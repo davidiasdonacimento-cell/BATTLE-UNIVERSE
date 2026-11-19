@@ -544,6 +544,8 @@ void resetBots() {
 }
 void updateBots(float dt) {
     if(gMatchFinished) return;
+    // Limita a pressão simultânea no jogador: o restante da IA prioriza combates entre bots.
+    int botsPressuringPlayer=0;
     for(int i=0;i<BOT_COUNT;++i) {
         BotState& bot=gBots[static_cast<size_t>(i)];
         bot.fireFlash=std::max(0.0f,bot.fireFlash-dt);
@@ -572,14 +574,10 @@ void updateBots(float dt) {
         int targetBot=-1;
         float targetDistance=std::numeric_limits<float>::max();
 
-        // Every bot searches for the nearest hostile: opponents fight opponents too.
-        // In solo, all bots are hostile to each other and to the human player.
-        // In team modes, allies protect the player and target only enemy bots.
+        // Os bots procuram primeiro outros bots hostis para manter batalhas pelo mapa.
+        // O jogador só entra na seleção a curta distância e no máximo dois bots o pressionam
+        // ao mesmo tempo. Em equipes, os aliados nunca escolhem o próprio jogador como alvo.
         if(gDropState==3 && gSelectedMode!=3) {
-            if(!ally && playerDistance<92.0f) {
-                targetDistance=playerDistance;
-                targetPlayer=true;
-            }
             for(int other=0;other<BOT_COUNT;++other) {
                 if(other==i||!gBotActive[static_cast<size_t>(other)])continue;
                 if(gSelectedMode!=0 && isAllyBot(other)==ally)continue;
@@ -589,8 +587,14 @@ void updateBots(float dt) {
                 if(d<targetDistance && d<92.0f) {
                     targetDistance=d;
                     targetBot=other;
-                    targetPlayer=false;
                 }
+            }
+            if(!ally && playerDistance<20.0f && playerDistance<targetDistance
+                    && botsPressuringPlayer<2) {
+                targetDistance=playerDistance;
+                targetPlayer=true;
+                targetBot=-1;
+                ++botsPressuringPlayer;
             }
             if(targetPlayer||targetBot>=0) {
                 engaging=true;
@@ -976,7 +980,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
     const bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
     const bool buildHeld=(buttons&BUTTON_BUILD)!=0;
-    const bool pulsePressed=(buttons&BUTTON_PULSE)&&!(gPreviousButtons&BUTTON_PULSE);
+    const bool pulseHeld=(buttons&BUTTON_PULSE)!=0;
     const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
     const bool aimHeld=(buttons&BUTTON_AIM)!=0;
     gPreviousButtons=buttons;
@@ -1111,7 +1115,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(buildHeld&&gDropState==3&&gBuildCooldown<=0.0f) {
         placeBuildPiece();gBuildCooldown=0.14f;
     }
-    if(pulsePressed&&gDropState==3&&gPulseCooldown<=0.0f) {
+    // Segurar DISPARAR mantém o disparo automático; um toque rápido dispara uma vez.
+    if(pulseHeld&&gDropState==3&&gPulseCooldown<=0.0f) {
         firePulse();gPulseCooldown=gWeaponType==2?0.55f:0.24f;
     }
 
@@ -1130,24 +1135,25 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     }
     gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
     gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
-    const float cameraDistance=aimHeld?3.15f:8.5f;
-    const float cameraHeight=aimHeld?2.05f:(3.7f+gCameraPitch*3.1f);
-    // Over-shoulder aim: keep the character out of the crosshair and look
-    // forward into the play space instead of zooming into the character's back.
-    const float shoulder=aimHeld?0.72f:0.0f;
+    // Mira em terceira pessoa: câmera mais afastada e deslocada para o ombro,
+    // deixando a cabeça do operador fora do centro do retículo.
+    const float cameraDistance=aimHeld?4.15f:8.5f;
+    const float cameraHeight=aimHeld?1.78f:(3.7f+gCameraPitch*3.1f);
+    const float shoulder=aimHeld?1.08f:0.0f;
     Vec3 eye{
         gPlayer.x+std::sin(gCameraYaw)*cameraDistance+std::cos(gCameraYaw)*shoulder,
         gPlayer.y+cameraHeight+gJumpHeight*0.30f,
         gPlayer.z+std::cos(gCameraYaw)*cameraDistance-std::sin(gCameraYaw)*shoulder
     };
-    const float lookAhead=aimHeld?22.0f:0.0f;
+    const float lookAhead=aimHeld?28.0f:0.0f;
+    const float aimVertical=aimHeld?(gCameraPitch-0.36f)*6.0f:0.0f;
     Vec3 target{
         gPlayer.x-std::sin(gCameraYaw)*lookAhead,
-        gPlayer.y+(aimHeld?1.42f:1.0f)+gJumpHeight*0.40f,
+        gPlayer.y+(aimHeld?1.38f+aimVertical:1.0f)+gJumpHeight*0.40f,
         gPlayer.z-std::cos(gCameraYaw)*lookAhead
     };
     Mat4 view=lookAt(eye,target,{0,1,0});
-    gProjection=multiply(perspective(aimHeld?0.78f:0.93f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
+    gProjection=multiply(perspective(aimHeld?0.90f:0.93f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
 
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
     drawWorld(gMatchTime);
