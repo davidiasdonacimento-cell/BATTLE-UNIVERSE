@@ -11,6 +11,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1,lookSensitivity=1;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile boolean contentPackReady=false;
+    private boolean aimToggled=false;
     private int movePointer=-1,lookPointer=-1;
     private final int[] buttonPointers={-1,-1,-1,-1,-1,-1,-1};
     private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,FIRE,SWAP,AIM};
@@ -28,6 +29,12 @@ public final class GameSurfaceView extends GLSurfaceView {
 
     public void setGameScreen(boolean playing) {
         screenMode=playing?1:0;
+        if(!playing) {
+            aimToggled=false;
+            moveX=moveY=lookDX=lookDY=0;
+            Arrays.fill(buttonPointers,-1);
+            buttons=0;
+        }
         queueEvent(()->nativeSetScreen(screenMode));
     }
     public void setCharacter(int id) {
@@ -64,6 +71,8 @@ public final class GameSurfaceView extends GLSurfaceView {
         try { return nativeGetStatus(); }
         catch(UnsatisfiedLinkError error) { return "INICIALIZANDO SISTEMAS..."; }
     }
+    public boolean isAimToggled() { return aimToggled; }
+    public boolean isFiring() { return (buttons&FIRE)!=0; }
 
     private float scale(float w,float h) { return Math.min(w/1280f,h/720f); }
     private float offsetX(float w,float s) { return (w-1280f*s)*0.5f; }
@@ -102,6 +111,7 @@ public final class GameSurfaceView extends GLSurfaceView {
         int mask=0;
         for(int i=0;i<buttonPointers.length;i++)
             if(buttonPointers[i]!=-1)mask|=buttonBits[i];
+        if(aimToggled)mask|=AIM;
         buttons=mask;
     }
 
@@ -113,6 +123,13 @@ public final class GameSurfaceView extends GLSurfaceView {
             float px=event.getX(index),py=event.getY(index);
             int control=controlAt(px,py,w,h);
             if(control!=0) {
+                // A mira funciona por toque: liga e permanece ativa até o próximo toque.
+                if(control==AIM) {
+                    aimToggled=!aimToggled;
+                    recalculateButtons();
+                    invalidate();
+                    return true;
+                }
                 for(int i=0;i<buttonPointers.length;i++) {
                     if(buttonBits[i]==control&&buttonPointers[i]==-1) {
                         buttonPointers[i]=id;recalculateButtons();return true;
@@ -147,6 +164,7 @@ public final class GameSurfaceView extends GLSurfaceView {
                 ||action==MotionEvent.ACTION_CANCEL) {
             if(action==MotionEvent.ACTION_CANCEL) {
                 movePointer=-1;lookPointer=-1;moveX=moveY=0;
+                aimToggled=false;
                 Arrays.fill(buttonPointers,-1);buttons=0;
             } else releasePointer(event.getPointerId(index));
             return true;
