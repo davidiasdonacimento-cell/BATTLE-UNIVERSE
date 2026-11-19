@@ -529,10 +529,10 @@ void updateStatus() {
         if(gDropTimer<PLANE_COUNTDOWN_SECONDS) {
             int remaining=static_cast<int>(std::ceil(PLANE_COUNTDOWN_SECONDS-gDropTimer));
             out<<"EMBARQUE NA AERONAVE  •  RAMPA FECHADA  •  "<<remaining<<"s";
-        } else if(gDropTimer<PLANE_COUNTDOWN_SECONDS+2.5f) {
-            out<<"AVIÃO EM ROTA  •  RAMPA ABERTA  •  ANDE ATÉ A SAÍDA";
+        } else if(gPlaneWalkX<=-12.8f && std::fabs(gPlaneWalkZ)<=4.2f) {
+            out<<"AVIÃO EM ROTA  •  RAMPA PRONTA  •  TOQUE SALTAR";
         } else {
-            out<<"AVIÃO EM ROTA  •  CORREDOR LIVRE  •  EXPLORE A CABINE";
+            out<<"AVIÃO EM ROTA  •  CORREDOR LIVRE  •  ANDE ATÉ A RAMPA";
         }
     } else if(gDropState==2) {
         out<<(gParachuteOpen?"PARAQUEDAS ABERTO":"QUEDA LIVRE")
@@ -970,7 +970,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
     if(gScreenMode==1) {
         gPlayer={-110,0.55f,-32};
         gPlayerXSnapshot.store(gPlayer.x);gPlayerZSnapshot.store(gPlayer.z);
-        gPlayerYaw=0;gCameraYaw=-PI*0.5f;gPlayerYaw=-PI*0.5f;gCameraPitch=0.36f;
+        gPlayerYaw=-PI*0.5f;gCameraYaw=-PI*0.5f;gCameraPitch=0.36f;
         gMatchTime=0;gZoneRadius=112;gCollected=0;gCrystalTaken.fill(false);
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
@@ -1088,7 +1088,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             setStatus("RAMPA NA TRASEIRA • ANDE ATÉ A SAÍDA PARA SALTAR");
         if(playerJump||forcedJump) {
             if(forcedJump&&!atRamp) {
-                gPlaneWalkX=-12.0f;gPlaneWalkZ=0.0f;
+                gPlaneWalkX=-14.4f;gPlaneWalkZ=0.0f;
                 gPlayer.x=gPlanePosition.x+gPlaneWalkX;gPlayer.z=gPlanePosition.z;
             }
             gDropState=2;gJumpHeight=22.0f;gJumpVelocity=0.0f;gParachuteOpen=false;
