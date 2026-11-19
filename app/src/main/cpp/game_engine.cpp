@@ -413,14 +413,24 @@ void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
 void drawWorld(float time) {
     // Expanded island arena: broad coast, inland districts, roads and forest belts.
     drawSphere({0,-1.05f,0},{520,0.55f,520},{0.025f,0.22f,0.36f});
-    Vec3 beach=gSelectedMap==2?Vec3{0.68f,0.47f,0.29f}:Vec3{0.78f,0.68f,0.44f};
-    Vec3 land=gSelectedMap==1?Vec3{0.19f,0.24f,0.31f}:
-        (gSelectedMap==2?Vec3{0.49f,0.37f,0.24f}:Vec3{0.17f,0.43f,0.23f});
+    const std::array<Vec3,7> beachColors{{
+        {0.78f,0.68f,0.44f},{0.24f,0.27f,0.38f},{0.68f,0.47f,0.29f},
+        {0.73f,0.84f,0.91f},{0.34f,0.39f,0.40f},{0.57f,0.70f,0.39f},{0.30f,0.40f,0.58f}
+    }};
+    const std::array<Vec3,7> landColors{{
+        {0.17f,0.43f,0.23f},{0.19f,0.24f,0.31f},{0.49f,0.37f,0.24f},
+        {0.65f,0.78f,0.87f},{0.28f,0.34f,0.35f},{0.20f,0.48f,0.25f},{0.12f,0.20f,0.37f}
+    }};
+    const std::array<Vec3,7> roadColors{{
+        {0.34f,0.37f,0.39f},{0.12f,0.16f,0.22f},{0.40f,0.37f,0.32f},
+        {0.48f,0.57f,0.64f},{0.22f,0.27f,0.29f},{0.30f,0.39f,0.29f},{0.18f,0.26f,0.42f}
+    }};
+    const size_t mapStyle=static_cast<size_t>(std::clamp(gSelectedMap,0,6));
+    const Vec3 beach=beachColors[mapStyle],land=landColors[mapStyle],road=roadColors[mapStyle];
     drawSphere({0,-0.02f,0},{174,0.62f,174},beach);
     drawSphere({0,0.31f,0},{158,0.31f,158},land);
 
     // Long roads create readable navigation across the larger play space.
-    Vec3 road=gSelectedMap==2?Vec3{0.40f,0.37f,0.32f}:Vec3{0.34f,0.37f,0.39f};
     drawCube({0,0.535f,0},{8.0f,0.06f,310.0f},road);
     drawCube({0,0.536f,0},{310.0f,0.06f,8.0f},road);
     drawCube({-48,0.536f,-48},{5.0f,0.06f,180.0f},road,0.60f);
@@ -429,16 +439,24 @@ void drawWorld(float time) {
     drawCube({0,0.537f,112},{150.0f,0.06f,6.0f},road);
 
     for(size_t i=0;i<gBuildingPositions.size();++i) {
-        Vec3 tint=gSelectedMap==1?Vec3{0.27f+0.025f*(i%3),0.30f,0.38f}:
-            (gSelectedMap==2?Vec3{0.64f,0.48f,0.31f}:Vec3{0.66f,0.61f,0.48f});
-        Vec3 roof=gSelectedMap==1?Vec3{0.11f,0.18f,0.28f}:
-            (gSelectedMap==2?Vec3{0.35f,0.23f,0.16f}:Vec3{0.27f,0.20f,0.16f});
+        const std::array<Vec3,7> buildingTints{{
+            {0.66f,0.61f,0.48f},{0.27f,0.30f,0.38f},{0.64f,0.48f,0.31f},
+            {0.66f,0.77f,0.84f},{0.38f,0.43f,0.44f},{0.55f,0.65f,0.43f},{0.25f,0.35f,0.54f}
+        }};
+        const std::array<Vec3,7> roofTints{{
+            {0.27f,0.20f,0.16f},{0.11f,0.18f,0.28f},{0.35f,0.23f,0.16f},
+            {0.38f,0.52f,0.62f},{0.16f,0.20f,0.22f},{0.23f,0.34f,0.22f},{0.08f,0.15f,0.30f}
+        }};
+        Vec3 tint=buildingTints[mapStyle],roof=roofTints[mapStyle];
         const float width=buildingWidth(i),depth=buildingDepth(i),height=buildingHeight(i);
         const Vec3 pos=gBuildingPositions[i];
         drawBuilding(pos.x,pos.z,width,depth,height,tint,roof);
         drawCube({pos.x,0.72f+height+0.30f,pos.z},
             {width*0.52f,0.22f,depth*0.55f},
-            gSelectedMap==1?Vec3{0.14f,0.74f,0.83f}:Vec3{0.35f,0.40f,0.43f});
+            gSelectedMap==1?Vec3{0.14f,0.74f,0.83f}:
+            (gSelectedMap==3?Vec3{0.82f,0.91f,0.98f}:
+            (gSelectedMap==4?Vec3{0.88f,0.49f,0.20f}:
+            (gSelectedMap==6?Vec3{0.18f,0.83f,0.96f}:Vec3{0.35f,0.40f,0.43f}))));
     }
 
     // A forest ring and smaller groves break up sightlines and make the island feel broad.
@@ -456,9 +474,19 @@ void drawWorld(float time) {
         float sway=std::sin(time*0.8f+static_cast<float>(i))*0.035f;
         float scale=0.80f+0.08f*static_cast<float>(i%4)+sway;
         if(gSelectedMap==0) drawPalm(trees[i].x,trees[i].z,scale);
-        else if(gSelectedMap==1) {
+        else if(gSelectedMap==1||gSelectedMap==6) {
             drawCylinder({trees[i].x,1.2f,trees[i].z},{0.16f,2.3f,0.16f},{0.20f,0.25f,0.26f});
-            drawSphere({trees[i].x,2.8f,trees[i].z},{1.2f,1.4f,1.0f},{0.12f,0.24f,0.30f});
+            drawSphere({trees[i].x,2.8f,trees[i].z},{1.2f,1.4f,1.0f},
+                gSelectedMap==6?Vec3{0.12f,0.62f,0.78f}:Vec3{0.12f,0.24f,0.30f});
+        } else if(gSelectedMap==3) {
+            drawCylinder({trees[i].x,1.0f,trees[i].z},{0.12f,2.0f,0.12f},{0.58f,0.70f,0.78f});
+            drawCone({trees[i].x,2.3f,trees[i].z},{1.45f,2.5f,1.45f},{0.78f,0.88f,0.94f});
+        } else if(gSelectedMap==4) {
+            drawCylinder({trees[i].x,2.2f,trees[i].z},{0.32f,4.4f,0.32f},{0.27f,0.31f,0.33f});
+            drawCylinder({trees[i].x,4.7f,trees[i].z},{0.42f,0.28f,0.42f},{0.90f,0.39f,0.14f});
+        } else if(gSelectedMap==5) {
+            drawCylinder({trees[i].x,1.0f,trees[i].z},{0.14f,2.0f,0.14f},{0.31f,0.24f,0.15f});
+            drawSphere({trees[i].x,2.7f,trees[i].z},{1.5f,1.7f,1.5f},{0.13f,0.42f,0.20f});
         } else {
             drawCylinder({trees[i].x,0.9f,trees[i].z},{0.14f,1.8f,0.14f},{0.31f,0.24f,0.15f});
             drawCone({trees[i].x,2.0f,trees[i].z},{1.25f,2.0f,1.25f},{0.22f,0.39f,0.24f});
@@ -471,9 +499,33 @@ void drawWorld(float time) {
         drawCube({-18.5f+i*1.5f,0.96f,-117.0f},{0.10f,0.55f,0.10f},{0.55f,0.40f,0.22f});
     drawCube({85,0.75f,-102},{18,0.42f,11},{0.22f,0.28f,0.32f});
     drawCube({-91,0.72f,99},{18,0.36f,16},{0.40f,0.34f,0.27f});
-    drawSphere({-58,0.02f,32},{18,0.22f,27},{0.08f,0.36f,0.48f});
+    drawSphere({-58,0.02f,32},{18,0.22f,27},
+        gSelectedMap==3?Vec3{0.72f,0.87f,0.94f}:
+        (gSelectedMap==5?Vec3{0.08f,0.42f,0.30f}:Vec3{0.08f,0.36f,0.48f}));
     drawCylinder({53,4.0f,9},{0.28f,7.0f,0.28f},{0.42f,0.43f,0.42f});
     drawSphere({53,7.6f,9},{1.6f,0.5f,1.6f},{0.90f,0.58f,0.22f});
+    // Map-specific landmarks make each destination visually readable in-world.
+    if(gSelectedMap==3) {
+        for(int i=0;i<5;++i)drawCone({-72.0f+i*12.0f,2.2f,58.0f},{4.0f,4.4f,4.0f},{0.78f,0.88f,0.96f});
+        drawCube({74,1.2f,-64},{22,0.7f,14},{0.56f,0.70f,0.80f});
+    } else if(gSelectedMap==4) {
+        for(int i=0;i<4;++i) {
+            float x=-78.0f+i*18.0f;
+            drawCylinder({x,7.0f,-72},{1.2f,14.0f,1.2f},{0.23f,0.28f,0.30f});
+            drawCylinder({x,14.3f,-72},{1.8f,0.45f,1.8f},{0.91f,0.38f,0.13f});
+        }
+        drawCube({78,1.1f,72},{24,0.6f,18},{0.25f,0.32f,0.35f});
+    } else if(gSelectedMap==5) {
+        for(int i=0;i<6;++i)drawSphere({-70.0f+i*25.0f,0.6f,72},{5,0.5f,7},{0.12f,0.45f,0.27f});
+        drawCube({72,0.9f,-70},{20,0.35f,12},{0.20f,0.48f,0.30f});
+    } else if(gSelectedMap==6) {
+        for(int i=0;i<5;++i) {
+            float x=-76.0f+i*36.0f;
+            drawCylinder({x,5.0f,-76},{1.1f,10.0f,1.1f},{0.28f,0.43f,0.62f});
+            drawSphere({x,10.8f,-76},{2.1f,0.6f,2.1f},{0.18f,0.78f,0.92f});
+        }
+        drawCube({76,1.1f,76},{22,0.6f,22},{0.16f,0.28f,0.48f});
+    }
 }
 Vec3 localPoint(Vec3 base,float lx,float ly,float lz,float yaw) {
     float c=std::cos(yaw), sn=std::sin(yaw);
@@ -1135,7 +1187,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,j
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMap(JNIEnv*,jclass,jint id) {
-    gSelectedMap=std::clamp(static_cast<int>(id),0,2);
+    gSelectedMap=std::clamp(static_cast<int>(id),0,6);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint id) {
