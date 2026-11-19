@@ -712,6 +712,10 @@ const char* weaponName() {
 }
 void updateStatus() {
     std::ostringstream out;
+    if(gSpectatorMode) {
+        out<<"MODO ESPECTADOR  •  ACOMPANHANDO SOBREVIVENTES";
+        setStatus(out.str());return;
+    }
     if(gDropState==1) {
         if(gDropTimer<PLANE_COUNTDOWN_SECONDS) {
             int remaining=static_cast<int>(std::ceil(PLANE_COUNTDOWN_SECONDS-gDropTimer));
@@ -1282,6 +1286,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     gCameraYaw+=static_cast<float>(lookDX)*4.8f*gLookSensitivity;
     gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f*gLookSensitivity,0.12f,0.85f);
 
+    if(gSpectatorMode){moveX=0.0f;moveY=0.0f;buttons=0;}
     const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
     const bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
     const bool buildHeld=(buttons&BUTTON_BUILD)!=0;
@@ -1497,8 +1502,13 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const float cameraHeight=aimHeld?1.78f:(3.7f+gCameraPitch*3.1f);
     const float shoulder=aimHeld?1.08f:0.0f;
     Vec3 cameraSubject=gPlayer;
-    if(gSpectatorMode&&gSpectatorTarget>=0&&gSpectatorTarget<BOT_COUNT&&gBotActive[static_cast<size_t>(gSpectatorTarget)])
-        cameraSubject=gBots[static_cast<size_t>(gSpectatorTarget)].pos;
+    if(gSpectatorMode) {
+        if(gSpectatorTarget<0||gSpectatorTarget>=BOT_COUNT||!gBotActive[static_cast<size_t>(gSpectatorTarget)]) {
+            gSpectatorTarget=-1;
+            for(int i=0;i<BOT_COUNT;++i)if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i)){gSpectatorTarget=i;break;}
+        }
+        if(gSpectatorTarget>=0)cameraSubject=gBots[static_cast<size_t>(gSpectatorTarget)].pos;
+    }
     Vec3 eye{
         cameraSubject.x+std::sin(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)+std::cos(gCameraYaw)*shoulder,
         cameraSubject.y+(gSpectatorMode?5.0f:cameraHeight)+gJumpHeight*0.40f,
