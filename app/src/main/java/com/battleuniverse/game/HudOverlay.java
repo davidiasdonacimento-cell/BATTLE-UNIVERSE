@@ -16,15 +16,22 @@ import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.HapticFeedbackConstants;
 
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
-        INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, GAME=9;
+        INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, GAME=10;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
-        "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE"};
-    private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO"};
-    private static final String[] SHOP_KEYS={"shop_frame_neon","shop_emblem_bloob","shop_title_champion"};
-    private static final long[] SHOP_PRICES={500L,1000L,1500L};
+        "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES"};
+    private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
+        "MOLDURA FROST","INSÍGNIA TROPA","TÍTULO ELITE","FAIXA VETERANO","SELO NOVA","BANNER VITÓRIA"};
+    private static final String[] SHOP_KEYS={"shop_frame_neon","shop_emblem_bloob","shop_title_champion",
+        "shop_frame_frost","shop_badge_squad","shop_title_elite","shop_ribbon_veteran","shop_seal_nova","shop_banner_victory"};
+    private static final long[] SHOP_PRICES={500L,1000L,1500L,700L,900L,1800L,1200L,1600L,2200L};
+    private static final int[] SHOP_COLORS={0xFF8D42D7,0xFF08A9D8,0xFFE0A62B,0xFF66DDEB,
+        0xFF40B989,0xFFFFB454,0xFF4D79C7,0xFFB55BDD,0xFFE45B65};
+    private static final int[] ROYALE_LEVELS={2,4,6,8,10,12};
+    private static final long[] ROYALE_REWARDS={40,60,80,100,120,150};
     private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
     private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM"};
     private static final String[] CHARACTER_NAMES={"BLOOB","BLOOB TÁTICO","BLOOB NEON","BLOOB DOURADO"};
@@ -35,6 +42,7 @@ public final class HudOverlay extends View {
     private final RectF r=new RectF();
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private boolean music=true, effects=true, forwarding;
+    private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
     private float scale=1, offsetX, offsetY;
     private String toast="";
     private boolean googleConfigured, googleSignedIn;
@@ -51,6 +59,11 @@ public final class HudOverlay extends View {
         character=prefs.getInt("character",0); quality=prefs.getInt("quality",1);
         music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
         lookSensitivity=prefs.getInt("look_sensitivity",1);
+        invertCameraY=prefs.getBoolean("invert_camera_y",false);
+        showMinimap=prefs.getBoolean("show_minimap",true);
+        hapticsEnabled=prefs.getBoolean("haptics",true);
+        ensureDailyMissionWindow();
+        game.setInvertCameraY(invertCameraY);
         game.setCharacter(character); game.setMap(map);
         game.setMatchMode(mode); game.setQuality(quality); game.setLookSensitivity(lookSensitivity); game.setGameScreen(false);
     }
@@ -100,11 +113,11 @@ public final class HudOverlay extends View {
         // In-game horizontal navigation, not an admin-style web sidebar.
         panel(c,24,105,1224,50,0xB90A1B2B,0x336CA4B7,16);
         for(int i=0;i<NAV.length;i++) {
-            float x=27+i*136f;boolean active=page==i;
-            panel(c,x,111,132,38,active?0xDD136276:0x22243B4D,
-                    active?0xFF35D6E5:0x225A8297,10);
-            drawNavIcon(c,i,x+16,130,active);
-            text(c,NAV[i],x+30,134,8,active?Color.WHITE:0xFFB8CBD7,
+            float x=27+i*122f;boolean active=page==i;
+            panel(c,x,111,118,38,active?0xDD136276:0x22243B4D,
+                    active?0xFF35D6E5:0x225A8297,9);
+            drawNavIcon(c,i,x+14,130,active);
+            text(c,NAV[i],x+25,134,7,active?Color.WHITE:0xFFB8CBD7,
                 Typeface.create(active?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
         }
     }
@@ -124,6 +137,7 @@ public final class HudOverlay extends View {
         else if(page==INVENTORY)drawInventory(c); else if(page==SETTINGS)drawSettings(c);
         else if(page==PROFILE)drawProfilePage(c); else if(page==SHOP)drawShopPage(c);
         else if(page==ROYALE)drawRoyalePage(c);
+        else if(page==MISSIONS)drawMissionsPage(c);
     }
     private void drawHome(Canvas c){
         eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.2.2  /  OPERAÇÃO BLOOB");
@@ -200,38 +214,54 @@ public final class HudOverlay extends View {
         }
     }
     private void drawInventory(Canvas c){
-        eyebrow(c,270,175,"EQUIPAMENTO E RECOMPENSAS");title(c,"INVENTÁRIO",270,224);
-        subtitle(c,"Gerencie os itens cosméticos desbloqueados no seu perfil local.",270,252);
-        panel(c,270,292,570,92,0xAE193040,0x335D8495,17);
-        eyebrow(c,292,320,"CARTEIRA");
-        text(c,"◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),292,355,24,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"Diamantes virtuais • perfil salvo neste aparelho",465,352,11,0xFF9EB6C4,Typeface.DEFAULT);
-        for(int i=0;i<3;i++){
-            float x=270+i*192;boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
-            panel(c,x,408,174,148,0xA91A3040,0x335D8495,15);
-            circle(c,x+87,461,24,new int[]{0xFF8D42D7,0xFF08A9D8,0xFFE0A62B}[i],0xFFB5D6E1);
-            text(c,SHOP_NAMES[i],x+12,514,10,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,owned?"ADQUIRIDO":"NA LOJA",x+18,535,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+        eyebrow(c,270,175,"COLEÇÃO DO OPERADOR");title(c,"INVENTÁRIO",270,224);
+        subtitle(c,"Itens cosméticos locais desbloqueados na loja e no passe.",270,252);
+        panel(c,270,270,570,58,0xAE193040,0x335D8495,15);
+        text(c,"◆ "+formatDiamonds(prefs.getLong("diamonds",0L))+" DIAMANTES",292,306,17,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        for(int i=0;i<SHOP_NAMES.length;i++) {
+            int col=i%3,row=i/3;float x=270+col*192f,y=344+row*100f;
+            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            panel(c,x,y,174,88,owned?0xB51A4650:0x771A3040,
+                owned?0xFF4BD4C9:0x335D8495,14);
+            circle(c,x+28,y+34,17,SHOP_COLORS[i],0xFFB5D6E1);
+            text(c,SHOP_NAMES[i],x+53,y+31,9,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,owned?"DESBLOQUEADO":"BLOQUEADO",x+53,y+51,8,
+                owned?0xFF83DCD5:0xFF91A9B7,Typeface.DEFAULT_BOLD);
+            text(c,owned?"NA COLEÇÃO":"ADQUIRA NA LOJA",x+53,y+67,7,0xFF9EB6C4,Typeface.DEFAULT);
         }
     }
+
     private void drawSettings(Canvas c){
-        eyebrow(c,270,175,"PREFERÊNCIAS DO DISPOSITIVO");title(c,"CONFIGURAÇÕES",270,224);
-        subtitle(c,"Ajustes locais, aplicados imediatamente e salvos no aparelho.",270,252);
-        panel(c,270,292,570,94,0xAE193040,0x335D8495,17);
-        eyebrow(c,294,321,"QUALIDADE GRÁFICA");
-        text(c,QUALITY_NAMES[quality],294,354,14,Color.WHITE,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<3;i++)pill(c,522+i*96,316,88,42,QUALITY_NAMES[i],quality==i?0xFF176A75:0x553B6172,Color.WHITE);
-        panel(c,270,408,570,66,0xAE193040,0x335D8495,15);
-        text(c,"MÚSICA",294,448,14,Color.WHITE,Typeface.DEFAULT_BOLD);
-        pill(c,730,422,86,34,music?"ATIVADA":"DESATIVADA",music?0xFF176A75:0x553B6172,Color.WHITE);
-        panel(c,270,490,570,66,0xAE193040,0x335D8495,15);
-        text(c,"EFEITOS SONOROS",294,530,14,Color.WHITE,Typeface.DEFAULT_BOLD);
-        pill(c,730,504,86,34,effects?"ATIVADOS":"DESATIVADOS",effects?0xFF176A75:0x553B6172,Color.WHITE);
-        panel(c,270,572,570,70,0xAE193040,0x335D8495,15);
-        text(c,"SENSIBILIDADE DA CÂMERA",294,613,13,Color.WHITE,Typeface.DEFAULT_BOLD);
+        eyebrow(c,270,175,"CONTROLES E PREFERÊNCIAS");title(c,"CONFIGURAÇÕES",270,224);
+        subtitle(c,"Ajustes locais para a tela e o controle do operador.",270,252);
+        panel(c,270,282,570,84,0xAE193040,0x335D8495,16);
+        eyebrow(c,292,309,"QUALIDADE GRÁFICA");
+        text(c,QUALITY_NAMES[quality],292,344,14,Color.WHITE,Typeface.DEFAULT_BOLD);
+        for(int i=0;i<3;i++)pill(c,520+i*100,302,92,38,QUALITY_NAMES[i],
+            quality==i?0xFF176A75:0x553B6172,Color.WHITE);
+        panel(c,270,378,276,60,0xAE193040,0x335D8495,14);
+        text(c,"MÚSICA",290,414,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        pill(c,430,392,100,32,music?"ATIVADA":"DESATIVADA",music?0xFF176A75:0x553B6172,Color.WHITE);
+        panel(c,562,378,278,60,0xAE193040,0x335D8495,14);
+        text(c,"EFEITOS",582,414,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        pill(c,718,392,104,32,effects?"ATIVADOS":"DESATIVADOS",effects?0xFF176A75:0x553B6172,Color.WHITE);
+        panel(c,270,450,570,76,0xAE193040,0x335D8495,15);
+        eyebrow(c,292,477,"SENSIBILIDADE DA CÂMERA");
         String[] levels={"BAIXA","MÉDIA","ALTA"};
-        for(int i=0;i<3;i++)pill(c,522+i*96,590,88,38,levels[i],lookSensitivity==i?0xFF176A75:0x553B6172,Color.WHITE);
+        for(int i=0;i<3;i++)pill(c,520+i*100,466,92,38,levels[i],
+            lookSensitivity==i?0xFF176A75:0x553B6172,Color.WHITE);
+        panel(c,270,538,570,108,0xAE193040,0x335D8495,15);
+        text(c,"CÂMERA INVERTIDA",292,565,11,Color.WHITE,Typeface.DEFAULT_BOLD);
+        pill(c,690,549,130,30,invertCameraY?"ATIVADA":"DESATIVADA",
+            invertCameraY?0xFF176A75:0x553B6172,Color.WHITE);
+        text(c,"MINIMAPA",292,598,11,Color.WHITE,Typeface.DEFAULT_BOLD);
+        pill(c,690,582,130,30,showMinimap?"VISÍVEL":"OCULTO",
+            showMinimap?0xFF176A75:0x553B6172,Color.WHITE);
+        text(c,"VIBRAÇÃO NOS TOQUES",292,631,11,Color.WHITE,Typeface.DEFAULT_BOLD);
+        pill(c,690,615,130,26,hapticsEnabled?"ATIVADA":"DESATIVADA",
+            hapticsEnabled?0xFF176A75:0x553B6172,Color.WHITE);
     }
+
     private void drawProfilePage(Canvas c) {
         eyebrow(c,270,175,googleSignedIn?"CONTA GOOGLE CONECTADA":"PERFIL E CONTA GOOGLE");
         title(c,"PERFIL DO JOGADOR",270,224);
@@ -267,40 +297,54 @@ public final class HudOverlay extends View {
     private void drawShopPage(Canvas c) {
         eyebrow(c,270,175,"LOJA VIRTUAL • SEM PAGAMENTO REAL");
         title(c,"LOJA DE COSMÉTICOS",270,224);
-        subtitle(c,"Use apenas os diamantes virtuais ganhos ou resgatados.",270,252);
-        panel(c,270,270,570,48,0xA91A3040,0x335D8495,14);
-        text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),292,301,16,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<3;i++) {
-            float x=270+i*192; boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
-            panel(c,x,338,174,230,0xA91A3040,0x335D8495,16);
-            circle(c,x+87,397,34,new int[]{0xFF8D42D7,0xFF08A9D8,0xFFE0A62B}[i],0xFFB5D6E1);
-            text(c,SHOP_NAMES[i],x+14,460,10,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,owned?"JÁ ADQUIRIDO":"◆ "+SHOP_PRICES[i]+" DIAMANTES",x+14,486,10,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-            pill(c,x+22,516,130,31,owned?"ADQUIRIDO":"COMPRAR",
+        subtitle(c,"Nove itens colecionáveis. Compras feitas só com diamantes virtuais.",270,252);
+        panel(c,270,266,570,48,0xA91A3040,0x335D8495,14);
+        text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),292,297,16,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        for(int i=0;i<SHOP_NAMES.length;i++) {
+            int col=i%3,row=i/3;float x=270+col*192f,y=326+row*108f;
+            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            panel(c,x,y,174,96,owned?0xB51A4650:0xA91A3040,
+                owned?0xFF4BD4C9:0x335D8495,14);
+            circle(c,x+29,y+32,19,SHOP_COLORS[i],0xFFB5D6E1);
+            text(c,SHOP_NAMES[i],x+56,y+27,8,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,owned?"JÁ ADQUIRIDO":"◆ "+SHOP_PRICES[i]+" DIAMANTES",x+56,y+47,7,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            pill(c,x+56,y+58,104,26,owned?"NA COLEÇÃO":"ADQUIRIR",
                 owned?0xFF176A75:0xFF345D79,Color.WHITE);
         }
-        text(c,"Itens cosméticos do perfil local. Não alteram dano ou desempenho.",272,608,10,0xFF8FAAB8,Typeface.DEFAULT);
+        text(c,"Colecionáveis de perfil • não alteram dano, vida ou vantagem de jogo.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
+
     private void drawRoyalePage(Canvas c) {
-        eyebrow(c,270,175,"PROGRESSÃO OFFLINE"); title(c,"MENU ROYALE",270,224);
-        subtitle(c,"Passe local calculado pelo XP salvo no perfil.",270,252);
-        long xp=prefs.getLong("xp",0L),dailyDay=System.currentTimeMillis()/86400000L;
+        eyebrow(c,270,175,"TEMPORADA 02 • PROGRESSÃO OFFLINE");
+        title(c,"MENU ROYALE",270,224);
+        subtitle(c,"Trilha de recompensas, níveis, bônus diário e itens desbloqueáveis.",270,252);
+        long xp=prefs.getLong("xp",0L);
         int level=(int)Math.min(30L,1L+xp/500L),progress=(int)(xp%500L);
-        panel(c,270,286,570,175,0xAE193040,0x557AA9BC,18);
-        eyebrow(c,294,320,"PASSE ROYALE");
-        text(c,"NÍVEL "+level+" / 30",294,365,28,Color.WHITE,
-            Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,xp+" XP TOTAL  •  "+progress+" / 500 XP PARA O PRÓXIMO NÍVEL",294,397,11,0xFF9EB6C4,Typeface.DEFAULT_BOLD);
-        p.setColor(0xFF233F4F); r.set(294,416,814,431); c.drawRoundRect(r,8,8,p);
-        p.setColor(0xFF55DDE7); r.set(294,416,294+520*(progress/500f),431); c.drawRoundRect(r,8,8,p);
-        panel(c,270,485,570,112,0xA91A3040,0x335D8495,16);
-        eyebrow(c,294,515,"BÔNUS DIÁRIO");
-        text(c,"Receba 100 XP e 50 diamantes virtuais.",294,544,13,Color.WHITE,Typeface.DEFAULT_BOLD);
-        boolean claimed=prefs.getLong("daily_reward_day",-1L)==dailyDay;
-        pill(c,294,556,220,30,claimed?"RECOMPENSA COLETADA":"COLETAR RECOMPENSA",
-            claimed?0xFF176A75:0xFF345D79,Color.WHITE);
-        text(c,"O progresso e as recompensas são locais e offline.",272,625,10,0xFF8FAAB8,Typeface.DEFAULT);
+        panel(c,270,276,570,128,0xAE193040,0x557AA9BC,17);
+        eyebrow(c,292,305,"PASSE DE TEMPORADA");
+        text(c,"NÍVEL "+level+" / 30",292,345,27,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,xp+" XP TOTAL  •  "+progress+" / 500 XP",292,369,10,0xFF9EB6C4,Typeface.DEFAULT_BOLD);
+        p.setColor(0xFF233F4F);r.set(292,382,818,394);c.drawRoundRect(r,7,7,p);
+        p.setColor(0xFF55DDE7);r.set(292,382,292+526*(progress/500f),394);c.drawRoundRect(r,7,7,p);
+        panel(c,270,414,570,48,0xA91A3040,0x335D8495,13);
+        text(c,"BÔNUS DIÁRIO  •  +100 XP  •  +50 DIAMANTES",290,444,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        boolean dailyClaimed=prefs.getLong("daily_reward_day",-1L)==(System.currentTimeMillis()/86400000L);
+        pill(c,681,423,138,30,dailyClaimed?"COLETADO":"RESGATAR",
+            dailyClaimed?0xFF176A75:0xFF345D79,Color.WHITE);
+        for(int i=0;i<ROYALE_LEVELS.length;i++) {
+            int col=i%3,row=i/3;float x=270+col*192f,y=476+row*88f;
+            boolean claimed=prefs.getBoolean("royale_tier_claimed_"+i,false);
+            boolean unlocked=level>=ROYALE_LEVELS[i];
+            panel(c,x,y,174,78,claimed?0xB51A4650:unlocked?0xB1264A55:0x771A3040,
+                claimed?0xFF4BD4C9:unlocked?0xFF51C9C4:0x335D8495,13);
+            text(c,"MARCO "+(i+1),x+12,y+20,8,0xFF71DDE5,Typeface.DEFAULT_BOLD);
+            text(c,"NÍVEL "+ROYALE_LEVELS[i]+"  •  +"+ROYALE_REWARDS[i]+" ◆",x+12,y+40,9,Color.WHITE,Typeface.DEFAULT_BOLD);
+            pill(c,x+12,y+48,148,23,claimed?"RESGATADO":unlocked?"RESGATAR":"BLOQUEADO",
+                claimed?0xFF176A75:unlocked?0xFF345D79:0x553B6172,Color.WHITE);
+        }
+        text(c,"Recompensas locais • sem compras reais ou conexão online.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
+
     private void claimDailyReward() {
         long day=System.currentTimeMillis()/86400000L;
         if(prefs.getLong("daily_reward_day",-1L)==day) {
