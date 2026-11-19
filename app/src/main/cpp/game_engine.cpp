@@ -145,7 +145,9 @@ int gTrainingScore=0, gWeaponType=-1;
 struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=true; bool ammoOnly=false; };
 std::array<GroundLoot,18> gGroundLoot{};
 int gPlayerHealth=100,gEliminations=0;
-bool gMatchFinished=false;
+int gDamageDealt=0,gDamageTaken=0,gAiEliminations=0;
+bool gMatchFinished=false,gSpectatorMode=false;
+int gSpectatorTarget=-1;
 float gPulseCooldown=0, gPulseFlash=0, gDropTimer=0;
 float gZoneDamageTimer=0,gLookSensitivity=1.0f;
 constexpr float PLANE_COUNTDOWN_SECONDS=7.0f;
@@ -879,7 +881,7 @@ void updateBots(float dt) {
                     && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
                 bot.fireFlash=0.32f;
                 if(targetPlayer) {
-                    gPlayerHealth=std::max(0,gPlayerHealth-1);
+                    gPlayerHealth=std::max(0,gPlayerHealth-1);++gDamageTaken;
                     if(gPlayerHealth<=0) {
                         gMatchFinished=true;
                         setStatus("ELIMINADO • FIM DA PARTIDA");
@@ -892,7 +894,7 @@ void updateBots(float dt) {
                     const size_t victim=static_cast<size_t>(targetBot);
                     gBotHealth[victim]=std::max(0,gBotHealth[victim]-1);
                     if(gBotHealth[victim]<=0) {
-                        gBotActive[victim]=false;
+                        gBotActive[victim]=false;++gAiEliminations;
                         gBotRespawn[victim]=gSelectedMode==3?3.0f:0.0f;
                     }
                 }
@@ -1012,6 +1014,7 @@ void firePulse() {
         }
     } else if(hitBot>=0) {
         gBotHealth[static_cast<size_t>(hitBot)]=std::max(0,gBotHealth[static_cast<size_t>(hitBot)]-damage);
+        gDamageDealt+=damage;
         const int healthAfterHit=gBotHealth[static_cast<size_t>(hitBot)];
         gBotDamageAmount[static_cast<size_t>(hitBot)]=damage;
         gBotDamageTimer[static_cast<size_t>(hitBot)]=1.20f;
@@ -1184,7 +1187,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gMatchTime=0;gZoneRadius=112;gCollected=0;gCrystalTaken.fill(false);
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
-        gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
+        gPlayerHealth=100;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
         resetGroundLoot();
         if(gSelectedMode==3) {
             gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);
@@ -1248,7 +1251,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gCollected=0;gPreviousButtons=0;gInteractCooldown=0;gCrystalTaken.fill(false);
     gBuildCount=0;gBuildType=0;gWood=180;gBuildCooldown=0;gBuildLimit=12;gResourceCount=5;gContentPackReady=false;
     gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
-    gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
+    gPlayerHealth=100;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
     gBotAttackCooldown.fill(0.0f);gLookSensitivity=1.0f;
     gDropState=0;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;gParachuteOpen=false;
     gTargets[0]={{0,1.25f,-10},3,true};
@@ -1479,7 +1482,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             gZoneDamageTimer=std::max(0.0f,gZoneDamageTimer-dt);
             const float fromCenter=std::sqrt(gPlayer.x*gPlayer.x+gPlayer.z*gPlayer.z);
             if(fromCenter>gZoneRadius&&gZoneDamageTimer<=0.0f) {
-                gPlayerHealth=std::max(0,gPlayerHealth-3);
+                gPlayerHealth=std::max(0,gPlayerHealth-3);gDamageTaken+=3;
                 gZoneDamageTimer=1.0f;
                 if(gPlayerHealth<=0){gMatchFinished=true;setStatus("ELIMINADO PELA ZONA • FIM DA PARTIDA");}
                 else setStatus("FORA DA ZONA SEGURA • VIDA "+std::to_string(gPlayerHealth)+"%");
@@ -1493,17 +1496,20 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const float cameraDistance=aimHeld?4.15f:8.5f;
     const float cameraHeight=aimHeld?1.78f:(3.7f+gCameraPitch*3.1f);
     const float shoulder=aimHeld?1.08f:0.0f;
+    Vec3 cameraSubject=gPlayer;
+    if(gSpectatorMode&&gSpectatorTarget>=0&&gSpectatorTarget<BOT_COUNT&&gBotActive[static_cast<size_t>(gSpectatorTarget)])
+        cameraSubject=gBots[static_cast<size_t>(gSpectatorTarget)].pos;
     Vec3 eye{
-        gPlayer.x+std::sin(gCameraYaw)*cameraDistance+std::cos(gCameraYaw)*shoulder,
-        gPlayer.y+cameraHeight+gJumpHeight*0.40f,
-        gPlayer.z+std::cos(gCameraYaw)*cameraDistance-std::sin(gCameraYaw)*shoulder
+        cameraSubject.x+std::sin(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)+std::cos(gCameraYaw)*shoulder,
+        cameraSubject.y+(gSpectatorMode?5.0f:cameraHeight)+gJumpHeight*0.40f,
+        cameraSubject.z+std::cos(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)-std::sin(gCameraYaw)*shoulder
     };
     const float lookAhead=aimHeld?28.0f:0.0f;
     const float aimVertical=aimHeld?(gCameraPitch-0.36f)*6.0f:0.0f;
     Vec3 target{
-        gPlayer.x-std::sin(gCameraYaw)*lookAhead,
-        gPlayer.y+(aimHeld?1.38f+aimVertical:1.0f)+gJumpHeight*0.40f,
-        gPlayer.z-std::cos(gCameraYaw)*lookAhead
+        cameraSubject.x-std::sin(gCameraYaw)*(gSpectatorMode?0.0f:lookAhead),
+        cameraSubject.y+(gSpectatorMode?1.1f:(aimHeld?1.38f+aimVertical:1.0f))+gJumpHeight*0.40f,
+        cameraSubject.z-std::cos(gCameraYaw)*(gSpectatorMode?0.0f:lookAhead)
     };
     Mat4 view=lookAt(eye,target,{0,1,0});
     gProjection=multiply(perspective(aimHeld?0.90f:0.93f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
@@ -1581,7 +1587,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         glEnable(GL_DEPTH_TEST);
     }
     Vec3 playerDraw=gPlayer;playerDraw.y+=gJumpHeight;
-    drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
+    if(!gSpectatorMode) drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
         false,gMatchTime,moving?std::min(1.0f,moveLength):0.0f,
         aimHeld,gPulseFlash>0.0f,(buttons&BUTTON_RUN)!=0);
     drawParachute(gPlayer);
@@ -1605,6 +1611,22 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetStatus(JNIEnv* env,jclass) {
     std::lock_guard<std::mutex> lock(gStatusMutex);
     return env->NewStringUTF(gHudStatus.c_str());
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetMatchStats(JNIEnv* env,jclass) {
+    jint values[5]={gDamageDealt,gDamageTaken,gAiEliminations,0,gPlayerHealth};
+    for(int i=0;i<BOT_COUNT;++i)if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i))++values[3];
+    jintArray result=env->NewIntArray(5);if(result)env->SetIntArrayRegion(result,0,5,values);return result;
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetSpectator(JNIEnv*,jclass,jboolean enabled) {
+    gSpectatorMode=enabled==JNI_TRUE;
+    if(gSpectatorMode) {
+        gSpectatorTarget=-1;
+        for(int i=0;i<BOT_COUNT;++i)if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i)){gSpectatorTarget=i;break;}
+        gMatchFinished=false;
+        setStatus(gSpectatorTarget>=0?"MODO ESPECTADOR • ACOMPANHANDO IA":"MODO ESPECTADOR • PARTIDA ENCERRADA");
+    }
 }
 extern "C" JNIEXPORT jint JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetEliminations(JNIEnv*,jclass) {
