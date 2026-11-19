@@ -177,6 +177,7 @@ public final class HudOverlay extends View {
         else if(page==ROYALE)drawRoyalePage(c);
         else if(page==MISSIONS)drawMissionsPage(c);
         else if(page==WARDROBE)drawWardrobePage(c);
+        else if(page==WARDROBE)drawWardrobePage(c);
     }
     private void drawHome(Canvas c){
         eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.3.0  /  OPERAÇÃO BLOOB");
@@ -755,8 +756,8 @@ public final class HudOverlay extends View {
         if(hapticsEnabled)performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
         for(int i=0;i<NAV.length;i++){
-            float nx=27+i*122f;
-            if(hit(x,y,nx,111,118,38)){page=i;return;}
+            float nx=24+i*111f;
+            if(hit(x,y,nx,111,108,38)){page=i;return;}
         }
         if(page==HOME){
             if(hit(x,y,270,328,275,112)){page=MODES_PAGE;return;}
