@@ -91,6 +91,8 @@ public final class GameSurfaceView extends GLSurfaceView {
     public boolean isMovingTouchActive() { return movePointer!=-1; }
     public float getMoveTouchX() { return moveX; }
     public float getMoveTouchY() { return moveY; }
+    public float getMoveOriginDesignX() { return (moveOriginX-offsetX(getWidth(),scale(getWidth(),getHeight())))/scale(getWidth(),getHeight()); }
+    public float getMoveOriginDesignY() { return (moveOriginY-offsetY(getHeight(),scale(getWidth(),getHeight())))/scale(getWidth(),getHeight()); }
 
     private float scale(float w,float h) { return Math.min(w/1280f,h/720f); }
     private float offsetX(float w,float s) { return (w-1280f*s)*0.5f; }
@@ -157,8 +159,8 @@ public final class GameSurfaceView extends GLSurfaceView {
             float x=designX(px,w,s),y=designY(py,h,s);
             if(movePointer==-1&&x<330f&&y>420f) {
                 movePointer=id;
-                moveOriginX=offsetX(w,s)+179f*s;
-                moveOriginY=offsetY(h,s)+544f*s;
+                moveOriginX=px;
+                moveOriginY=py;
                 updateMovement(px,py,w,h);
             } else if(lookPointer==-1&&x>=390f&&y>145f) {
                 lookPointer=id;lastLookX=px;lastLookY=py;
@@ -192,7 +194,7 @@ public final class GameSurfaceView extends GLSurfaceView {
 
     private void updateMovement(float x,float y,float w,float h) {
         float s=scale(w,h),radius=94f*s;
-        moveX=clamp((moveOriginX-x)/radius,-1f,1f);
+        moveX=clamp((x-moveOriginX)/radius,-1f,1f);
         moveY=clamp((moveOriginY-y)/radius,-1f,1f);
     }
     private static float clamp(float value,float min,float max) {
