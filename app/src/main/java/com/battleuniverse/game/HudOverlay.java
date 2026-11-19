@@ -545,7 +545,7 @@ public final class HudOverlay extends View {
             if(hit(x,y,270,408,570,148)){toast("Veja seus cosméticos e itens adquiridos.");return;}
         }else if(page==PROFILE){
             if(hit(x,y,270,486,570,58)){
-                if(googleAccountAction!=null)googleAccountAction();
+                if(googleAccountAction!=null)googleAccountAction.run();
                 else toast("Conta Google indisponível.");
                 return;
             }
