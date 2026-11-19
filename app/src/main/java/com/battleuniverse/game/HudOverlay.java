@@ -47,7 +47,8 @@ public final class HudOverlay extends View {
     private static final long[] MISSION_XP={120,180,0};
     private static final long[] MISSION_DIAMONDS={0,0,80};
     private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
-    private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM"};
+    private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM","FROZEN FRONT","INDUSTRIAL ZONE","GREEN VALLEY","ORBITAL BASE"};
+    private static final String[] MAP_DETAILS={"Praias • florestas • vilas","Arranha-céus • neon • avenidas","Dunas • cânions • ruínas","Geleiras • neve • bases polares","Fábricas • depósitos • chaminés","Campos • rios • florestas","Instalações • plataformas • tecnologia"};
     private static final String[] CHARACTER_NAMES={"BLOOB","BLOOB TÁTICO","BLOOB NEON","BLOOB DOURADO"};
     private static final String[] QUALITY_NAMES={"ECONÔMICO","EQUILIBRADO","ALTO"};
     private final GameSurfaceView game;
@@ -72,6 +73,7 @@ public final class HudOverlay extends View {
         setClickable(true); setFocusable(true);
         mode=prefs.getInt("mode",0); map=prefs.getInt("map",0);
         character=prefs.getInt("character",0); quality=prefs.getInt("quality",1);
+        map=Math.max(0,Math.min(MAP_NAMES.length-1,map));
         music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
         lookSensitivity=prefs.getInt("look_sensitivity",1);
         invertCameraY=prefs.getBoolean("invert_camera_y",false);
@@ -180,7 +182,7 @@ public final class HudOverlay extends View {
         else if(page==WARDROBE)drawWardrobePage(c);
     }
     private void drawHome(Canvas c){
-        eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.3.0  /  OPERAÇÃO BLOOB");
+        eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.4.0  /  SEASON 03");
         text(c,"SUA PRÓXIMA",272,224,37,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"JORNADA COMEÇA AQUI.",272,267,37,0xFF55DDE7,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"Monte sua equipe, escolha o destino e entre na batalha.",274,296,14,0xFFB3C8D4,Typeface.DEFAULT);
@@ -192,7 +194,7 @@ public final class HudOverlay extends View {
         chevron(c,515,385);
         eyebrow(c,578,357,"MAPA SELECIONADO");
         text(c,MAP_NAMES[map],578,390,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,map==0?"Praias • Florestas • Vilas":map==1?"Cidade moderna • Neon":"Dunas • Cânions • Ruínas",578,417,11,0xFF9DB6C5,Typeface.DEFAULT);
+        text(c,MAP_DETAILS[map],578,417,11,0xFF9DB6C5,Typeface.DEFAULT);
         chevron(c,817,385);
         gradientButton(c,270,468,342,78,"JOGAR AGORA","ENTRAR NA PARTIDA",0xFFFFB45E,0xFFE97543);
         text(c,"▶",292,516,21,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
@@ -238,18 +240,18 @@ public final class HudOverlay extends View {
         }
     }
     private void drawMaps(Canvas c){
-        eyebrow(c,270,175,"DESTINOS DISPONÍVEIS");title(c,"ESCOLHA O MAPA",270,224);
-        subtitle(c,"Cada região terá clima, terreno e pontos de interesse próprios.",270,252);
-        int[] colors={0xFF1B7B72,0xFF554C91,0xFFB77B43};
-        String[] detail={"Praias, floresta e vilas","Cidade moderna e distritos neon","Dunas, cânions e instalações"};
-        for(int i=0;i<3;i++){
-            float x=270+i*190;boolean active=map==i;
-            panel(c,x,292,174,258,active?0xDB1B5B69:0xB0193040,active?0xFF48D7E1:0x335D8495,18);
-            panel(c,x+12,305,150,112,colors[i],0x66FFFFFF,12);
-            mapArtwork(c,i,x+12,305,150,112);
-            text(c,MAP_NAMES[i],x+15,451,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,detail[i],x+15,477,10,0xFFABC0CC,Typeface.DEFAULT);
-            pill(c,x+15,506,active?105:93,25,active?"SELECIONADO":"SELECIONAR",
+        eyebrow(c,270,175,"7 DESTINOS • MAPAS SELECIONÁVEIS");title(c,"ESCOLHA O MAPA",270,224);
+        subtitle(c,"Cada arena usa uma identidade visual própria na partida.",270,252);
+        int[] colors={0xFF1B7B72,0xFF554C91,0xFFB77B43,0xFF8CB8CE,0xFF59666C,0xFF43875A,0xFF344B70};
+        for(int i=0;i<MAP_NAMES.length;i++){
+            int col=i%4,row=i/4;float x=270+col*145f,y=282+row*178f;
+            boolean active=map==i;
+            panel(c,x,y,132,164,active?0xDB1B5B69:0xB0193040,active?0xFF48D7E1:0x335D8495,15);
+            panel(c,x+8,y+9,116,76,colors[i],0x66FFFFFF,10);
+            mapArtwork(c,i,x+8,y+9,116,76);
+            text(c,MAP_NAMES[i],x+9,y+108,9.2f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,MAP_DETAILS[i],x+9,y+126,7.1f,0xFFABC0CC,Typeface.DEFAULT);
+            pill(c,x+9,y+137,active?105:92,20,active?"SELECIONADO":"SELECIONAR",
                     active?0xFF176A75:0x553B6172,active?Color.WHITE:0xFFBBD0D9);
         }
     }
@@ -589,13 +591,18 @@ public final class HudOverlay extends View {
         text(c,"Operações locais da Temporada 02.",913,616,10,0xFF7FA4B7,Typeface.DEFAULT);
     }
     private void mapArtwork(Canvas c,int map,float x,float y,float w,float h){
-        p.setShader(new LinearGradient(x,y,x+w,y+h,
-                map==0?new int[]{0xFF54C2D1,0xFF1B665B}:map==1?new int[]{0xFF7B6BD6,0xFF171F49}:new int[]{0xFFE4B366,0xFF8B5737},
-                null,Shader.TileMode.CLAMP));
+        int[][] palettes={{0xFF54C2D1,0xFF1B665B},{0xFF7B6BD6,0xFF171F49},{0xFFE4B366,0xFF8B5737},
+            {0xFFB9E5F2,0xFF567F9D},{0xFF89979A,0xFF26343A},{0xFF83C66D,0xFF1B6041},{0xFF5479A9,0xFF111D3A}};
+        int index=Math.max(0,Math.min(palettes.length-1,map));
+        p.setShader(new LinearGradient(x,y,x+w,y+h,palettes[index],null,Shader.TileMode.CLAMP));
         r.set(x,y,x+w,y+h);c.drawRoundRect(r,12,12,p);p.setShader(null);
-        if(map==0){circle(c,x+108,y+66,19,0xFFE8D79B,0xFFFFE7B2);for(int i=0;i<3;i++)palmIcon(c,x+35+i*48,y+79);}
-        else if(map==1){for(int i=0;i<5;i++){float bx=x+12+i*28;p.setColor(i%2==0?0xFF18284D:0xFF31295E);c.drawRoundRect(bx,y+20+(i%2)*18,bx+19,y+97,2,2,p);p.setColor(0xFF4FE4F0);for(int j=0;j<3;j++)c.drawRect(bx+5,y+33+j*18,bx+9,y+38+j*18,p);}}
-        else{p.setColor(0xFF8B5737);c.drawOval(x+3,y+58,x+145,y+112,p);p.setColor(0xFFD59B58);c.drawOval(x+28,y+55,x+138,y+101,p);p.setColor(0xFF6C4934);c.drawRoundRect(x+69,y+36,x+95,y+90,5,5,p);}
+        if(map==0){circle(c,x+w*.72f,y+h*.48f,h*.17f,0xFFE8D79B,0xFFFFE7B2);for(int i=0;i<3;i++)palmIcon(c,x+w*(.22f+i*.27f),y+h*.82f);}
+        else if(map==1){for(int i=0;i<5;i++){float bx=x+8+i*22;p.setColor(i%2==0?0xFF18284D:0xFF31295E);c.drawRoundRect(bx,y+14+(i%2)*9,bx+15,y+h-7,2,2,p);p.setColor(0xFF4FE4F0);for(int j=0;j<3;j++)c.drawRect(bx+4,y+22+j*13,bx+8,y+26+j*13,p);}}
+        else if(map==2){p.setColor(0xFF8B5737);c.drawOval(x+3,y+h*.55f,x+w-4,y+h+8,p);p.setColor(0xFFD59B58);c.drawOval(x+w*.2f,y+h*.48f,x+w*.9f,y+h*.9f,p);}
+        else if(map==3){p.setColor(0xFFECF8FF);for(int i=0;i<4;i++)c.drawCircle(x+12+i*29,y+22+(i%2)*10,7,p);p.setColor(0xFF6C9DB7);c.drawRect(x+8,y+h*.68f,x+w-8,y+h*.82f,p);}
+        else if(map==4){for(int i=0;i<4;i++){float bx=x+13+i*27;p.setColor(0xFF39484D);c.drawRect(bx,y+17,bx+12,y+h-8,p);p.setColor(0xFFDB8A48);c.drawRect(bx+3,y+25,bx+9,y+31,p);}p.setColor(0xFF263238);c.drawRect(x+w*.72f,y+8,x+w*.83f,y+h-5,p);}
+        else if(map==5){p.setColor(0xFF1C6947);for(int i=0;i<5;i++)c.drawCircle(x+12+i*23,y+h*.62f,10,p);p.setColor(0xFF8BD58B);c.drawOval(x+10,y+h*.65f,x+w-10,y+h+6,p);}
+        else{p.setColor(0xFF172C55);for(int i=0;i<4;i++){float bx=x+12+i*27;c.drawRoundRect(bx,y+12,bx+13,y+h-8,3,3,p);}p.setColor(0xFF5BE7F2);c.drawCircle(x+w*.5f,y+h*.45f,10,p);}
     }
     private void palmIcon(Canvas c,float x,float y){
         p.setColor(0xFF175944);p.setStrokeWidth(3);c.drawLine(x,y,x+3,y-27,p);
@@ -800,9 +807,12 @@ public final class HudOverlay extends View {
                 toast("Modo "+MODE_NAMES[i]+" selecionado");return;
             }
         }else if(page==MAPS_PAGE){
-            for(int i=0;i<3;i++)if(hit(x,y,270+i*190,292,174,258)){
+            for(int i=0;i<MAP_NAMES.length;i++){
+                int col=i%4,row=i/4;float mx=270+col*145f,my=282+row*178f;
+                if(hit(x,y,mx,my,132,164)){
                 map=i;game.setMap(i);prefs.edit().putInt("map",i).apply();
                 toast("Mapa "+MAP_NAMES[i]+" selecionado");return;
+                }
             }
         }else if(page==PROFILE){
             if(hit(x,y,270,486,570,58)){
