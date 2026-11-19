@@ -10,6 +10,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private volatile float moveX,moveY,lookDX,lookDY;
     private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1,lookSensitivity=1;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
+    private volatile int shirtStyle,bootStyle,setStyle;
     private volatile boolean contentPackReady=false;
     private volatile boolean invertCameraY=false;
     private boolean aimToggled=false;
@@ -59,6 +60,12 @@ public final class GameSurfaceView extends GLSurfaceView {
         queueEvent(()->nativeSetLookSensitivity(lookSensitivity));
     }
     public void setInvertCameraY(boolean enabled) { invertCameraY=enabled; }
+    public void setWardrobe(int shirt,int boots,int set) {
+        shirtStyle=Math.max(0,Math.min(4,shirt));
+        bootStyle=Math.max(0,Math.min(4,boots));
+        setStyle=Math.max(0,Math.min(4,set));
+        queueEvent(()->nativeSetWardrobe(shirtStyle,bootStyle,setStyle));
+    }
     public int getEliminations() {
         try { return nativeGetEliminations(); } catch(UnsatisfiedLinkError error) { return 0; }
     }
@@ -198,6 +205,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetMode(int id);
     private static native void nativeSetQuality(int value);
     private static native void nativeSetLookSensitivity(int value);
+    private static native void nativeSetWardrobe(int shirt,int boots,int set);
     private static native void nativeSetContentData(int buildLimit,int resourceCount);
     private static native String nativeGetStatus();
     private static native float[] nativeGetPlayerPosition();
@@ -211,6 +219,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             nativeInit();
             nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
             nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity);
+            nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
             nativeSetScreen(screenMode);
             previous=System.nanoTime();
