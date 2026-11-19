@@ -16,6 +16,7 @@
 namespace {
 constexpr float PI = 3.14159265358979323846f;
 constexpr int BOT_COUNT = 29;
+constexpr int BOT_MAX_HEALTH = 12;
 constexpr int CRYSTAL_COUNT = 12;
 constexpr int BUTTON_JUMP = 1;
 constexpr int BUTTON_INTERACT = 2;
@@ -101,6 +102,9 @@ int gCollected=0, gPreviousButtons=0;
 std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
 struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; float fireFlash=0; bool aiming=false; int targetIndex=-1; bool targetPlayer=false; };
 std::array<int,BOT_COUNT> gBotHealth{};
+std::array<int,BOT_COUNT> gBotDamageAmount{};
+std::array<float,BOT_COUNT> gBotDamageTimer{};
+std::array<Vec3,BOT_COUNT> gBotDamagePosition{};
 std::array<bool,BOT_COUNT> gBotActive{};
 std::array<float,BOT_COUNT> gBotRespawn{};
 std::array<float,BOT_COUNT> gBotAttackCooldown{};
@@ -289,6 +293,33 @@ void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,f
 }
 void drawCube(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
     drawMesh(gCubeVbo,36,p,size,color,yaw,tilt,tiltX);
+}
+void drawDamagePopup(Vec3 origin,int damage,float yaw,float rise) {
+    // Números 3D em sete segmentos, sempre voltados para a câmera.
+    const Vec3 color{1.0f,0.78f,0.16f};
+    const float scale=1.0f;
+    const float rightX=std::cos(yaw), rightZ=-std::sin(yaw);
+    auto segment=[&](float x,float y,Vec3 size) {
+        Vec3 p{origin.x+rightX*x,origin.y+3.35f+rise+y,origin.z+rightZ*x};
+        drawCube(p,size,color,yaw);
+    };
+    // Sinal de menos.
+    segment(-0.30f,0.0f,{0.19f*scale,0.055f*scale,0.07f});
+    const int digit=std::clamp(damage,0,9);
+    static const bool digits[10][7]={
+        {1,1,1,0,1,1,1},{0,0,1,0,0,1,0},{1,0,1,1,1,0,1},
+        {1,0,1,1,0,1,1},{0,1,1,1,0,1,0},{1,1,0,1,0,1,1},
+        {1,1,0,1,1,1,1},{1,0,1,0,0,1,0},{1,1,1,1,1,1,1},
+        {1,1,1,1,0,1,1}
+    };
+    const float x=0.02f;
+    if(digits[digit][0]) segment(x,0.25f,{0.30f*scale,0.055f*scale,0.07f});
+    if(digits[digit][1]) segment(x-0.15f,0.13f,{0.055f*scale,0.22f*scale,0.07f});
+    if(digits[digit][2]) segment(x+0.15f,0.13f,{0.055f*scale,0.22f*scale,0.07f});
+    if(digits[digit][3]) segment(x,0.0f,{0.30f*scale,0.055f*scale,0.07f});
+    if(digits[digit][4]) segment(x-0.15f,-0.13f,{0.055f*scale,0.22f*scale,0.07f});
+    if(digits[digit][5]) segment(x+0.15f,-0.13f,{0.055f*scale,0.22f*scale,0.07f});
+    if(digits[digit][6]) segment(x,-0.25f,{0.30f*scale,0.055f*scale,0.07f});
 }
 void drawSphere(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
     drawMesh(gSphereVbo,gSphereCount,p,size,color,yaw,tilt,tiltX);
@@ -528,7 +559,9 @@ void resetBots() {
             std::sin(angle)*radius};
     }
     const std::array<Vec3,3> allyOffsets{{{-8,0.55f,-7},{8,0.55f,-8},{0,0.55f,9}}};
-    gBotHealth.fill(6);
+    gBotHealth.fill(BOT_MAX_HEALTH);
+    gBotDamageAmount.fill(0);
+    gBotDamageTimer.fill(0.0f);
     gBotActive.fill(true);
     gBotRespawn.fill(0.0f);
     for(int i=0;i<BOT_COUNT;++i) {
@@ -558,7 +591,7 @@ void updateBots(float dt) {
                 gBotRespawn[static_cast<size_t>(i)]=std::max(0.0f,gBotRespawn[static_cast<size_t>(i)]-dt);
                 if(gBotRespawn[static_cast<size_t>(i)]<=0.0f) {
                     bot.pos=gBotHomes[static_cast<size_t>(i)];
-                    bot.speed=0;gBotHealth[static_cast<size_t>(i)]=6;
+                    bot.speed=0;gBotHealth[static_cast<size_t>(i)]=BOT_MAX_HEALTH;
                     gBotActive[static_cast<size_t>(i)]=true;
                 } else continue;
             } else continue;
@@ -774,7 +807,10 @@ void firePulse() {
     } else if(hitBot>=0) {
         gBotHealth[static_cast<size_t>(hitBot)]=std::max(0,gBotHealth[static_cast<size_t>(hitBot)]-damage);
         const int healthAfterHit=gBotHealth[static_cast<size_t>(hitBot)];
-        { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/6"; setStatus(hit.str()); }
+        gBotDamageAmount[static_cast<size_t>(hitBot)]=damage;
+        gBotDamageTimer[static_cast<size_t>(hitBot)]=1.20f;
+        gBotDamagePosition[static_cast<size_t>(hitBot)]=gBots[static_cast<size_t>(hitBot)].pos;
+        { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/"<<BOT_MAX_HEALTH; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
             gBotActive[static_cast<size_t>(hitBot)]=false;
@@ -972,6 +1008,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(!gProgram||!gCubeVbo){glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);return;}
     const float dt=std::clamp(static_cast<float>(deltaSeconds),0.001f,0.05f);
     gMatchTime+=dt;
+    for(float& timer:gBotDamageTimer) timer=std::max(0.0f,timer-dt);
     gZoneRadius=std::max(38.0f,112.0f-gMatchTime*0.12f);
     if(gPulseCooldown>0)gPulseCooldown=std::max(0.0f,gPulseCooldown-dt);
     if(gBuildCooldown>0)gBuildCooldown=std::max(0.0f,gBuildCooldown-dt);
@@ -1188,21 +1225,32 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             drawSegment({0,0,0},0.0f,muzzle,impact,0.055f,{0.18f,0.88f,1.0f});
         }
         drawCube({bot.pos.x,bot.pos.y+2.72f,bot.pos.z},
-            {0.70f*static_cast<float>(gBotHealth[static_cast<size_t>(i)])/6.0f,0.07f,0.07f},
+            {0.70f*static_cast<float>(gBotHealth[static_cast<size_t>(i)])/static_cast<float>(BOT_MAX_HEALTH),0.07f,0.07f},
             isAllyBot(i)?Vec3{0.20f,0.90f,0.55f}:Vec3{0.95f,0.30f,0.20f},bot.yaw);
     }
-    // ESP de fim de partida: destaca todos os oponentes restantes, mesmo atrás de obstáculos.
-    int remainingOpponents=0;
-    for(int i=0;i<BOT_COUNT;++i) if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)]) ++remainingOpponents;
-    if(gSelectedMode!=3 && remainingOpponents<=5 && remainingOpponents>0) {
+    // Dano flutuante: permanece visível por pouco tempo mesmo se a IA for eliminada.
+    glDisable(GL_DEPTH_TEST);
+    for(int i=0;i<BOT_COUNT;++i) {
+        if(gBotDamageTimer[static_cast<size_t>(i)]<=0.0f) continue;
+        const float elapsed=1.20f-gBotDamageTimer[static_cast<size_t>(i)];
+        const float rise=elapsed*1.35f;
+        drawDamagePopup(gBotDamagePosition[static_cast<size_t>(i)],
+            gBotDamageAmount[static_cast<size_t>(i)],gCameraYaw,rise);
+    }
+    glEnable(GL_DEPTH_TEST);
+
+    // ESP final quando restarem cinco participantes no total, contando o jogador.
+    int remainingPlayers=1;
+    for(int i=0;i<BOT_COUNT;++i) if(gBotActive[static_cast<size_t>(i)]) ++remainingPlayers;
+    if(gSelectedMode!=3 && remainingPlayers<=5) {
         glDisable(GL_DEPTH_TEST);
         for(int i=0;i<BOT_COUNT;++i) {
             if(isAllyBot(i)||!gBotActive[static_cast<size_t>(i)]) continue;
             const Vec3 pos=gBots[static_cast<size_t>(i)].pos;
             const Vec3 markerBase{pos.x,pos.y+3.2f,pos.z};
-            const Vec3 markerTop{pos.x,pos.y+8.5f,pos.z};
-            drawSegment({0,0,0},0.0f,markerBase,markerTop,0.12f,{1.0f,0.18f,0.12f});
-            drawSphere(markerTop,{0.75f,0.75f,0.75f},{1.0f,0.22f,0.12f});
+            const Vec3 markerTop{pos.x,pos.y+12.0f,pos.z};
+            drawSegment({0,0,0},0.0f,markerBase,markerTop,0.18f,{1.0f,0.12f,0.06f});
+            drawSphere(markerTop,{1.05f,1.05f,1.05f},{1.0f,0.18f,0.08f});
         }
         glEnable(GL_DEPTH_TEST);
     }
