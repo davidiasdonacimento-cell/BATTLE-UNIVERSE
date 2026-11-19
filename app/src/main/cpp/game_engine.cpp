@@ -14,7 +14,7 @@
 
 namespace {
 constexpr float PI = 3.14159265358979323846f;
-constexpr int BOT_COUNT = 12;
+constexpr int BOT_COUNT = 29;
 constexpr int CRYSTAL_COUNT = 12;
 constexpr int BUTTON_JUMP = 1;
 constexpr int BUTTON_INTERACT = 2;
@@ -402,40 +402,74 @@ void drawSegment(Vec3 base,float yaw,Vec3 a,Vec3 b,float radius,Vec3 color) {
     drawSphere(localPoint(base,mid.x,mid.y,mid.z,yaw),
         {radius*2.0f,len+radius*0.8f,radius*2.0f},color,yaw,tiltZ,tiltX);
 }
-void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movement=0.0f) {
+void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movement=0.0f,
+                   bool aiming=false,bool firing=false,bool sprinting=false) {
+    // Bloob: corpo cilíndrico azul, cabeça arredondada e olhos grandes.
+    // As poses são calculadas por quadro, sem arquivos de animação externos.
     const float gait=std::clamp(movement,0.0f,1.0f);
-    const float phase=time*8.2f+(bot?0.7f:0.0f);
-    const float swing=std::sin(phase)*0.36f*gait;
-    const float bob=std::sin(phase*2.0f)*0.025f*gait+std::sin(time*1.5f)*0.014f;
-    const Vec3 skin{0.68f,0.47f,0.34f},pants{0.075f,0.11f,0.16f},boots{0.025f,0.035f,0.045f};
-    drawSphere(localPoint(p,0,1.16f+bob,0,yaw),{0.66f,0.93f,0.39f},color,yaw);
-    drawSphere(localPoint(p,0,1.31f+bob,-0.035f,yaw),{0.63f,0.62f,0.43f},
-        {std::min(1.0f,color.x*1.12f),std::min(1.0f,color.y*1.12f),std::min(1.0f,color.z*1.12f)},yaw);
-    drawSphere(localPoint(p,0,1.19f+bob,-0.245f,yaw),{0.49f,0.72f,0.115f},{0.055f,0.105f,0.14f},yaw);
-    drawSphere(localPoint(p,0,1.48f+bob,-0.30f,yaw),{0.37f,0.12f,0.055f},{0.10f,0.65f,0.72f},yaw);
-    drawSphere(localPoint(p,0,1.42f+bob,0.245f,yaw),{0.45f,0.58f,0.25f},{0.07f,0.13f,0.17f},yaw);
-    drawSphere(localPoint(p,-0.43f,1.43f+bob,0,yaw),{0.23f,0.26f,0.25f},{0.13f,0.18f,0.21f},yaw);
-    drawSphere(localPoint(p,0.43f,1.43f+bob,0,yaw),{0.23f,0.26f,0.25f},{0.13f,0.18f,0.21f},yaw);
-    drawCylinder(localPoint(p,0,1.70f+bob,0,yaw),{0.17f,0.18f,0.17f},skin,yaw);
-    drawSphere(localPoint(p,0,1.96f+bob,0,yaw),{0.34f,0.43f,0.32f},skin,yaw);
-    drawSphere(localPoint(p,0,2.15f+bob,0.005f,yaw),{0.365f,0.205f,0.35f},{0.045f,0.065f,0.085f},yaw);
-    drawSphere(localPoint(p,0,2.035f+bob,-0.29f,yaw),{0.245f,0.065f,0.045f},{0.055f,0.075f,0.09f},yaw);
-    drawSphere(localPoint(p,-0.115f,1.99f+bob,-0.305f,yaw),{0.035f,0.035f,0.022f},{0.025f,0.035f,0.04f},yaw);
-    drawSphere(localPoint(p,0.115f,1.99f+bob,-0.305f,yaw),{0.035f,0.035f,0.022f},{0.025f,0.035f,0.04f},yaw);
-    Vec3 hipL{-0.19f,0.82f+bob,swing*0.36f},kneeL{-0.20f,0.47f+bob,swing*0.72f},footL{-0.20f,0.16f+bob,swing*0.86f};
-    Vec3 hipR{0.19f,0.82f+bob,-swing*0.36f},kneeR{0.20f,0.47f+bob,-swing*0.72f},footR{0.20f,0.16f+bob,-swing*0.86f};
-    drawSegment(p,yaw,hipL,kneeL,0.135f,pants);drawSegment(p,yaw,kneeL,footL,0.105f,pants);
-    drawSegment(p,yaw,hipR,kneeR,0.135f,pants);drawSegment(p,yaw,kneeR,footR,0.105f,pants);
-    drawSphere(localPoint(p,-0.20f,0.105f+bob,-0.16f+swing*0.86f,yaw),{0.24f,0.13f,0.37f},boots,yaw);
-    drawSphere(localPoint(p,0.20f,0.105f+bob,-0.16f-swing*0.86f,yaw),{0.24f,0.13f,0.37f},boots,yaw);
-    Vec3 shoulderL{-0.43f,1.53f+bob,0},elbowL{-0.52f,1.13f+bob,-swing*0.55f},handL{-0.48f,0.84f+bob,-swing*0.72f};
-    Vec3 shoulderR{0.43f,1.53f+bob,0},elbowR{0.52f,1.13f+bob,swing*0.55f},handR{0.48f,0.84f+bob,swing*0.72f};
-    drawSegment(p,yaw,shoulderL,elbowL,0.105f,color);drawSegment(p,yaw,elbowL,handL,0.085f,skin);
-    drawSegment(p,yaw,shoulderR,elbowR,0.105f,color);drawSegment(p,yaw,elbowR,handR,0.085f,skin);
-    drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.115f,0.13f,0.115f},skin,yaw);
-    drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.115f,0.13f,0.115f},skin,yaw);
-    drawCylinder(localPoint(p,0.49f,0.93f+bob,swing*0.72f-0.20f,yaw),{0.105f,0.42f,0.105f},{0.12f,0.72f,0.86f},yaw,0.0f,-PI*0.5f);
-    drawSphere(localPoint(p,0.49f,0.93f+bob,swing*0.72f-0.43f,yaw),{0.12f,0.12f,0.12f},{0.45f,0.95f,1.0f},yaw);
+    const float phase=time*(sprinting?10.8f:8.2f)+(bot?0.7f:0.0f);
+    const float swing=std::sin(phase)*(sprinting?0.46f:0.34f)*gait;
+    const float bob=std::sin(phase*2.0f)*0.035f*gait+std::sin(time*1.5f)*0.014f;
+    const float recoil=firing?0.105f:0.0f;
+    const Vec3 shell=color;
+    const Vec3 bootColor{0.91f,0.95f,0.98f};
+    const Vec3 dark{0.055f,0.095f,0.13f};
+    const Vec3 white{0.95f,0.98f,1.0f};
+    const float eyeShift=std::sin(time*1.7f+(bot?1.0f:0.0f))*0.018f;
+
+    Vec3 hipL{-0.19f,0.72f+bob,swing*0.34f};
+    Vec3 kneeL{-0.20f,0.43f+bob,swing*0.72f};
+    Vec3 footL{-0.20f,0.17f+bob,swing*0.88f};
+    Vec3 hipR{0.19f,0.72f+bob,-swing*0.34f};
+    Vec3 kneeR{0.20f,0.43f+bob,-swing*0.72f};
+    Vec3 footR{0.20f,0.17f+bob,-swing*0.88f};
+    drawSegment(p,yaw,hipL,kneeL,0.125f,shell);
+    drawSegment(p,yaw,kneeL,footL,0.105f,shell);
+    drawSegment(p,yaw,hipR,kneeR,0.125f,shell);
+    drawSegment(p,yaw,kneeR,footR,0.105f,shell);
+    drawSphere(localPoint(p,-0.20f,0.12f+bob,-0.16f+swing*0.88f,yaw),
+        {0.25f,0.15f,0.36f},bootColor,yaw);
+    drawSphere(localPoint(p,0.20f,0.12f+bob,-0.16f-swing*0.88f,yaw),
+        {0.25f,0.15f,0.36f},bootColor,yaw);
+
+    drawCylinder(localPoint(p,0,0.78f+bob,0,yaw),{0.78f,0.52f,0.72f},shell,yaw);
+    drawCylinder(localPoint(p,0,1.20f+bob,0,yaw),{0.82f,0.78f,0.74f},shell,yaw);
+    drawCylinder(localPoint(p,0,1.61f+bob,0,yaw),{0.38f,0.18f,0.38f},shell,yaw);
+    drawCylinder(localPoint(p,0,1.86f+bob,0,yaw),{0.78f,0.48f,0.72f},shell,yaw);
+    drawSphere(localPoint(p,0,2.04f+bob,0,yaw),{0.79f,0.32f,0.73f},shell,yaw);
+
+    drawSphere(localPoint(p,-0.205f,1.99f+bob,-0.322f,yaw),{0.275f,0.285f,0.145f},white,yaw);
+    drawSphere(localPoint(p,0.205f,1.99f+bob,-0.322f,yaw),{0.275f,0.285f,0.145f},white,yaw);
+    drawSphere(localPoint(p,-0.205f+eyeShift,1.99f+bob,-0.448f,yaw),{0.108f,0.12f,0.066f},dark,yaw);
+    drawSphere(localPoint(p,0.205f+eyeShift,1.99f+bob,-0.448f,yaw),{0.108f,0.12f,0.066f},dark,yaw);
+    drawSphere(localPoint(p,-0.235f+eyeShift,2.035f+bob,-0.505f,yaw),{0.025f,0.027f,0.018f},white,yaw);
+    drawSphere(localPoint(p,0.175f+eyeShift,2.035f+bob,-0.505f,yaw),{0.025f,0.027f,0.018f},white,yaw);
+
+    Vec3 shoulderL{-0.40f,1.48f+bob,0.0f}, shoulderR{0.40f,1.48f+bob,0.0f};
+    Vec3 elbowL,handL,elbowR,handR;
+    if(aiming) {
+        elbowL={-0.31f,1.34f+bob,-0.25f}; handL={-0.15f,1.31f+bob,-0.57f};
+        elbowR={0.31f,1.36f+bob,-0.24f}; handR={0.15f,1.31f+bob,-0.58f};
+    } else {
+        elbowL={-0.50f,1.14f+bob,-swing*0.55f}; handL={-0.47f,0.88f+bob,-swing*0.78f};
+        elbowR={0.50f,1.14f+bob,swing*0.55f}; handR={0.47f,0.88f+bob,swing*0.78f};
+    }
+    drawSegment(p,yaw,shoulderL,elbowL,0.105f,shell);
+    drawSegment(p,yaw,elbowL,handL,0.083f,shell);
+    drawSegment(p,yaw,shoulderR,elbowR,0.105f,shell);
+    drawSegment(p,yaw,elbowR,handR,0.083f,shell);
+    drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.11f,0.12f,0.11f},shell,yaw);
+    drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.11f,0.12f,0.11f},shell,yaw);
+
+    drawCube(localPoint(p,0,1.32f+bob,-0.75f+recoil,yaw),
+        {0.22f,0.16f,0.52f},{0.055f,0.105f,0.15f},yaw);
+    drawCube(localPoint(p,0,1.43f+bob,-0.70f+recoil,yaw),
+        {0.12f,0.055f,0.22f},{0.12f,0.73f,0.86f},yaw);
+    drawCube(localPoint(p,0,1.32f+bob,-1.05f+recoil,yaw),
+        {0.105f,0.105f,0.20f},{0.12f,0.62f,0.78f},yaw);
+    drawSphere(localPoint(p,0,1.32f+bob,-1.18f+recoil,yaw),
+        {firing?0.14f:0.085f,firing?0.14f:0.085f,firing?0.14f:0.085f},
+        firing?Vec3{0.45f,0.98f,1.0f}:Vec3{0.10f,0.80f,0.95f},yaw);
 }
 void drawCrystal(Vec3 p,float time,int index) {
     float bob=std::sin(time*2.2f+index)*0.16f, spin=time*0.55f+index*0.7f;
@@ -460,9 +494,9 @@ void updateStatus() {
     if(gDropState==1) {
         if(gDropTimer<PLANE_COUNTDOWN_SECONDS) {
             int remaining=static_cast<int>(std::ceil(PLANE_COUNTDOWN_SECONDS-gDropTimer));
-            out<<"EMBARQUE 13/13  •  DECOLAGEM EM "<<remaining<<"s  •  SALTO LIBERADO DEPOIS";
+            out<<"EMBARQUE 30/30  •  DECOLAGEM EM "<<remaining<<"s  •  SALTO LIBERADO DEPOIS";
         } else {
-            out<<"AVIÃO EM ROTA  •  13 PARTICIPANTES  •  TOQUE SALTAR";
+            out<<"AVIÃO EM ROTA  •  30 PARTICIPANTES  •  TOQUE SALTAR";
         }
     } else if(gDropState==2) {
         out<<(gParachuteOpen?"PARAQUEDAS ABERTO":"QUEDA LIVRE")
@@ -481,6 +515,14 @@ void updateStatus() {
     setStatus(out.str());
 }
 void resetBots() {
+    // 17 posições extras completam os 29 bots espalhados pelo mapa.
+    for(int i=12;i<BOT_COUNT;++i) {
+        const int slot=i-12;
+        const float angle=2.0f*PI*static_cast<float>(slot)/17.0f;
+        const float radius=48.0f+static_cast<float>(slot%4)*11.0f;
+        gBotHomes[static_cast<size_t>(i)]={std::cos(angle)*radius,0.55f,
+            std::sin(angle)*radius};
+    }
     const std::array<Vec3,3> allyOffsets{{{-8,0.55f,-7},{8,0.55f,-8},{0,0.55f,9}}};
     gBotHealth.fill(3);
     gBotActive.fill(true);
@@ -747,8 +789,8 @@ void drawTransportPlane(Vec3 pos,float time) {
     drawSphere({pos.x-1.0f,pos.y-0.72f,pos.z-6.3f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
     drawSphere({pos.x-1.0f,pos.y-0.72f,pos.z+6.3f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
     const std::array<Vec3,4> flightOutfits{{
-        {0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},
-        {0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}
+        {0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
+        {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}
     }};
     for(int i=0;i<=BOT_COUNT;++i) {
         const int row=i/5,col=i%5;
@@ -1019,21 +1061,28 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
     drawTargets(gMatchTime);drawBuildPieces();
 
-    const std::array<Vec3,4> outfits{{{0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},
-        {0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}}};
+    const std::array<Vec3,4> outfits{{{0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
+        {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}}};
     for(int i=0;i<BOT_COUNT;++i) {
         if(!gBotActive[static_cast<size_t>(i)])continue;
         const BotState& bot=gBots[static_cast<size_t>(i)];
         Vec3 botColor=isAllyBot(i)?Vec3{0.16f,0.62f,0.43f}:Vec3{0.82f,0.34f,0.19f};
+        const float playerDx=bot.pos.x-gPlayer.x;
+        const float playerDz=bot.pos.z-gPlayer.z;
+        const float botDistance2=playerDx*playerDx+playerDz*playerDz;
+        const float renderDistance=gQuality==0?44.0f:(gQuality==1?64.0f:92.0f);
+        if(botDistance2>renderDistance*renderDistance)continue;
+        const bool botAiming=!isAllyBot(i)&&botDistance2<34.0f*34.0f;
         drawCharacter(bot.pos,bot.yaw,botColor,true,
-            gMatchTime+bot.phase,std::min(1.0f,bot.speed/3.5f));
+            gMatchTime+bot.phase,std::min(1.0f,bot.speed/3.5f),botAiming,false,false);
         drawCube({bot.pos.x,bot.pos.y+2.72f,bot.pos.z},
             {0.70f*static_cast<float>(gBotHealth[static_cast<size_t>(i)])/3.0f,0.07f,0.07f},
             isAllyBot(i)?Vec3{0.20f,0.90f,0.55f}:Vec3{0.95f,0.30f,0.20f},bot.yaw);
     }
     Vec3 playerDraw=gPlayer;playerDraw.y+=gJumpHeight;
     drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
-        false,gMatchTime,moving?std::min(1.0f,moveLength):0.0f);
+        false,gMatchTime,moving?std::min(1.0f,moveLength):0.0f,
+        aimHeld,gPulseFlash>0.0f,(buttons&BUTTON_RUN)!=0);
     drawParachute(gPlayer);
 
     static float statusTimer=0;statusTimer+=dt;

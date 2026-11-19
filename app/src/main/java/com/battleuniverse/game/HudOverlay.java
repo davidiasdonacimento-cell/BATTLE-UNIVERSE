@@ -17,7 +17,7 @@ public final class HudOverlay extends View {
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS","INVENTÁRIO","AJUSTES"};
     private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
     private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM"};
-    private static final String[] CHARACTER_NAMES={"NOVA","ATLAS","EMBER","VOLT"};
+    private static final String[] CHARACTER_NAMES={"BLOOB","BLOOB TÁTICO","BLOOB NEON","BLOOB DOURADO"};
     private static final String[] QUALITY_NAMES={"ECONÔMICO","EQUILIBRADO","ALTO"};
     private final GameSurfaceView game;
     private final SharedPreferences prefs;
@@ -104,7 +104,7 @@ public final class HudOverlay extends View {
         else if(page==INVENTORY)drawInventory(c); else if(page==SETTINGS)drawSettings(c);
     }
     private void drawHome(Canvas c){
-        eyebrow(c,272,174,"TEMPORADA 01  /  OPERAÇÃO ILHA");
+        eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.1.0  /  OPERAÇÃO BLOOB");
         text(c,"SUA PRÓXIMA",272,224,37,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"JORNADA COMEÇA AQUI.",272,267,37,0xFF55DDE7,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"Monte sua equipe, escolha o destino e entre na batalha.",274,296,14,0xFFB3C8D4,Typeface.DEFAULT);
@@ -112,7 +112,7 @@ public final class HudOverlay extends View {
         panel(c,558,328,292,112,0xC9183040,0x557AA9BC,18);
         eyebrow(c,290,357,"MODO DE JOGO");
         text(c,MODE_NAMES[mode],290,390,21,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,mode==0?"12 adversários IA • sobrevivência":mode==1?"Você + 1 aliado • 11 adversários":mode==2?"Você + 3 aliados • 9 adversários":"Explore e pratique livremente",290,417,11,0xFF9DB6C5,Typeface.DEFAULT);
+        text(c,mode==0?"Você + 29 bots IA • 30 participantes":mode==1?"Você + 1 aliado • 28 bots IA":mode==2?"Você + 3 aliados • 26 bots IA":"Treinamento livre • alvos IA",290,417,11,0xFF9DB6C5,Typeface.DEFAULT);
         chevron(c,515,385);
         eyebrow(c,578,357,"MAPA SELECIONADO");
         text(c,MAP_NAMES[map],578,390,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -123,20 +123,20 @@ public final class HudOverlay extends View {
         panel(c,628,468,222,78,0xB9183040,0x557AA9BC,17);
         text(c,"● PARTIDA LOCAL",650,498,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
         text(c,"BATTLE ROYALE",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"12 adversários controlados por IA • sem conexão online nesta versão.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
+        text(c,"30 participantes offline • 1 jogador + 29 bots IA.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
         panel(c,270,608,580,58,0x70152B3A,0x225B8296,14);
-        stat(c,292,642,"04","VAGAS NA EQUIPE");stat(c,468,642,"03","MAPAS PLANEJADOS");stat(c,665,642,"AI","COMPANHEIROS");
+        stat(c,292,642,"30","PARTICIPANTES");stat(c,468,642,"29","BOTS IA");stat(c,665,642,"OFF","MODO OFFLINE");
     }
     private void drawCharacters(Canvas c){
         eyebrow(c,270,175,"PERSONALIZAÇÃO");title(c,"SUA EQUIPE",270,224);
-        subtitle(c,"Escolha seu operador. A seleção altera o personagem no cenário 3D.",270,252);
-        String[] roles={"RECONHECIMENTO","DEFESA","EXPLORAÇÃO","ESTRATÉGIA"};
-        int[] colors={0xFF287A91,0xFF6A647F,0xFF966344,0xFF437D66};
+        subtitle(c,"Escolha a skin do Bloob. As quatro variações aparecem no cenário 3D.",270,252);
+        String[] roles={"PADRÃO","TÁTICO","NEON","DOURADO"};
+        int[] colors={0xFF08A9D8,0xFF344C5C,0xFF8D42D7,0xFFE0A62B};
         for(int i=0;i<4;i++){
             float x=270+i*146;boolean active=character==i;
             panel(c,x,295,132,210,active?0xD51B5B69:0xA51A3040,active?0xFF48D7E1:0x335D8495,16);
             circle(c,x+66,365,36,colors[i],active?0xFF68E9EF:0xFF8AA5B4);
-            text(c,new String[]{"N","A","E","V"}[i],x+59,372,19,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,new String[]{"B","T","N","G"}[i],x+59,372,19,Color.WHITE,Typeface.DEFAULT_BOLD);
             text(c,CHARACTER_NAMES[i],x+18,432,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
             text(c,roles[i],x+14,453,9,0xFF9DB6C5,Typeface.DEFAULT);
             pill(c,x+(active?27:35),470,active?78:62,23,active?"SELECIONADO":"ESCOLHER",
@@ -149,9 +149,9 @@ public final class HudOverlay extends View {
     }
     private void drawModes(Canvas c){
         eyebrow(c,270,175,"SELECIONE A EXPERIÊNCIA");title(c,"MODOS DE JOGO",270,224);
-        subtitle(c,"A equipe e os adversários são controlados por IA nesta versão.",270,252);
-        String[] desc={"Você contra 12 adversários IA","Você + 1 aliado • 11 adversários","Você + 3 aliados • 9 adversários","Sem pressão • alvos e exploração"};
-        String[] counts={"13 NA PARTIDA","13 NA PARTIDA","13 NA PARTIDA","LIVRE"};
+        subtitle(c,"Partida offline com até 30 participantes: você e 29 bots IA.",270,252);
+        String[] desc={"Você contra 29 bots IA","Você + 1 aliado • 28 bots IA","Você + 3 aliados • 26 bots IA","Sem pressão • alvos e exploração"};
+        String[] counts={"30 PARTICIPANTES","30 PARTICIPANTES","30 PARTICIPANTES","TREINAMENTO"};
         for(int i=0;i<4;i++){
             float x=270+(i%2)*292,y=290+(i/2)*150;boolean active=mode==i;
             panel(c,x,y,270,126,active?0xD51B5B69:0xAA193040,active?0xFF48D7E1:0x335D8495,17);

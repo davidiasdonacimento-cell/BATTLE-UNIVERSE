@@ -2,7 +2,20 @@
 
 Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL ES 3.0 para o motor de jogo. Não usa Godot, Unity, WebView, HTML, CSS ou JavaScript.
 
-## Versão 0.5.0-alpha — inserção no avião e batalha local
+## Versão 1.1.0 — primeira integração do Bloob
+
+### Entrega inicial no código
+- Personagem Bloob renderizado em 3D nativo: corpo cilíndrico, cabeça arredondada, olhos grandes, pupilas e botas claras.
+- Animações procedurais em tempo real: parado, caminhada, corrida, mira, andar mirando, reação visual ao disparo, salto e descida de paraquedas.
+- Quatro skins visuais: padrão azul, tática, neon e dourada.
+- Partida offline configurada para 30 participantes: 1 jogador e 29 bots IA.
+- Bots distribuídos por diferentes posições do mapa; a distância de renderização varia conforme a qualidade gráfica para reduzir o trabalho na GPU.
+- Equipamento visual de energia fictício, sem armas reais.
+
+### Estado desta etapa
+Esta é uma alteração do código. O APK ainda precisa passar pela compilação do GitHub Actions e por teste físico no Android. O pacote adicional de 2 GB continua em desenvolvimento: o pacote antigo da Temporada 02 não foi ampliado para 2 GB nesta entrega. Não considerar a versão testada no aparelho até a realização do teste físico.
+
+## Versão anterior 0.5.0-alpha — inserção no avião e batalha local
 
 ### Correções e sistemas desta etapa
 - Controles touchscreen usam o mesmo sistema de coordenadas da HUD, compatível com telas panorâmicas.
@@ -12,8 +25,8 @@ Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL E
 - HUD nativa de jogo: minimapa com posição do jogador, joystick, disparo, troca de arma, construção, corrida, salto e interação.
 - Três armas de energia totalmente fictícias para o jogo: Pulso Plasma, Raio Arc e Nova. Munição, alternância, disparos visíveis, alvos de treino e dano aos bots.
 - Construção de paredes, plataformas e rampas, com madeira, limite, detecção de sobreposição e colisão de paredes.
-- Partida começa dentro de um avião de transporte aberto, com 12 adversários IA visíveis, contagem regressiva de 7 segundos e salto manual em terceira pessoa.
-- Modo Battle Royale local com 12 adversários IA espalhados pelo mapa, vida, eliminações, ataques fictícios de energia e dano fora da zona segura; treinamento fica separado.
+- Partida começa dentro de um avião de transporte aberto, com os 29 bots IA visíveis, contagem regressiva de 7 segundos e salto manual em terceira pessoa.
+- Modo Battle Royale local com 29 adversários IA espalhados pelo mapa, vida, eliminações, ataques fictícios de energia e dano fora da zona segura; treinamento fica separado.
 - Mira de ombro com zoom de câmera, retículo central e disparo alinhado à direção da câmera.
 - Movimento relativo à câmera corrigido; a combinação simultânea de analógico, câmera e botões mantém o encaminhamento multitouch ativo.
 - Sensibilidade da câmera selecionável (baixa, média e alta), salva no aparelho.
@@ -32,7 +45,7 @@ Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL E
 - USAR: coleta recursos próximos.
 
 ## Conteúdo da Temporada 02
-O instalador na primeira abertura baixa automaticamente um pacote de conteúdo expandido de aproximadamente 300 MB (tamanho exato mostrado na tela). O arquivo inclui:
+O instalador na primeira abertura baixa automaticamente um pacote de conteúdo expandido de aproximadamente 409 MiB (tamanho exato mostrado na tela). O arquivo inclui:
 - Modelo OBJ do avião de transporte, operador, emissor de energia, peças de construção e objetos de cenário.
 - Cinco conjuntos de materiais PBR com texturas 4K de albedo, normal e roughness e mapas AO 2K.
 - Oito arquivos de configuração de mapa.
