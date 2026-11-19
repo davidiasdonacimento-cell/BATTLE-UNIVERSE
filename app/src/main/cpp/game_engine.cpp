@@ -767,7 +767,7 @@ void updateBots(float dt) {
             bot.yaw=std::atan2(-dirX,-dirZ);
             bot.speed=engaging?(targetDistance>24.0f?5.2f:2.8f):(ally?3.0f:2.2f);
             const float step=std::min(distance,bot.speed*dt);
-            bot.pos.x+=dirX*step;bot.pos.z+=dirZ*step;
+            moveWithCollision(bot.pos,bot.pos.x+dirX*step,bot.pos.z+dirZ*step,0.55f);
         }
 
         if(engaging) {
@@ -809,8 +809,8 @@ void updateBots(float dt) {
                 std::max(0.0f,gBotAttackCooldown[static_cast<size_t>(i)]-dt);
         }
 
-        bot.pos.x=std::clamp(bot.pos.x,-116.0f,116.0f);
-        bot.pos.z=std::clamp(bot.pos.z,-116.0f,116.0f);
+        bot.pos.x=std::clamp(bot.pos.x,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
+        bot.pos.z=std::clamp(bot.pos.z,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
         for(int other=0;other<i;++other) {
             if(!gBotActive[static_cast<size_t>(other)])continue;
             const Vec3 op=gBots[static_cast<size_t>(other)].pos;
@@ -1267,8 +1267,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         moveLength=std::sqrt(dx*dx+dz*dz);
         if(moveLength>0.08f) {
             dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
-            gPlayer.x=std::clamp(gPlayer.x+dx*2.4f*dt,-116.0f,116.0f);
-            gPlayer.z=std::clamp(gPlayer.z+dz*2.4f*dt,-116.0f,116.0f);
+            gPlayer.x=std::clamp(gPlayer.x+dx*2.4f*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
+            gPlayer.z=std::clamp(gPlayer.z+dz*2.4f*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
             gPlayerYaw=std::atan2(-dx,-dz);
         }
         if(gJumpHeight<=0.0f) {
@@ -1285,18 +1285,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         if(moving) {
             dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
             const float speed=(buttons&BUTTON_RUN)?8.0f:5.2f;
-            float nx=std::clamp(gPlayer.x+dx*speed*dt,-116.0f,116.0f);
-            float nz=std::clamp(gPlayer.z+dz*speed*dt,-116.0f,116.0f);
-            bool blocked=false;
-            for(int i=0;i<gBuildCount;++i) {
-                const BuildPiece& piece=gBuildPieces[static_cast<size_t>(i)];
-                if(piece.type!=0)continue;
-                float rx=nx-piece.pos.x,rz=nz-piece.pos.z;
-                float c=std::cos(piece.yaw),sn=std::sin(piece.yaw);
-                float localX=c*rx-sn*rz,localZ=sn*rx+c*rz;
-                if(std::fabs(localX)<1.75f&&std::fabs(localZ)<0.72f){blocked=true;break;}
-            }
-            if(!blocked){gPlayer.x=nx;gPlayer.z=nz;}
+            const float nx=std::clamp(gPlayer.x+dx*speed*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
+            const float nz=std::clamp(gPlayer.z+dz*speed*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
+            moveWithCollision(gPlayer,nx,nz,0.42f);
             // Match the model's -Z forward axis to the actual travel direction.
             gPlayerYaw=std::atan2(-dx,-dz);
             gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
