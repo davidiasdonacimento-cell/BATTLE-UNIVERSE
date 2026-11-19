@@ -399,7 +399,12 @@ void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
     drawCube({x-(1.125f+sideWidth*0.5f),wallY,front},{sideWidth,h,0.20f},wall);
     drawCube({x+(1.125f+sideWidth*0.5f),wallY,front},{sideWidth,h,0.20f},wall);
     drawCube({x,0.55f+2.35f,front},{2.25f,0.35f,0.22f},roof);
-    drawCube({x,0.55f+h+0.16f,z},{w+0.35f,0.28f,d+0.35f},roof);
+    const float roofY=0.55f+h+0.16f;
+    // Roof beams frame the room without hiding its interior from the follow camera.
+    drawCube({x,roofY,z-d*0.5f},{w+0.35f,0.22f,0.20f},roof);
+    drawCube({x,roofY,z+d*0.5f},{w+0.35f,0.22f,0.20f},roof);
+    drawCube({x-w*0.5f,roofY,z},{0.20f,0.22f,d+0.35f},roof);
+    drawCube({x+w*0.5f,roofY,z},{0.20f,0.22f,d+0.35f},roof);
     drawCube({x-w*0.28f,2.7f,front-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
     drawCube({x+w*0.28f,2.7f,front-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
     drawCube({x+1.35f,0.92f,z+0.75f},{1.45f,0.55f,0.85f},{0.24f,0.34f,0.40f});
@@ -867,6 +872,9 @@ void placeBuildPiece() {
         float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;
         if(dx*dx+dz*dz<2.0f) {setStatus("LOCAL DE CONSTRUÇÃO BLOQUEADO");return;}
     }
+    if(worldPositionBlocked(pos.x,pos.z,1.15f)) {
+        setStatus("CONSTRUÇÃO BLOQUEADA • NÃO COLOQUE DENTRO DE CASAS OU BARREIRAS");return;
+    }
     const int placedType=gBuildType;
     gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,placedType};
     ++gBuildCount;gWood-=10;gBuildType=(gBuildType+1)%3;
@@ -1053,9 +1061,14 @@ void drawTransportPlaneCabin(Vec3 pos,float time) {
         int row=i/2, side=(i%2==0?-1:1);
         float xOffset=-13.1f+static_cast<float>(row)*1.86f;
         float zOffset=static_cast<float>(side)*3.8f;
-        Vec3 passenger{pos.x+xOffset,pos.y-0.54f,pos.z+zOffset};
+        const float phase=time*0.78f+static_cast<float>(i)*1.31f;
+        const float walk=0.18f+0.42f*std::fabs(std::sin(phase));
+        const float hop=std::pow(std::max(0.0f,std::sin(phase*0.83f+0.7f)),6.0f)*0.34f;
+        const float sway=std::sin(phase*0.62f)*0.12f;
+        Vec3 passenger{pos.x+xOffset+std::sin(phase*0.47f)*0.14f,
+                       pos.y-0.54f+hop,pos.z+zOffset+sway};
         drawCharacter(passenger,PI*0.5f,outfits[static_cast<size_t>(i%4)],true,
-            time+static_cast<float>(i)*0.19f,0.0f,false,false,false);
+            time+static_cast<float>(i)*0.19f,walk,false,false,false);
     }
     // Instrument console and front cockpit partition.
     drawCube({pos.x+14.8f,pos.y+0.95f,pos.z},{0.55f,1.8f,8.0f},{0.17f,0.24f,0.31f});
