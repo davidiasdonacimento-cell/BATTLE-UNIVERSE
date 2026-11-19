@@ -88,6 +88,9 @@ public final class GameSurfaceView extends GLSurfaceView {
     }
     public boolean isAimToggled() { return aimToggled; }
     public boolean isFiring() { return (buttons&FIRE)!=0; }
+    public boolean isMovingTouchActive() { return movePointer!=-1; }
+    public float getMoveTouchX() { return moveX; }
+    public float getMoveTouchY() { return moveY; }
 
     private float scale(float w,float h) { return Math.min(w/1280f,h/720f); }
     private float offsetX(float w,float s) { return (w-1280f*s)*0.5f; }
@@ -168,7 +171,7 @@ public final class GameSurfaceView extends GLSurfaceView {
                 float x=event.getX(i),y=event.getY(i);
                 if(id==movePointer)updateMovement(x,y,w,h);
                 else if(id==lookPointer) {
-                    lookDX+=(x-lastLookX)/w;
+                    lookDX-=(x-lastLookX)/w;
                     lookDY+=(y-lastLookY)/h;
                     lastLookX=x;lastLookY=y;
                 }
@@ -189,7 +192,7 @@ public final class GameSurfaceView extends GLSurfaceView {
 
     private void updateMovement(float x,float y,float w,float h) {
         float s=scale(w,h),radius=94f*s;
-        moveX=clamp((x-moveOriginX)/radius,-1f,1f);
+        moveX=clamp((moveOriginX-x)/radius,-1f,1f);
         moveY=clamp((moveOriginY-y)/radius,-1f,1f);
     }
     private static float clamp(float value,float min,float max) {
