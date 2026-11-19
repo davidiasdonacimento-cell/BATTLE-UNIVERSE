@@ -73,8 +73,10 @@ Mat4 lookAt(Vec3 eye,Vec3 center,Vec3 up) {
     return r;
 }
 
-GLuint gProgram=0, gCubeVbo=0;
-GLint gMvpLocation=-1, gColorLocation=-1;
+GLuint gProgram=0, gCubeVbo=0, gSphereVbo=0, gCylinderVbo=0, gConeVbo=0;
+GLsizei gSphereCount=0, gCylinderCount=0, gConeCount=0;
+GLint gMvpLocation=-1, gModelLocation=-1, gColorLocation=-1;
+int gScreenMode=0, gSelectedCharacter=0, gSelectedMap=0, gSelectedMode=0, gQuality=1;
 Mat4 gProjection=identity();
 int gWidth=1, gHeight=1;
 Vec3 gPlayer{0,0.55f,0};
@@ -110,6 +112,68 @@ void addFace(std::vector<float>& out,Vec3 a,Vec3 b,Vec3 c,Vec3 d,Vec3 n) {
         out.push_back(n.x); out.push_back(n.y); out.push_back(n.z);
     }
 }
+void appendVertex(std::vector<float>& out, Vec3 p, Vec3 n) {
+    out.insert(out.end(), {p.x,p.y,p.z,n.x,n.y,n.z});
+}
+void appendTriangle(std::vector<float>& out, Vec3 a, Vec3 b, Vec3 c, Vec3 na, Vec3 nb, Vec3 nc) {
+    appendVertex(out,a,na); appendVertex(out,b,nb); appendVertex(out,c,nc);
+}
+struct MeshBuffer { GLuint vbo=0; GLsizei count=0; };
+MeshBuffer makeMesh(const std::vector<float>& vertices) {
+    MeshBuffer mesh;
+    glGenBuffers(1,&mesh.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,mesh.vbo);
+    glBufferData(GL_ARRAY_BUFFER,static_cast<GLsizeiptr>(vertices.size()*sizeof(float)),vertices.data(),GL_STATIC_DRAW);
+    mesh.count=static_cast<GLsizei>(vertices.size()/6);
+    return mesh;
+}
+MeshBuffer buildSphere() {
+    std::vector<float> v;
+    constexpr int rings=18, slices=28;
+    for(int y=0;y<rings;++y) {
+        float v0=static_cast<float>(y)/rings, v1=static_cast<float>(y+1)/rings;
+        float p0=PI*v0, p1=PI*v1;
+        for(int x=0;x<slices;++x) {
+            float u0=2*PI*static_cast<float>(x)/slices, u1=2*PI*static_cast<float>(x+1)/slices;
+            auto point=[](float a,float b){return Vec3{std::sin(a)*std::cos(b),std::cos(a),std::sin(a)*std::sin(b)};};
+            Vec3 a=point(p0,u0),b=point(p1,u0),c=point(p1,u1),d=point(p0,u1);
+            appendTriangle(v,a,b,c,a,b,c); appendTriangle(v,a,c,d,a,c,d);
+        }
+    }
+    return makeMesh(v);
+}
+MeshBuffer buildCylinder() {
+    std::vector<float> v;
+    constexpr int n=24;
+    for(int i=0;i<n;++i) {
+        float a=2*PI*i/n,b=2*PI*(i+1)/n;
+        Vec3 p0{0.5f*std::cos(a),-0.5f,0.5f*std::sin(a)};
+        Vec3 p1{0.5f*std::cos(b),-0.5f,0.5f*std::sin(b)};
+        Vec3 p2{0.5f*std::cos(b),0.5f,0.5f*std::sin(b)};
+        Vec3 p3{0.5f*std::cos(a),0.5f,0.5f*std::sin(a)};
+        Vec3 n0{std::cos(a),0,std::sin(a)},n1{std::cos(b),0,std::sin(b)};
+        appendTriangle(v,p0,p1,p2,n0,n1,n1); appendTriangle(v,p0,p2,p3,n0,n1,n0);
+        appendTriangle(v,{0,-0.5f,0},p1,p0,{0,-1,0},{0,-1,0},{0,-1,0});
+        appendTriangle(v,{0,0.5f,0},p3,p2,{0,1,0},{0,1,0},{0,1,0});
+    }
+    return makeMesh(v);
+}
+MeshBuffer buildCone() {
+    std::vector<float> v;
+    constexpr int n=24;
+    Vec3 tip{0,0.5f,0};
+    for(int i=0;i<n;++i) {
+        float a=2*PI*i/n,b=2*PI*(i+1)/n;
+        Vec3 p0{0.5f*std::cos(a),-0.5f,0.5f*std::sin(a)};
+        Vec3 p1{0.5f*std::cos(b),-0.5f,0.5f*std::sin(b)};
+        Vec3 na=normalize({std::cos(a),0.55f,std::sin(a)});
+        Vec3 nb=normalize({std::cos(b),0.55f,std::sin(b)});
+        appendTriangle(v,p0,p1,tip,na,nb,normalize({std::cos(a)+std::cos(b),1.0f,std::sin(a)+std::sin(b)}));
+        appendTriangle(v,{0,-0.5f,0},p1,p0,{0,-1,0},{0,-1,0},{0,-1,0});
+    }
+    return makeMesh(v);
+}
+MeshBuffer gSphereMesh, gCylinderMesh, gConeMesh;
 void createCube() {
     std::vector<float> v; v.reserve(36*6);
     constexpr float n=-0.5f,p=0.5f;
@@ -126,14 +190,18 @@ bool initializeGraphics() {
     const char* vsSource=
         "#version 300 es\nprecision highp float;\n"
         "layout(location=0) in vec3 aPosition; layout(location=1) in vec3 aNormal;\n"
-        "uniform mat4 uMVP; out float vLight;\n"
-        "void main(){ vec3 l=normalize(vec3(-0.45,0.85,0.35));"
-        "vLight=0.48+0.52*max(dot(normalize(aNormal),l),0.0);"
+        "uniform mat4 uMVP; uniform mat4 uModel; out vec3 vNormal; out vec3 vWorld;\n"
+        "void main(){ vec4 world=uModel*vec4(aPosition,1.0);"
+        "vNormal=mat3(uModel)*aNormal; vWorld=world.xyz;"
         "gl_Position=uMVP*vec4(aPosition,1.0); }\n";
     const char* fsSource=
         "#version 300 es\nprecision mediump float;\n"
-        "in float vLight; uniform vec4 uColor; out vec4 fragColor;\n"
-        "void main(){ fragColor=vec4(uColor.rgb*vLight,uColor.a); }\n";
+        "in vec3 vNormal; in vec3 vWorld; uniform vec4 uColor; out vec4 fragColor;\n"
+        "void main(){ vec3 n=normalize(vNormal); vec3 l=normalize(vec3(-0.45,0.85,0.35));"
+        "float d=max(dot(n,l),0.0); vec3 v=normalize(vec3(0.0,6.0,18.0)-vWorld);"
+        "float sp=pow(max(dot(reflect(-l,n),v),0.0),24.0);"
+        "vec3 c=uColor.rgb*(0.42+0.58*d)+vec3(0.10)*sp;"
+        "fragColor=vec4(c,uColor.a); }\n";
     GLuint vs=compileShader(GL_VERTEX_SHADER,vsSource);
     GLuint fs=compileShader(GL_FRAGMENT_SHADER,fsSource);
     if (!vs||!fs) return false;
@@ -146,26 +214,49 @@ bool initializeGraphics() {
         glDeleteProgram(gProgram); gProgram=0; return false;
     }
     gMvpLocation=glGetUniformLocation(gProgram,"uMVP");
+    gModelLocation=glGetUniformLocation(gProgram,"uModel");
     gColorLocation=glGetUniformLocation(gProgram,"uColor");
-    createCube(); return gCubeVbo!=0;
+    createCube();
+    gSphereMesh=buildSphere(); gCylinderMesh=buildCylinder(); gConeMesh=buildCone();
+    gSphereVbo=gSphereMesh.vbo; gSphereCount=gSphereMesh.count;
+    gCylinderVbo=gCylinderMesh.vbo; gCylinderCount=gCylinderMesh.count;
+    gConeVbo=gConeMesh.vbo; gConeCount=gConeMesh.count;
+    return gCubeVbo!=0 && gSphereVbo!=0 && gCylinderVbo!=0 && gConeVbo!=0;
 }
-void drawCube(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
-    if (!gProgram||!gCubeVbo) return;
+void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
+    if(!gProgram||!vbo||count<=0)return;
     Mat4 model=multiply(translation(p.x,p.y,p.z),
         multiply(rotationY(yaw),multiply(rotationZ(tilt),scaling(size.x,size.y,size.z))));
     Mat4 mvp=multiply(gProjection,model);
     glUniformMatrix4fv(gMvpLocation,1,GL_FALSE,mvp.m);
+    glUniformMatrix4fv(gModelLocation,1,GL_FALSE,model.m);
     glUniform4f(gColorLocation,color.x,color.y,color.z,1.0f);
-    glDrawArrays(GL_TRIANGLES,0,36);
+    glBindBuffer(GL_ARRAY_BUFFER,vbo);
+    glEnableVertexAttribArray(0); glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),reinterpret_cast<void*>(0));
+    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),reinterpret_cast<void*>(3*sizeof(float)));
+    glDrawArrays(GL_TRIANGLES,0,count);
+}
+void drawCube(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
+    drawMesh(gCubeVbo,36,p,size,color,yaw,tilt);
+}
+void drawSphere(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
+    drawMesh(gSphereVbo,gSphereCount,p,size,color,yaw,tilt);
+}
+void drawCylinder(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
+    drawMesh(gCylinderVbo,gCylinderCount,p,size,color,yaw,tilt);
+}
+void drawCone(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
+    drawMesh(gConeVbo,gConeCount,p,size,color,yaw,tilt);
 }
 void drawPalm(float x,float z,float scale) {
-    drawCube({x,1.85f*scale,z},{0.34f*scale,2.7f*scale,0.34f*scale},{0.39f,0.23f,0.12f},0,-0.035f);
-    for (int i=0;i<7;++i) {
-        float a=(2*PI*i)/7.0f;
-        drawCube({x+std::cos(a)*0.88f*scale,3.10f*scale,z+std::sin(a)*0.88f*scale},
-            {2.25f*scale,0.12f*scale,0.34f*scale},{0.12f,0.44f,0.25f},-a,0.14f);
+    drawCylinder({x,1.45f*scale,z},{0.24f*scale,2.65f*scale,0.24f*scale},{0.35f,0.20f,0.10f},0,-0.035f);
+    drawSphere({x,2.85f*scale,z},{0.42f*scale,0.34f*scale,0.42f*scale},{0.18f,0.48f,0.23f});
+    for(int i=0;i<8;++i){
+        float a=(2*PI*i)/8.0f;
+        drawSphere({x+std::cos(a)*0.92f*scale,2.95f*scale,z+std::sin(a)*0.92f*scale},
+            {1.20f*scale,0.10f*scale,0.30f*scale},{0.10f,0.42f+0.025f*(i%3),0.20f},-a,0.12f);
     }
-    drawCube({x,3.18f*scale,z},{0.65f*scale,0.34f*scale,0.65f*scale},{0.15f,0.48f,0.24f});
 }
 void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
     drawCube({x,0.55f+h*0.5f,z},{w,h,d},wall);
@@ -175,9 +266,11 @@ void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
     drawCube({x+w*0.28f,2.7f,z-d*0.5f-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
 }
 void drawWorld(float time) {
-    drawCube({0,-1.05f,0},{260,0.55f,260},{0.035f,0.31f,0.48f});
-    drawCube({0,-0.02f,0},{68,0.65f,68},{0.78f,0.66f,0.42f});
-    drawCube({0,0.40f,0},{54,0.25f,54},{0.18f,0.43f,0.22f});
+    drawSphere({0,-1.05f,0},{260,0.55f,260},{0.025f,0.27f,0.43f});
+    Vec3 beach=gSelectedMap==2?Vec3{0.66f,0.43f,0.24f}:Vec3{0.78f,0.66f,0.42f};
+    Vec3 land=gSelectedMap==1?Vec3{0.22f,0.27f,0.32f}:(gSelectedMap==2?Vec3{0.47f,0.35f,0.22f}:Vec3{0.18f,0.43f,0.22f});
+    drawSphere({0,-0.02f,0},{68,0.65f,68},beach);
+    drawSphere({0,0.40f,0},{54,0.25f,54},land);
     drawCube({0,0.535f,0},{4.2f,0.045f,31},{0.48f,0.43f,0.32f});
     drawCube({-9,0.535f,2},{13,0.05f,2.5f},{0.43f,0.45f,0.43f});
     drawCube({9,0.535f,-4},{12,0.05f,2.5f},{0.43f,0.45f,0.43f});
@@ -189,28 +282,46 @@ void drawWorld(float time) {
         {-22,0,-18},{-20,0,1},{-22,0,19},{-8,0,22},{8,0,23},{22,0,20},
         {22,0,2},{22,0,-19},{2,0,-23},{-13,0,-22},{-7,0,11},{8,0,7}
     }};
-    for (size_t i=0;i<trees.size();++i) {
+    size_t treeLimit=gQuality==0?7:trees.size();
+    for(size_t i=0;i<treeLimit;++i){
         float sway=std::sin(time*0.8f+static_cast<float>(i))*0.035f;
-        drawPalm(trees[i].x,trees[i].z,0.82f+0.08f*static_cast<float>(i%3)+sway);
+        if(gSelectedMap==0) drawPalm(trees[i].x,trees[i].z,0.82f+0.08f*static_cast<float>(i%3)+sway);
+        else if(gSelectedMap==1) {
+            drawCylinder({trees[i].x,1.2f,trees[i].z},{0.12f,2.1f,0.12f},{0.20f,0.28f,0.25f});
+            drawSphere({trees[i].x,2.6f,trees[i].z},{1.0f,1.0f,1.0f},{0.17f,0.24f,0.28f});
+        } else {
+            drawCylinder({trees[i].x,0.9f,trees[i].z},{0.12f,1.7f,0.12f},{0.30f,0.24f,0.16f});
+            drawSphere({trees[i].x,1.9f,trees[i].z},{0.30f,0.8f,0.30f},{0.20f,0.43f,0.25f});
+        }
     }
     drawCube({-20,0.95f,-8},{3.2f,1.2f,2.6f},{0.34f,0.39f,0.35f},0.4f);
     drawCube({19,0.82f,-5},{2.5f,0.95f,3.1f},{0.36f,0.41f,0.34f},-0.3f);
     drawCube({-3,0.78f,23},{3.0f,0.8f,2.2f},{0.14f,0.37f,0.19f});
 }
 void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time) {
-    float bob=bot?std::sin(time*3.0f+p.x)*0.06f:0.0f;
-    drawCube({p.x,p.y+1.05f+bob,p.z},{0.78f,0.98f,0.42f},color,yaw);
-    drawCube({p.x,p.y+1.76f+bob,p.z},{0.52f,0.54f,0.50f},{0.83f,0.68f,0.54f},yaw);
-    drawCube({p.x-0.48f,p.y+1.08f+bob,p.z},{0.25f,0.83f,0.27f},color,yaw,-0.10f);
-    drawCube({p.x+0.48f,p.y+1.08f+bob,p.z},{0.25f,0.83f,0.27f},color,yaw,0.10f);
-    drawCube({p.x-0.22f,p.y+0.34f+bob,p.z},{0.29f,0.68f,0.34f},{0.12f,0.17f,0.25f},yaw);
-    drawCube({p.x+0.22f,p.y+0.34f+bob,p.z},{0.29f,0.68f,0.34f},{0.12f,0.17f,0.25f},yaw);
-    drawCube({p.x,p.y+1.77f+bob,p.z-0.26f},{0.13f,0.10f,0.035f},{0.035f,0.055f,0.07f},yaw);
+    float bob=bot?std::sin(time*2.7f+p.x)*0.045f:std::sin(time*1.5f)*0.025f;
+    Vec3 skin{0.78f,0.59f,0.43f}, pants{0.10f,0.16f,0.23f}, boots{0.045f,0.065f,0.075f};
+    drawCylinder({p.x,p.y+1.12f+bob,p.z},{0.58f,0.82f,0.34f},color,yaw);
+    drawSphere({p.x,p.y+1.47f+bob,p.z},{0.62f,0.30f,0.38f},color,yaw);
+    drawSphere({p.x,p.y+1.91f+bob,p.z},{0.34f,0.40f,0.32f},skin,yaw);
+    drawSphere({p.x,p.y+2.08f+bob,p.z},{0.35f,0.19f,0.33f},{0.08f,0.10f,0.12f},yaw);
+    drawSphere({p.x-0.13f,p.y+1.94f+bob,p.z-0.285f},{0.045f,0.035f,0.025f},{0.025f,0.035f,0.045f},yaw);
+    drawSphere({p.x+0.13f,p.y+1.94f+bob,p.z-0.285f},{0.045f,0.035f,0.025f},{0.025f,0.035f,0.045f},yaw);
+    drawCylinder({p.x-0.19f,p.y+0.48f+bob,p.z},{0.22f,0.75f,0.23f},pants,yaw,-0.025f);
+    drawCylinder({p.x+0.19f,p.y+0.48f+bob,p.z},{0.22f,0.75f,0.23f},pants,yaw,0.025f);
+    drawSphere({p.x-0.19f,p.y+0.13f+bob,p.z-0.055f},{0.25f,0.16f,0.38f},boots,yaw);
+    drawSphere({p.x+0.19f,p.y+0.13f+bob,p.z-0.055f},{0.25f,0.16f,0.38f},boots,yaw);
+    drawCylinder({p.x-0.43f,p.y+1.14f+bob,p.z},{0.19f,0.73f,0.19f},color,yaw,-0.20f);
+    drawCylinder({p.x+0.43f,p.y+1.14f+bob,p.z},{0.19f,0.73f,0.19f},color,yaw,0.20f);
+    drawSphere({p.x-0.50f,p.y+0.77f+bob,p.z},{0.13f,0.14f,0.14f},skin,yaw);
+    drawSphere({p.x+0.50f,p.y+0.77f+bob,p.z},{0.13f,0.14f,0.14f},skin,yaw);
+    drawSphere({p.x,p.y+1.48f+bob,p.z+0.20f},{0.24f,0.36f,0.12f},{0.10f,0.18f,0.22f},yaw);
 }
 void drawCrystal(Vec3 p,float time,int index) {
-    float bob=std::sin(time*2.2f+index)*0.16f;
-    drawCube({p.x,p.y+0.62f+bob,p.z},{0.48f,0.82f,0.48f},{0.12f,0.82f,0.96f},time*0.9f+index*0.7f,0.18f);
-    drawCube({p.x,p.y+0.62f+bob,p.z},{0.68f,0.08f,0.68f},{0.22f,0.94f,0.98f},time*0.9f+index*0.7f);
+    float bob=std::sin(time*2.2f+index)*0.16f, spin=time*0.55f+index*0.7f;
+    drawCone({p.x,p.y+0.58f+bob,p.z},{0.42f,0.86f,0.42f},{0.12f,0.82f,0.96f},spin);
+    drawCone({p.x,p.y+0.96f+bob,p.z},{0.24f,0.48f,0.24f},{0.45f,0.98f,1.0f},spin+PI);
+    drawSphere({p.x,p.y+0.58f+bob,p.z},{0.48f,0.08f,0.48f},{0.08f,0.55f,0.68f});
 }
 void drawSafeZone() {
     constexpr int segments=52;
@@ -230,8 +341,30 @@ void updateStatus() {
 } // namespace
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint mode) {
+    gScreenMode=std::clamp(static_cast<int>(mode),0,1);
+    if(gScreenMode==1){gPlayer={0,0.55f,0};gMatchTime=0;gZoneRadius=30;gCollected=0;gCrystalTaken.fill(false);}
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,jint id) {
+    gSelectedCharacter=std::clamp(static_cast<int>(id),0,3);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetMap(JNIEnv*,jclass,jint id) {
+    gSelectedMap=std::clamp(static_cast<int>(id),0,2);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint id) {
+    gSelectedMode=std::clamp(static_cast<int>(id),0,3);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetQuality(JNIEnv*,jclass,jint value) {
+    gQuality=std::clamp(static_cast<int>(value),0,2);
+}
+extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gPlayer={0,0.55f,0}; gPlayerYaw=0; gCameraYaw=0; gCameraPitch=0.36f;
+    gScreenMode=0; gSelectedCharacter=0; gSelectedMap=0; gSelectedMode=0; gQuality=1;
     gJumpHeight=0; gJumpVelocity=0; gMatchTime=0; gZoneRadius=30;
     gCollected=0; gPreviousButtons=0; gInteractCooldown=0; gCrystalTaken.fill(false);
     glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); glDisable(GL_CULL_FACE);
@@ -249,7 +382,22 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     jfloat deltaSeconds,jfloat moveX,jfloat moveY,jfloat lookDX,jfloat lookDY,jint buttons) {
     if (!gProgram||!gCubeVbo) { glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); return; }
     const float dt=std::clamp(static_cast<float>(deltaSeconds),0.001f,0.05f);
-    gMatchTime+=dt; gZoneRadius=std::max(14.0f,30.0f-gMatchTime*0.010f);
+    gMatchTime+=dt;
+    if(gScreenMode==0) {
+        Vec3 eye{std::sin(gMatchTime*0.035f)*3.0f,7.0f,25.0f};
+        Vec3 target{3.1f,1.25f,0.0f};
+        Mat4 view=lookAt(eye,target,{0,1,0});
+        gProjection=multiply(perspective(0.88f,static_cast<float>(gWidth)/gHeight,0.1f,220.0f),view);
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+        glUseProgram(gProgram);
+        drawWorld(gMatchTime);
+        const std::array<Vec3,4> formation{{{2.8f,0.55f,1.0f},{4.4f,0.55f,-0.5f},{6.1f,0.55f,-0.7f},{7.7f,0.55f,0.9f}}};
+        const std::array<Vec3,4> outfits{{{0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},{0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}}};
+        for(int i=0;i<4;++i) drawCharacter(formation[static_cast<size_t>(i)],PI, i==0?outfits[static_cast<size_t>(gSelectedCharacter)]:outfits[static_cast<size_t>(i)],true,gMatchTime+static_cast<float>(i));
+        glDisableVertexAttribArray(0); glDisableVertexAttribArray(1); glBindBuffer(GL_ARRAY_BUFFER,0);
+        return;
+    }
+    gZoneRadius=std::max(14.0f,30.0f-gMatchTime*0.010f);
     gCameraYaw-=static_cast<float>(lookDX)*4.8f;
     gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f,0.12f,0.85f);
     const float forward=-static_cast<float>(moveY), strafe=static_cast<float>(moveX);
@@ -295,11 +443,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     gProjection=multiply(perspective(0.93f,static_cast<float>(gWidth)/gHeight,0.1f,180.0f),view);
 
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-    glUseProgram(gProgram); glBindBuffer(GL_ARRAY_BUFFER,gCubeVbo);
-    glEnableVertexAttribArray(0); glEnableVertexAttribArray(1);
-    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),reinterpret_cast<void*>(0));
-    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),reinterpret_cast<void*>(3*sizeof(float)));
-
+    glUseProgram(gProgram);
     drawWorld(gMatchTime);
     for (int i=0;i<CRYSTAL_COUNT;++i)
         if (!gCrystalTaken[static_cast<size_t>(i)]) drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
@@ -314,9 +458,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
 
     drawSafeZone();
     Vec3 playerDraw=gPlayer; playerDraw.y+=gJumpHeight;
-    drawCharacter(playerDraw,gPlayerYaw,{0.12f,0.43f,0.90f},false,gMatchTime);
-    drawCube({gPlayer.x,gPlayer.y+2.12f+gJumpHeight,gPlayer.z},
-             {0.82f,0.10f,0.08f},{0.11f,0.88f,0.98f},gPlayerYaw);
+    const std::array<Vec3,4> outfits{{{0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},{0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}}};
+    drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],false,gMatchTime);
+    drawSphere({gPlayer.x,gPlayer.y+2.20f+gJumpHeight,gPlayer.z},{0.46f,0.08f,0.46f},{0.11f,0.88f,0.98f},gPlayerYaw);
 
     glDisableVertexAttribArray(0); glDisableVertexAttribArray(1);
     glBindBuffer(GL_ARRAY_BUFFER,0);
