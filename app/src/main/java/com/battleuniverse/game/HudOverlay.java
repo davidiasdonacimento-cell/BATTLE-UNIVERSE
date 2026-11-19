@@ -638,6 +638,12 @@ public final class HudOverlay extends View {
             pill(c,40,250,160,20,gameStatus.startsWith("EMBARQUE")?"PORTA TRASEIRA FECHADA":
                     (rampReady?"RAMPA PRONTA":"CAMINHE ATÉ A RAMPA"),
                 rampReady?0xFF176A75:0x553A6B7C,0xFFB9E8EF);
+        } else if(gameStatus.contains("SEM ARMA")||gameStatus.contains("SEM MUNIÇÃO")) {
+            panel(c,22,170,340,84,0xD9081928,0x5579DDEB,15);
+            eyebrow(c,40,194,"EQUIPAMENTO NO CHÃO");
+            text(c,gameStatus.contains("SEM ARMA")?"VOCÊ ESTÁ SEM ARMA":"MUNIÇÃO ESGOTADA",
+                40,219,12,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"APROXIME-SE DO ITEM E TOQUE USAR PARA PEGAR",40,240,8,0xFF9FC6D3,Typeface.DEFAULT_BOLD);
         }
 
         drawControl(c,890,310,38,game.isAimToggled()?"MIRA ON":"MIRA",
