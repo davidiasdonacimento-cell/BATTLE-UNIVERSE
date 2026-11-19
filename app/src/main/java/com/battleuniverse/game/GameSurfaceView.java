@@ -11,6 +11,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1,lookSensitivity=1;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile boolean contentPackReady=false;
+    private volatile boolean invertCameraY=false;
     private boolean aimToggled=false;
     private int movePointer=-1,lookPointer=-1;
     private final int[] buttonPointers={-1,-1,-1,-1,-1,-1,-1};
@@ -56,6 +57,13 @@ public final class GameSurfaceView extends GLSurfaceView {
     public void setLookSensitivity(int value) {
         lookSensitivity=Math.max(0,Math.min(2,value));
         queueEvent(()->nativeSetLookSensitivity(lookSensitivity));
+    }
+    public void setInvertCameraY(boolean enabled) { invertCameraY=enabled; }
+    public int getEliminations() {
+        try { return nativeGetEliminations(); } catch(UnsatisfiedLinkError error) { return 0; }
+    }
+    public int getCollectedResources() {
+        try { return nativeGetCollected(); } catch(UnsatisfiedLinkError error) { return 0; }
     }
     public void setContentPackData(int buildLimit,int resourceCount) {
         contentBuildLimit=Math.max(4,Math.min(24,buildLimit));
@@ -193,6 +201,8 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetContentData(int buildLimit,int resourceCount);
     private static native String nativeGetStatus();
     private static native float[] nativeGetPlayerPosition();
+    private static native int nativeGetEliminations();
+    private static native int nativeGetCollected();
 
     private final class GameRenderer implements GLSurfaceView.Renderer {
         private long previous;
@@ -214,7 +224,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             float dt=Math.min(0.05f,Math.max(0.001f,(now-previous)/1_000_000_000f));
             previous=now;
             float dx=lookDX,dy=lookDY;lookDX=lookDY=0;
-            nativeRender(dt,moveX,moveY,dx,dy,buttons);
+            nativeRender(dt,moveX,moveY,dx,invertCameraY?-dy:dy,buttons);
         }
     }
     static { System.loadLibrary("battleuniverse"); }
