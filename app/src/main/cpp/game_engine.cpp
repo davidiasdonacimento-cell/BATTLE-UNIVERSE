@@ -120,6 +120,16 @@ std::array<Vec3,BOT_COUNT> gBotHomes{{
 struct BuildPiece { Vec3 pos; float yaw=0; int type=0; };
 std::array<BuildPiece,BUILD_CAPACITY> gBuildPieces{};
 int gBuildCount=0, gBuildType=0, gWood=120, gBuildLimit=12, gResourceCount=5;
+constexpr std::array<Vec3,32> gBuildingPositions{{
+    {-76,0,-70},{-38,0,-76},{12,0,-78},{57,0,-73},
+    {79,0,-22},{-81,0,-18},{-72,0,35},{-34,0,72},
+    {15,0,76},{64,0,72},{32,0,-30},{-38,0,-24},
+    {-7,0,37},{78,0,35},{-91,0,82},{91,0,-86},
+    {-128,0,-118},{-86,0,-128},{-34,0,-130},{20,0,-130},
+    {74,0,-126},{126,0,-108},{132,0,-54},{132,0,4},
+    {130,0,62},{116,0,116},{62,0,130},{8,0,132},
+    {-48,0,130},{-104,0,120},{-132,0,66},{-132,0,2}
+}};
 bool gContentPackReady=false;
 float gBuildCooldown=0;
 struct TrainingTarget { Vec3 pos; int energy=3; bool active=true; };
@@ -132,6 +142,7 @@ bool gMatchFinished=false;
 float gPulseCooldown=0, gPulseFlash=0, gDropTimer=0;
 float gZoneDamageTimer=0,gLookSensitivity=1.0f;
 constexpr float PLANE_COUNTDOWN_SECONDS=7.0f;
+constexpr float WORLD_LIMIT=148.0f;
 int gDropState=0; // 0 lobby, 1 inside transport plane, 2 parachute descent, 3 ground
 Vec3 gPlanePosition{-110,24,-32};
 float gPlaneWalkX=1.0f,gPlaneWalkZ=0.0f;
@@ -340,52 +351,82 @@ void drawPalm(float x,float z,float scale) {
             {1.20f*scale,0.10f*scale,0.30f*scale},{0.10f,0.42f+0.025f*(i%3),0.20f},-a,0.12f);
     }
 }
+float buildingWidth(size_t i) { return 7.0f+static_cast<float>(i%3)*2.1f; }
+float buildingDepth(size_t i) { return 6.0f+static_cast<float>(i%2)*2.0f; }
+float buildingHeight(size_t i) { return 4.0f+static_cast<float>(i%4)*1.5f; }
+bool worldPositionBlocked(float x,float z,float radius) {
+    if(x<-WORLD_LIMIT+radius||x>WORLD_LIMIT-radius||z<-WORLD_LIMIT+radius||z>WORLD_LIMIT-radius)return true;
+    for(size_t i=0;i<gBuildingPositions.size();++i) {
+        const Vec3 h=gBuildingPositions[i];
+        const float halfW=buildingWidth(i)*0.5f,halfD=buildingDepth(i)*0.5f;
+        const float left=h.x-halfW,right=h.x+halfW,front=h.z-halfD,back=h.z+halfD;
+        if(z>=front-radius&&z<=back+radius &&
+                (std::fabs(x-left)<radius+0.16f||std::fabs(x-right)<radius+0.16f))return true;
+        if(std::fabs(z-back)<radius+0.16f&&x>=left-radius&&x<=right+radius)return true;
+        if(std::fabs(z-front)<radius+0.16f&&x>=left-radius&&x<=right+radius) {
+            const bool doorway=std::fabs(x-h.x)<1.12f && z<front+1.35f;
+            if(!doorway)return true;
+        }
+    }
+    for(int i=0;i<gBuildCount;++i) {
+        const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
+        if(b.type!=0)continue;
+        const float rx=x-b.pos.x,rz=z-b.pos.z,co=std::cos(b.yaw),sn=std::sin(b.yaw);
+        const float localX=co*rx-sn*rz,localZ=sn*rx+co*rz;
+        if(std::fabs(localX)<1.60f+radius&&std::fabs(localZ)<0.12f+radius)return true;
+    }
+    return false;
+}
+void moveWithCollision(Vec3& actor,float nextX,float nextZ,float radius) {
+    if(!worldPositionBlocked(nextX,actor.z,radius))actor.x=nextX;
+    if(!worldPositionBlocked(actor.x,nextZ,radius))actor.z=nextZ;
+}
 void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
-    drawCube({x,0.55f+h*0.5f,z},{w,h,d},wall);
-    drawCube({x,0.55f+h+0.14f,z},{w+0.35f,0.28f,d+0.35f},roof);
-    drawCube({x,1.45f,z-d*0.5f-0.025f},{0.95f,1.8f,0.08f},{0.18f,0.22f,0.28f});
-    drawCube({x-w*0.28f,2.7f,z-d*0.5f-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
-    drawCube({x+w*0.28f,2.7f,z-d*0.5f-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
+    const float wallY=0.55f+h*0.5f,front=z-d*0.5f,back=z+d*0.5f;
+    // Open-front room with four real walls: the entrance remains clear.
+    drawCube({x,0.57f,z},{w-0.24f,0.16f,d-0.24f},{0.37f,0.31f,0.24f});
+    drawCube({x,wallY,back},{w,h,0.20f},wall);
+    drawCube({x-w*0.5f,wallY,z},{0.20f,h,d},wall);
+    drawCube({x+w*0.5f,wallY,z},{0.20f,h,d},wall);
+    const float sideWidth=(w-2.25f)*0.5f;
+    drawCube({x-(1.125f+sideWidth*0.5f),wallY,front},{sideWidth,h,0.20f},wall);
+    drawCube({x+(1.125f+sideWidth*0.5f),wallY,front},{sideWidth,h,0.20f},wall);
+    drawCube({x,0.55f+2.35f,front},{2.25f,0.35f,0.22f},roof);
+    drawCube({x,0.55f+h+0.16f,z},{w+0.35f,0.28f,d+0.35f},roof);
+    drawCube({x-w*0.28f,2.7f,front-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
+    drawCube({x+w*0.28f,2.7f,front-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
+    drawCube({x+1.35f,0.92f,z+0.75f},{1.45f,0.55f,0.85f},{0.24f,0.34f,0.40f});
+    drawCube({x-1.35f,0.72f,z+1.05f},{0.85f,0.25f,0.70f},{0.46f,0.35f,0.23f});
 }
 void drawWorld(float time) {
     // Expanded island arena: broad coast, inland districts, roads and forest belts.
-    drawSphere({0,-1.05f,0},{420,0.55f,420},{0.025f,0.22f,0.36f});
+    drawSphere({0,-1.05f,0},{520,0.55f,520},{0.025f,0.22f,0.36f});
     Vec3 beach=gSelectedMap==2?Vec3{0.68f,0.47f,0.29f}:Vec3{0.78f,0.68f,0.44f};
     Vec3 land=gSelectedMap==1?Vec3{0.19f,0.24f,0.31f}:
         (gSelectedMap==2?Vec3{0.49f,0.37f,0.24f}:Vec3{0.17f,0.43f,0.23f});
-    drawSphere({0,-0.02f,0},{146,0.62f,146},beach);
-    drawSphere({0,0.31f,0},{128,0.31f,128},land);
+    drawSphere({0,-0.02f,0},{174,0.62f,174},beach);
+    drawSphere({0,0.31f,0},{158,0.31f,158},land);
 
     // Long roads create readable navigation across the larger play space.
     Vec3 road=gSelectedMap==2?Vec3{0.40f,0.37f,0.32f}:Vec3{0.34f,0.37f,0.39f};
-    drawCube({0,0.535f,0},{8.0f,0.06f,250.0f},road);
-    drawCube({0,0.536f,0},{250.0f,0.06f,8.0f},road);
-    drawCube({-48,0.536f,-48},{5.0f,0.06f,120.0f},road,0.60f);
-    drawCube({51,0.536f,48},{5.0f,0.06f,120.0f},road,-0.60f);
-    drawCube({0,0.537f,-82},{110.0f,0.06f,6.0f},road);
-    drawCube({0,0.537f,83},{110.0f,0.06f,6.0f},road);
+    drawCube({0,0.535f,0},{8.0f,0.06f,310.0f},road);
+    drawCube({0,0.536f,0},{310.0f,0.06f,8.0f},road);
+    drawCube({-48,0.536f,-48},{5.0f,0.06f,180.0f},road,0.60f);
+    drawCube({51,0.536f,48},{5.0f,0.06f,180.0f},road,-0.60f);
+    drawCube({0,0.537f,-112},{150.0f,0.06f,6.0f},road);
+    drawCube({0,0.537f,112},{150.0f,0.06f,6.0f},road);
 
-    const std::array<Vec3,16> buildings{{
-        {-76,0,-70},{-38,0,-76},{12,0,-78},{57,0,-73},
-        {79,0,-22},{-81,0,-18},{-72,0,35},{-34,0,72},
-        {15,0,76},{64,0,72},{32,0,-30},{-38,0,-24},
-        {-7,0,37},{78,0,35},{-91,0,82},{91,0,-86}
-    }};
-    for(size_t i=0;i<buildings.size();++i) {
+    for(size_t i=0;i<gBuildingPositions.size();++i) {
         Vec3 tint=gSelectedMap==1?Vec3{0.27f+0.025f*(i%3),0.30f,0.38f}:
             (gSelectedMap==2?Vec3{0.64f,0.48f,0.31f}:Vec3{0.66f,0.61f,0.48f});
         Vec3 roof=gSelectedMap==1?Vec3{0.11f,0.18f,0.28f}:
             (gSelectedMap==2?Vec3{0.35f,0.23f,0.16f}:Vec3{0.27f,0.20f,0.16f});
-        float width=7.0f+static_cast<float>(i%3)*2.1f;
-        float depth=6.0f+static_cast<float>(i%2)*2.0f;
-        float height=4.0f+static_cast<float>(i%4)*1.5f;
-        drawBuilding(buildings[i].x,buildings[i].z,width,depth,height,tint,roof);
-        drawCube({buildings[i].x,0.72f+height+0.30f,buildings[i].z},
+        const float width=buildingWidth(i),depth=buildingDepth(i),height=buildingHeight(i);
+        const Vec3 pos=gBuildingPositions[i];
+        drawBuilding(pos.x,pos.z,width,depth,height,tint,roof);
+        drawCube({pos.x,0.72f+height+0.30f,pos.z},
             {width*0.52f,0.22f,depth*0.55f},
             gSelectedMap==1?Vec3{0.14f,0.74f,0.83f}:Vec3{0.35f,0.40f,0.43f});
-        if(i%3==0)
-            drawCylinder({buildings[i].x+width*0.30f,height+1.0f,buildings[i].z},
-                {0.20f,1.4f,0.20f},{0.60f,0.66f,0.69f});
     }
 
     // A forest ring and smaller groves break up sightlines and make the island feel broad.
