@@ -2,7 +2,7 @@
 
 Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL ES 3.0 para o motor de jogo. Não usa Godot, Unity, WebView, HTML, CSS ou JavaScript.
 
-## Versão 0.4.0-alpha — reconstrução da partida
+## Versão 0.5.0-alpha — inserção no avião e batalha local
 
 ### Correções e sistemas desta etapa
 - Controles touchscreen usam o mesmo sistema de coordenadas da HUD, compatível com telas panorâmicas.
@@ -12,13 +12,18 @@ Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL E
 - HUD nativa de jogo: minimapa com posição do jogador, joystick, disparo, troca de arma, construção, corrida, salto e interação.
 - Três armas de energia totalmente fictícias para o jogo: Pulso Plasma, Raio Arc e Nova. Munição, alternância, disparos visíveis, alvos de treino e dano aos bots.
 - Construção de paredes, plataformas e rampas, com madeira, limite, detecção de sobreposição e colisão de paredes.
-- Partida começa em avião de transporte em movimento; o jogador escolhe quando saltar e desce com paraquedas.
+- Partida começa dentro de um avião de transporte aberto, com 12 adversários IA visíveis, contagem regressiva de 7 segundos e salto manual em terceira pessoa.
+- Modo Battle Royale local com 12 adversários IA espalhados pelo mapa, vida, eliminações, ataques fictícios de energia e dano fora da zona segura; treinamento fica separado.
+- Mira de ombro com zoom de câmera, retículo central e disparo alinhado à direção da câmera.
+- Movimento relativo à câmera corrigido; a combinação simultânea de analógico, câmera e botões mantém o encaminhamento multitouch ativo.
+- Sensibilidade da câmera selecionável (baixa, média e alta), salva no aparelho.
 - Arena ampliada para cerca de 230 x 230 unidades jogáveis, com estradas, 16 estruturas e cinturão de vegetação.
 - Configurações e preferências continuam locais no aparelho.
 
 ### Controles
 - Joystick esquerdo: movimentação.
 - Arraste na metade direita: câmera.
+- MIRA: manter pressionado para aproximar a câmera e alinhar a mira.
 - DISPARAR: arma de energia equipada.
 - ARMA: alterna entre Pulso Plasma, Raio Arc e Nova.
 - CONSTRUIR: alterna parede, plataforma e rampa; cada peça custa madeira.
@@ -44,7 +49,7 @@ Workflow: `.github/workflows/android.yml`.
 - Publica APK e pacote 4K como artefatos.
 
 ## Limitações conhecidas
-Esta versão ainda não é um jogo AAA completo. Os personagens e cenários no renderizador continuam estilizados e feitos por malhas procedurais; o jogo ainda não importa os modelos OBJ e materiais 4K do pacote para a renderização em tempo real. A IA é local e simples, não há multiplayer online, sistema completo de inventário de armas, veículos dirigíveis, destruição avançada ou oito mapas renderizados individualmente. O pacote inclui os recursos e configurações correspondentes, mas sua integração completa ao motor é trabalho separado. A execução física no aparelho precisa ser testada depois da instalação.
+Esta versão ainda não é um jogo AAA completo. A partida é local contra adversários controlados por IA; ainda não existe multiplayer online com pessoas reais, matchmaking ou servidor de partidas. Os personagens e cenários continuam estilizados e o renderizador ainda não carrega todos os modelos OBJ e materiais 4K do pacote como recursos visuais em tempo real. O pacote de dados só deve crescer quando novos recursos estiverem integrados e forem utilizados pelo jogo. A execução física no aparelho precisa ser testada depois da instalação.
 
 ## Links
 - Repositório: https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE

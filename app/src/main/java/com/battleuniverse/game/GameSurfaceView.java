@@ -6,14 +6,14 @@ import android.view.MotionEvent;
 import java.util.Arrays;
 
 public final class GameSurfaceView extends GLSurfaceView {
-    private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32;
+    private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64;
     private volatile float moveX,moveY,lookDX,lookDY;
     private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile boolean contentPackReady=false;
     private int movePointer=-1,lookPointer=-1;
-    private final int[] buttonPointers={-1,-1,-1,-1,-1,-1};
-    private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,FIRE,SWAP};
+    private final int[] buttonPointers={-1,-1,-1,-1,-1,-1,-1};
+    private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,FIRE,SWAP,AIM};
     private float moveOriginX,moveOriginY,lastLookX,lastLookY;
 
     public GameSurfaceView(Context context) {
@@ -46,6 +46,10 @@ public final class GameSurfaceView extends GLSurfaceView {
         quality=Math.max(0,Math.min(2,value));
         queueEvent(()->nativeSetQuality(quality));
     }
+    public void setLookSensitivity(int value) {
+        int level=Math.max(0,Math.min(2,value));
+        queueEvent(()->nativeSetLookSensitivity(level));
+    }
     public void setContentPackData(int buildLimit,int resourceCount) {
         contentBuildLimit=Math.max(4,Math.min(24,buildLimit));
         contentResourceCount=Math.max(1,Math.min(12,resourceCount));
@@ -73,7 +77,8 @@ public final class GameSurfaceView extends GLSurfaceView {
         float s=scale(w,h);
         float x=designX(px,w,s),y=designY(py,h,s);
         float[][] controls={
-            {998f,310f,FIRE,48f},
+            {890f,310f,AIM,43f},
+            {1002f,310f,FIRE,48f},
             {1165f,403f,BUILD,50f},
             {960f,461f,RUN,47f},
             {1065f,465f,SWAP,42f},
@@ -166,6 +171,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetMap(int id);
     private static native void nativeSetMode(int id);
     private static native void nativeSetQuality(int value);
+    private static native void nativeSetLookSensitivity(int value);
     private static native void nativeSetContentData(int buildLimit,int resourceCount);
     private static native String nativeGetStatus();
     private static native float[] nativeGetPlayerPosition();
@@ -177,6 +183,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             nativeInit();nativeSetScreen(screenMode);nativeSetCharacter(characterId);
             nativeSetMap(mapId);nativeSetMode(matchMode);nativeSetQuality(quality);
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
+            nativeSetLookSensitivity(1);
             previous=System.nanoTime();
         }
         @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,

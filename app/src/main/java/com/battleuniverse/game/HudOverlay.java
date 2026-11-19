@@ -15,7 +15,7 @@ import android.view.View;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3, INVENTORY=4, SETTINGS=5, GAME=6;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS","INVENTÁRIO","AJUSTES"};
-    private static final String[] MODE_NAMES={"SOLO","DUPLA","ESQUADRÃO","TREINAMENTO"};
+    private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
     private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM"};
     private static final String[] CHARACTER_NAMES={"NOVA","ATLAS","EMBER","VOLT"};
     private static final String[] QUALITY_NAMES={"ECONÔMICO","EQUILIBRADO","ALTO"};
@@ -23,7 +23,7 @@ public final class HudOverlay extends View {
     private final SharedPreferences prefs;
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r=new RectF();
-    private int page=HOME, mode, map, character, quality=1;
+    private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private boolean music=true, effects=true, forwarding;
     private float scale=1, offsetX, offsetY;
     private String toast="";
@@ -37,8 +37,9 @@ public final class HudOverlay extends View {
         mode=prefs.getInt("mode",0); map=prefs.getInt("map",0);
         character=prefs.getInt("character",0); quality=prefs.getInt("quality",1);
         music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
+        lookSensitivity=prefs.getInt("look_sensitivity",1);
         game.setCharacter(character); game.setMap(map);
-        game.setMatchMode(mode); game.setQuality(quality); game.setGameScreen(false);
+        game.setMatchMode(mode); game.setQuality(quality); game.setLookSensitivity(lookSensitivity); game.setGameScreen(false);
     }
 
     @Override protected void onDraw(Canvas c) {
@@ -111,7 +112,7 @@ public final class HudOverlay extends View {
         panel(c,558,328,292,112,0xC9183040,0x557AA9BC,18);
         eyebrow(c,290,357,"MODO DE JOGO");
         text(c,MODE_NAMES[mode],290,390,21,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,mode==0?"Cada jogador por si":mode==1?"Você + 1 companheiro IA":mode==2?"Você + 3 companheiros IA":"Explore e pratique livremente",290,417,11,0xFF9DB6C5,Typeface.DEFAULT);
+        text(c,mode==0?"12 adversários IA • sobrevivência":mode==1?"Você + 1 aliado • 10 adversários":mode==2?"Você + 3 aliados • 9 adversários":"Explore e pratique livremente",290,417,11,0xFF9DB6C5,Typeface.DEFAULT);
         chevron(c,515,385);
         eyebrow(c,578,357,"MAPA SELECIONADO");
         text(c,MAP_NAMES[map],578,390,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -120,9 +121,9 @@ public final class HudOverlay extends View {
         gradientButton(c,270,468,342,78,"JOGAR AGORA","ENTRAR NA PARTIDA",0xFFFFB45E,0xFFE97543);
         text(c,"▶",292,516,21,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
         panel(c,628,468,222,78,0xB9183040,0x557AA9BC,17);
-        text(c,"● SERVIDOR LOCAL",650,498,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
-        text(c,"TREINAMENTO",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"Modo offline: adversários e aliados com objetivos próprios.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
+        text(c,"● PARTIDA LOCAL",650,498,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
+        text(c,"BATTLE ROYALE",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"12 adversários controlados por IA • sem conexão online nesta versão.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
         panel(c,270,608,580,58,0x70152B3A,0x225B8296,14);
         stat(c,292,642,"04","VAGAS NA EQUIPE");stat(c,468,642,"03","MAPAS PLANEJADOS");stat(c,665,642,"AI","COMPANHEIROS");
     }
@@ -149,8 +150,8 @@ public final class HudOverlay extends View {
     private void drawModes(Canvas c){
         eyebrow(c,270,175,"SELECIONE A EXPERIÊNCIA");title(c,"MODOS DE JOGO",270,224);
         subtitle(c,"A equipe e os adversários são controlados por IA nesta versão.",270,252);
-        String[] desc={"1 jogador • todos contra todos","Você + 1 aliado controlado por IA","Você + 3 aliados controlados por IA","Sem pressão • pratique e explore"};
-        String[] counts={"SOLO","2 JOGADORES","4 JOGADORES","LIVRE"};
+        String[] desc={"Você contra 12 adversários IA","Você + 1 aliado • 10 adversários","Você + 3 aliados • 9 adversários","Sem pressão • alvos e exploração"};
+        String[] counts={"13 NA PARTIDA","12 NA PARTIDA","13 NA PARTIDA","LIVRE"};
         for(int i=0;i<4;i++){
             float x=270+(i%2)*292,y=290+(i/2)*150;boolean active=mode==i;
             panel(c,x,y,270,126,active?0xD51B5B69:0xAA193040,active?0xFF48D7E1:0x335D8495,17);
@@ -204,7 +205,10 @@ public final class HudOverlay extends View {
         panel(c,270,490,570,66,0xAE193040,0x335D8495,15);
         text(c,"EFEITOS SONOROS",294,530,14,Color.WHITE,Typeface.DEFAULT_BOLD);
         pill(c,730,504,86,34,effects?"ATIVADOS":"DESATIVADOS",effects?0xFF176A75:0x553B6172,Color.WHITE);
-        text(c,"Áudio será conectado ao sistema de jogo conforme os módulos forem adicionados.",272,590,10,0xFF8FAAB8,Typeface.DEFAULT);
+        panel(c,270,572,570,70,0xAE193040,0x335D8495,15);
+        text(c,"SENSIBILIDADE DA CÂMERA",294,613,13,Color.WHITE,Typeface.DEFAULT_BOLD);
+        String[] levels={"BAIXA","MÉDIA","ALTA"};
+        for(int i=0;i<3;i++)pill(c,522+i*96,590,88,38,levels[i],lookSensitivity==i?0xFF176A75:0x553B6172,Color.WHITE);
     }
     private void drawTeam(Canvas c){
         panel(c,888,124,362,218,0x9B0B1D2C,0x337AA0B2,19);
@@ -241,13 +245,13 @@ public final class HudOverlay extends View {
         for(int i=0;i<5;i++){double a=-Math.PI*.85+i*Math.PI*.42;c.drawLine(x+3,y-26,x+3+(float)Math.cos(a)*15,y-26+(float)Math.sin(a)*11,p);}
     }
     private void drawGame(Canvas c){
-        panel(c,22,18,385,85,0xD9081928,0x6679DDEB,17);
+        panel(c,22,18,430,85,0xD9081928,0x6679DDEB,17);
         text(c,"BATTLE UNIVERSE",42,48,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"OPERAÇÃO  •  "+MAP_NAMES[map],42,70,10,0xFF6FE0E6,Typeface.DEFAULT_BOLD);
         text(c,game.getGameStatus(),42,89,9,0xFFD5E7ED,Typeface.DEFAULT_BOLD);
 
         panel(c,22,112,278,46,0xB9071724,0x337AA0B2,13);
-        text(c,"SESSÃO OFFLINE  •  IA LOCAL",38,141,11,0xFF79E8D0,Typeface.DEFAULT_BOLD);
+        text(c,"BATTLE ROYALE  •  IA LOCAL",38,141,11,0xFF79E8D0,Typeface.DEFAULT_BOLD);
 
         panel(c,1064,18,190,166,0xD9071724,0x6679DDEB,17);
         eyebrow(c,1080,40,"MINIMAPA");
@@ -263,12 +267,22 @@ public final class HudOverlay extends View {
         c.drawCircle(1159-10*0.88f,105-6*0.88f,4,p);
         c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
 
-        drawControl(c,998,310,43,"DISPARAR",0xFF185D7A,0xFF65E9F4);
+        drawControl(c,890,310,38,"MIRA",0xFF285D79,0xFF8ADCF4);
+        drawControl(c,1002,310,43,"DISPARAR",0xFF185D7A,0xFF65E9F4);
         drawControl(c,1165,403,43,"CONSTRUIR",0xFF66502A,0xFFFFD27A);
         drawControl(c,960,461,39,"CORRER",0xFF285D49,0xFF83E9B2);
         drawControl(c,1065,465,34,"ARMA",0xFF354F79,0xFF9DC7FF);
         drawControl(c,1152,562,47,"SALTAR",0xFF7B3D35,0xFFFFA28F);
         drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
+
+        String gameStatus=game.getGameStatus();
+        if(!gameStatus.startsWith("EMBARQUE")&&!gameStatus.startsWith("AVIÃO")) {
+            float cx=640,cy=360;
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.0f);p.setColor(0xDDF1FFFF);
+            c.drawCircle(cx,cy,9,p);c.drawLine(cx-21,cy,cx-11,cy,p);c.drawLine(cx+11,cy,cx+21,cy,p);
+            c.drawLine(cx,cy-21,cx,cy-11,p);c.drawLine(cx,cy+11,cx,cy+21,p);
+            p.setStyle(Paint.Style.FILL);p.setColor(0xFFFFD27A);c.drawCircle(cx,cy,2.2f,p);
+        }
 
         p.setColor(0x553D7183);c.drawCircle(179,544,66,p);
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA8CE8EF);c.drawCircle(179,544,66,p);
@@ -330,7 +344,12 @@ public final class HudOverlay extends View {
                 if(hit(q[0],q[1],24,625,160,49)){page=HOME;game.setGameScreen(false);invalidate();return true;}
                 forwarding=true;
             }
-            if(forwarding){game.onTouchEvent(e);if(e.getActionMasked()==MotionEvent.ACTION_UP||e.getActionMasked()==MotionEvent.ACTION_CANCEL)forwarding=false;return true;}
+            if(forwarding){
+                game.onTouchEvent(e);
+                if(e.getActionMasked()==MotionEvent.ACTION_CANCEL
+                        ||(e.getActionMasked()==MotionEvent.ACTION_UP&&e.getPointerCount()==1))forwarding=false;
+                return true;
+            }
             return true;
         }
         if(e.getActionMasked()==MotionEvent.ACTION_UP){float[] q=design(e.getX(),e.getY());tap(q[0],q[1]);invalidate();}
@@ -354,7 +373,8 @@ public final class HudOverlay extends View {
         }else if(page==SETTINGS){
             if(hit(x,y,515,306,300,60)){quality=x<618?0:x<714?1:2;game.setQuality(quality);prefs.edit().putInt("quality",quality).apply();toast("Qualidade: "+QUALITY_NAMES[quality]);return;}
             if(hit(x,y,715,414,110,52)){music=!music;prefs.edit().putBoolean("music",music).apply();toast(music?"Música ativada":"Música desativada");return;}
-            if(hit(x,y,715,495,110,52)){effects=!effects;prefs.edit().putBoolean("effects",effects).apply();toast(effects?"Efeitos ativados":"Efeitos desativados");}
+            if(hit(x,y,715,495,110,52)){effects=!effects;prefs.edit().putBoolean("effects",effects).apply();toast(effects?"Efeitos ativados":"Efeitos desativados");return;}
+            if(hit(x,y,515,580,300,55)){lookSensitivity=x<618?0:x<714?1:2;game.setLookSensitivity(lookSensitivity);prefs.edit().putInt("look_sensitivity",lookSensitivity).apply();toast("Sensibilidade: "+new String[]{"baixa","média","alta"}[lookSensitivity]);}
         }
     }
     private void toast(String s){toast=s;toastUntil=System.currentTimeMillis()+1800;invalidate();}

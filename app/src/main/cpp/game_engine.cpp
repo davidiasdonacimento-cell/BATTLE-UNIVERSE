@@ -14,7 +14,7 @@
 
 namespace {
 constexpr float PI = 3.14159265358979323846f;
-constexpr int BOT_COUNT = 4;
+constexpr int BOT_COUNT = 12;
 constexpr int CRYSTAL_COUNT = 12;
 constexpr int BUTTON_JUMP = 1;
 constexpr int BUTTON_INTERACT = 2;
@@ -22,6 +22,7 @@ constexpr int BUTTON_BUILD = 4;
 constexpr int BUTTON_RUN = 8;
 constexpr int BUTTON_PULSE = 16;
 constexpr int BUTTON_SWAP = 32;
+constexpr int BUTTON_AIM = 64;
 constexpr int BUILD_CAPACITY = 24;
 constexpr int TARGET_COUNT = 3;
 
@@ -98,14 +99,19 @@ float gInteractCooldown=0;
 int gCollected=0, gPreviousButtons=0;
 std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
 struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; };
-std::array<int,BOT_COUNT> gBotHealth{{3,3,3,3}};
-std::array<bool,BOT_COUNT> gBotActive{{true,true,true,true}};
+std::array<int,BOT_COUNT> gBotHealth{};
+std::array<bool,BOT_COUNT> gBotActive{};
 std::array<float,BOT_COUNT> gBotRespawn{};
+std::array<float,BOT_COUNT> gBotAttackCooldown{};
 bool isAllyBot(int index) {
     return (gSelectedMode==1&&index==0)||(gSelectedMode==2&&index<3);
 }
 std::array<BotState,BOT_COUNT> gBots{};
-std::array<Vec3,BOT_COUNT> gBotHomes{{{-24,0.55f,-16},{25,0.55f,-18},{-29,0.55f,27},{32,0.55f,25}}};
+std::array<Vec3,BOT_COUNT> gBotHomes{{
+    {-92,0.55f,-88},{-53,0.55f,-94},{-10,0.55f,-99},{38,0.55f,-92},
+    {87,0.55f,-71},{98,0.55f,-18},{88,0.55f,48},{48,0.55f,94},
+    {2,0.55f,91},{-47,0.55f,83},{-96,0.55f,42},{-101,0.55f,-22}
+}};
 struct BuildPiece { Vec3 pos; float yaw=0; int type=0; };
 std::array<BuildPiece,BUILD_CAPACITY> gBuildPieces{};
 int gBuildCount=0, gBuildType=0, gWood=120, gBuildLimit=12, gResourceCount=5;
@@ -116,8 +122,12 @@ std::array<TrainingTarget,TARGET_COUNT> gTargets{{
     {{-12,1.25f,-13},3,true}, {{13,1.25f,-12},3,true}, {{2,1.25f,18},3,true}
 }};
 int gPulseAmmo=40, gTrainingScore=0, gWeaponType=0;
+int gPlayerHealth=100,gEliminations=0;
+bool gMatchFinished=false;
 float gPulseCooldown=0, gPulseFlash=0, gDropTimer=0;
-int gDropState=0; // 0 lobby, 1 transport plane, 2 parachute descent, 3 ground
+float gZoneDamageTimer=0,gLookSensitivity=1.0f;
+constexpr float PLANE_COUNTDOWN_SECONDS=7.0f;
+int gDropState=0; // 0 lobby, 1 inside transport plane, 2 parachute descent, 3 ground
 Vec3 gPlanePosition{-110,24,-32};
 Vec3 gPulseStartPosition{0,1.5f,0},gPulseHitPosition{0,1.4f,-8};
 bool gParachuteOpen=false;
@@ -448,42 +458,56 @@ const char* weaponName() {
 void updateStatus() {
     std::ostringstream out;
     if(gDropState==1) {
-        out<<"AVIÃO DE TRANSPORTE  |  TOQUE EM SALTAR";
+        if(gDropTimer<PLANE_COUNTDOWN_SECONDS) {
+            int remaining=static_cast<int>(std::ceil(PLANE_COUNTDOWN_SECONDS-gDropTimer));
+            out<<"EMBARQUE 13/13  •  DECOLAGEM EM "<<remaining<<"s  •  SALTO LIBERADO DEPOIS";
+        } else {
+            out<<"AVIÃO EM ROTA  •  13 PARTICIPANTES  •  TOQUE SALTAR";
+        }
     } else if(gDropState==2) {
         out<<(gParachuteOpen?"PARAQUEDAS ABERTO":"QUEDA LIVRE")
-           <<"  |  "<<weaponName()<<"  |  MADEIRA "<<gWood;
+           <<"  •  MIRA E CÂMERA LIVRES  •  "<<weaponName();
+    } else if(gSelectedMode==3) {
+        out<<"TREINAMENTO  •  "<<weaponName()<<"  CARGA "<<gPulseAmmo
+           <<"  •  MADEIRA "<<gWood<<"  •  PONTOS "<<gTrainingScore;
     } else {
-        static const char* buildNames[]={"PAREDE","PLATAFORMA","RAMPA"};
-        out<<weaponName()<<"  CARGA "<<gPulseAmmo<<"  |  MADEIRA "<<gWood
-           <<"  |  CONSTRUÇÕES "<<gBuildCount<<"/"<<gBuildLimit
-           <<"  |  PRÓXIMA "<<buildNames[gBuildType]<<"  |  PONTOS "<<gTrainingScore;
+        int remaining=0;
+        for(int i=0;i<BOT_COUNT;++i) if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)]) ++remaining;
+        out<<"VIDA "<<gPlayerHealth<<"%  •  ELIMINAÇÕES "<<gEliminations
+           <<"  •  OPONENTES "<<remaining<<"  •  "<<weaponName()<<" "<<gPulseAmmo;
+        if(gMatchFinished) out<<(gPlayerHealth<=0?"  •  ELIMINADO":"  •  VITÓRIA");
+        else out<<"  •  MADEIRA "<<gWood;
     }
     setStatus(out.str());
 }
 void resetBots() {
-    const std::array<Vec3,BOT_COUNT> offsets{{
-        {-19,0.55f,-10},{19,0.55f,-13},{-21,0.55f,17},{22,0.55f,18}
-    }};
+    const std::array<Vec3,3> allyOffsets{{{-8,0.55f,-7},{8,0.55f,-8},{0,0.55f,9}}};
+    gBotHealth.fill(3);
+    gBotActive.fill(true);
+    gBotRespawn.fill(0.0f);
     for(int i=0;i<BOT_COUNT;++i) {
-        const Vec3 offset=offsets[static_cast<size_t>(i)];
-        gBotHomes[static_cast<size_t>(i)]={
-            std::clamp(gPlayer.x+offset.x,-112.0f,112.0f),0.55f,
-            std::clamp(gPlayer.z+offset.z,-112.0f,112.0f)};
+        if(isAllyBot(i)) {
+            const Vec3 offset=allyOffsets[static_cast<size_t>(i%3)];
+            gBotHomes[static_cast<size_t>(i)]={
+                std::clamp(gPlayer.x+offset.x,-112.0f,112.0f),0.55f,
+                std::clamp(gPlayer.z+offset.z,-112.0f,112.0f)};
+        }
         gBots[static_cast<size_t>(i)]={gBotHomes[static_cast<size_t>(i)],0,0,static_cast<float>(i)*1.3f};
-        gBotHealth[static_cast<size_t>(i)]=3;
-        gBotActive[static_cast<size_t>(i)]=true;
-        gBotRespawn[static_cast<size_t>(i)]=0;
+        gBotAttackCooldown[static_cast<size_t>(i)]=5.0f+static_cast<float>(i%5)*0.7f;
     }
 }
 void updateBots(float dt) {
+    if(gMatchFinished) return;
     for(int i=0;i<BOT_COUNT;++i) {
         BotState& bot=gBots[static_cast<size_t>(i)];
         if(!gBotActive[static_cast<size_t>(i)]) {
-            gBotRespawn[static_cast<size_t>(i)]=std::max(0.0f,gBotRespawn[static_cast<size_t>(i)]-dt);
-            if(gBotRespawn[static_cast<size_t>(i)]<=0.0f) {
-                bot.pos=gBotHomes[static_cast<size_t>(i)];
-                bot.speed=0;gBotHealth[static_cast<size_t>(i)]=3;
-                gBotActive[static_cast<size_t>(i)]=true;
+            if(gSelectedMode==3) {
+                gBotRespawn[static_cast<size_t>(i)]=std::max(0.0f,gBotRespawn[static_cast<size_t>(i)]-dt);
+                if(gBotRespawn[static_cast<size_t>(i)]<=0.0f) {
+                    bot.pos=gBotHomes[static_cast<size_t>(i)];
+                    bot.speed=0;gBotHealth[static_cast<size_t>(i)]=3;
+                    gBotActive[static_cast<size_t>(i)]=true;
+                } else continue;
             } else continue;
         }
 
@@ -535,6 +559,21 @@ void updateBots(float dt) {
         bot.pos.z=std::clamp(bot.pos.z,-116.0f,116.0f);
 
         if(!ally) {
+            const float attackDx=gPlayer.x-bot.pos.x,attackDz=gPlayer.z-bot.pos.z;
+            const float attackDistance=std::sqrt(attackDx*attackDx+attackDz*attackDz);
+            gBotAttackCooldown[static_cast<size_t>(i)]=std::max(0.0f,gBotAttackCooldown[static_cast<size_t>(i)]-dt);
+            if(gSelectedMode!=3 && gDropState==3 && attackDistance<23.0f && attackDistance>5.0f
+                    && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
+                gPlayerHealth=std::max(0,gPlayerHealth-4);
+                gBotAttackCooldown[static_cast<size_t>(i)]=4.2f;
+                if(gPlayerHealth<=0) {
+                    gMatchFinished=true;
+                    setStatus("ELIMINADO • FIM DA PARTIDA");
+                } else {
+                    std::ostringstream hit;hit<<"PULSO DE ENERGIA RECEBIDO • VIDA "<<gPlayerHealth<<"%";
+                    setStatus(hit.str());
+                }
+            }
             for(int j=0;j<gResourceCount;++j) {
                 if(gCrystalTaken[static_cast<size_t>(j)])continue;
                 Vec3 resource=gCrystals[static_cast<size_t>(j)];
@@ -598,20 +637,23 @@ void firePulse() {
     if(gPulseAmmo<=0){setStatus("SEM CARGA • COLETE ENERGIA");return;}
     --gPulseAmmo;
     gPulseFlash=0.18f;
-    gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gPlayerYaw);
-    const float fx=-std::sin(gPlayerYaw),fz=-std::cos(gPlayerYaw);
-    const float range=gWeaponType==2?36.0f:45.0f;
-    const float tolerance=gWeaponType==1?2.5f:1.7f;
+    gPlayerYaw=gCameraYaw;
+    gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gCameraYaw);
+    const float fx=-std::sin(gCameraYaw),fz=-std::cos(gCameraYaw);
+    const float range=gWeaponType==2?42.0f:56.0f;
+    const float tolerance=gWeaponType==1?2.7f:2.0f;
     const int damage=gWeaponType==2?3:(gWeaponType==1?2:1);
     float best=range;
     int hitTarget=-1,hitBot=-1;
-    for(int i=0;i<TARGET_COUNT;++i) {
-        TrainingTarget& target=gTargets[static_cast<size_t>(i)];
-        if(!target.active)continue;
-        float dx=target.pos.x-gPlayer.x,dz=target.pos.z-gPlayer.z;
-        float along=dx*fx+dz*fz,side=std::fabs(dx*fz-dz*fx);
-        if(along>0.8f&&along<best&&side<tolerance) {
-            best=along;hitTarget=i;hitBot=-1;
+    if(gSelectedMode==3) {
+        for(int i=0;i<TARGET_COUNT;++i) {
+            TrainingTarget& target=gTargets[static_cast<size_t>(i)];
+            if(!target.active)continue;
+            float dx=target.pos.x-gPlayer.x,dz=target.pos.z-gPlayer.z;
+            float along=dx*fx+dz*fz,side=std::fabs(dx*fz-dz*fx);
+            if(along>0.8f&&along<best&&side<tolerance) {
+                best=along;hitTarget=i;hitBot=-1;
+            }
         }
     }
     for(int i=0;i<BOT_COUNT;++i) {
@@ -637,28 +679,43 @@ void firePulse() {
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
             gBotActive[static_cast<size_t>(hitBot)]=false;
-            gBotRespawn[static_cast<size_t>(hitBot)]=12.0f;
-            gTrainingScore+=150;gWood=std::min(250,gWood+10);
-            setStatus("BOT DESATIVADO  •  +150 PONTOS");
+            if(gSelectedMode==3) {
+                gBotRespawn[static_cast<size_t>(hitBot)]=12.0f;
+                gTrainingScore+=150;
+            } else {
+                gBotRespawn[static_cast<size_t>(hitBot)]=0.0f;
+                ++gEliminations;
+            }
+            gWood=std::min(250,gWood+10);
+            int remaining=0;
+            for(int i=0;i<BOT_COUNT;++i)
+                if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])++remaining;
+            if(gSelectedMode!=3&&remaining==0) {
+                gMatchFinished=true;
+                setStatus("VITÓRIA • TODOS OS OPONENTES ELIMINADOS");
+            } else if(gSelectedMode==3) setStatus("ALVO BOT DESATIVADO • +150 PONTOS");
+            else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining));
         }
     }
     if(hitTarget<0&&hitBot<0) {
         const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA"};
-        std::ostringstream out;out<<names[gWeaponType]<<" DISPARADO  •  SEM ALVO NO TRAJETO";
+        std::ostringstream out;out<<names[gWeaponType]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
         setStatus(out.str());
     }
 }
 void drawTargets(float time) {
-    for(int i=0;i<TARGET_COUNT;++i) {
-        const TrainingTarget& target=gTargets[static_cast<size_t>(i)];
-        if(!target.active)continue;
-        float bob=std::sin(time*2.0f+i)*0.12f;
-        drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.60f,0.60f,0.60f},{0.12f,0.69f,0.86f});
-        drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.72f,0.10f,0.72f},{0.80f,0.94f,1.0f});
-        drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.24f,0.24f,0.24f},{0.55f,0.98f,1.0f});
-        for(int ring=0;ring<target.energy;++ring)
-            drawCube({target.pos.x-0.42f+ring*0.42f,target.pos.y+0.70f,target.pos.z},
-                {0.28f,0.07f,0.08f},{0.24f,0.95f,0.92f});
+    if(gSelectedMode==3) {
+        for(int i=0;i<TARGET_COUNT;++i) {
+            const TrainingTarget& target=gTargets[static_cast<size_t>(i)];
+            if(!target.active)continue;
+            float bob=std::sin(time*2.0f+i)*0.12f;
+            drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.60f,0.60f,0.60f},{0.12f,0.69f,0.86f});
+            drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.72f,0.10f,0.72f},{0.80f,0.94f,1.0f});
+            drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.24f,0.24f,0.24f},{0.55f,0.98f,1.0f});
+            for(int ring=0;ring<target.energy;++ring)
+                drawCube({target.pos.x-0.42f+ring*0.42f,target.pos.y+0.70f,target.pos.z},
+                    {0.28f,0.07f,0.08f},{0.24f,0.95f,0.92f});
+        }
     }
     if(gPulseFlash>0.0f) {
         Vec3 boltColor=gWeaponType==2?Vec3{0.92f,0.46f,0.16f}:
@@ -669,8 +726,12 @@ void drawTargets(float time) {
     }
 }
 void drawTransportPlane(Vec3 pos,float time) {
-    // Original stylized transport aircraft, with broad wings, tail and twin engines.
-    drawCylinder(pos,{0.72f,10.5f,0.72f},{0.60f,0.65f,0.69f},0.0f,-PI*0.5f,0.0f);
+    // Open cargo cabin keeps the player and the other 12 contestants visible in third person.
+    drawCube({pos.x-0.35f,pos.y-0.68f,pos.z},{8.7f,0.22f,6.0f},{0.25f,0.30f,0.35f});
+    drawCube({pos.x-0.35f,pos.y+0.26f,pos.z-2.95f},{8.7f,1.9f,0.20f},{0.43f,0.48f,0.54f});
+    drawCube({pos.x-0.35f,pos.y+0.26f,pos.z+2.95f},{8.7f,1.9f,0.20f},{0.43f,0.48f,0.54f});
+    drawCube({pos.x-4.65f,pos.y+0.05f,pos.z},{0.22f,1.7f,5.8f},{0.34f,0.40f,0.46f});
+    drawCube({pos.x-4.95f,pos.y-1.05f,pos.z},{1.2f,0.16f,5.5f},{0.54f,0.58f,0.60f},0,0.0f,0.18f);
     drawCone({pos.x+5.55f,pos.y,pos.z},{1.1f,2.0f,1.1f},{0.77f,0.80f,0.83f},0.0f,-PI*0.5f,0.0f);
     drawCube({pos.x-0.15f,pos.y-0.15f,pos.z},{0.55f,0.16f,17.5f},{0.52f,0.58f,0.64f});
     drawCube({pos.x-4.3f,pos.y+0.05f,pos.z},{0.42f,0.13f,7.2f},{0.56f,0.61f,0.66f});
@@ -689,11 +750,13 @@ void drawTransportPlane(Vec3 pos,float time) {
         {0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},
         {0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}
     }};
-    for(int i=0;i<4;++i) {
-        Vec3 passenger{pos.x-2.8f,pos.y+0.12f,pos.z-3.6f+i*2.4f};
-        drawCharacter(passenger,-PI*0.5f,
-            i==0?flightOutfits[static_cast<size_t>(gSelectedCharacter)]:
-                flightOutfits[static_cast<size_t>(i)],true,time+static_cast<float>(i),0.0f);
+    for(int i=0;i<BOT_COUNT;++i) {
+        const float x=pos.x-3.35f+static_cast<float>(i%3)*2.85f;
+        const float z=pos.z-1.78f+static_cast<float>(i/3)*0.88f;
+        Vec3 passenger{x,pos.y-0.62f,z};
+        const Vec3 outfit=i==0?flightOutfits[static_cast<size_t>(gSelectedCharacter)]:
+            flightOutfits[static_cast<size_t>(i%4)];
+        drawCharacter(passenger,-PI*0.5f,outfit,true,time+static_cast<float>(i)*0.23f,0.0f);
     }
 }
 void drawParachute(Vec3 player) {
@@ -719,6 +782,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gMatchTime=0;gZoneRadius=112;gCollected=0;gCrystalTaken.fill(false);
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
+        gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
         gDropState=1;gDropTimer=0;gPlanePosition={-110,24,-32};
         gJumpHeight=0;gJumpVelocity=0;gParachuteOpen=false;gPreviousButtons=0;
         gTargets[0]={{0,1.25f,-17},3,true};
@@ -746,6 +810,11 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetQuality(JNIEnv*,jclass,jin
     gQuality=std::clamp(static_cast<int>(value),0,2);
 }
 extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetLookSensitivity(JNIEnv*,jclass,jint value) {
+    const int level=std::clamp(static_cast<int>(value),0,2);
+    gLookSensitivity=level==0?0.65f:(level==1?1.0f:1.45f);
+}
+extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetContentData(JNIEnv*,jclass,jint buildLimit,jint resourceCount) {
     gBuildLimit=std::clamp(static_cast<int>(buildLimit),4,BUILD_CAPACITY);
     gResourceCount=std::clamp(static_cast<int>(resourceCount),1,CRYSTAL_COUNT);
@@ -760,6 +829,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gCollected=0;gPreviousButtons=0;gInteractCooldown=0;gCrystalTaken.fill(false);
     gBuildCount=0;gBuildType=0;gWood=180;gBuildCooldown=0;gBuildLimit=12;gResourceCount=5;gContentPackReady=false;
     gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
+    gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
+    gBotAttackCooldown.fill(0.0f);gLookSensitivity=1.0f;
     gDropState=0;gDropTimer=0;gPlanePosition={-110,24,-32};gParachuteOpen=false;
     gTargets[0]={{0,1.25f,-10},3,true};
     gTargets[1]={{-10,1.25f,-14},3,true};
@@ -785,24 +856,26 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(gPulseCooldown>0)gPulseCooldown=std::max(0.0f,gPulseCooldown-dt);
     if(gBuildCooldown>0)gBuildCooldown=std::max(0.0f,gBuildCooldown-dt);
     if(gPulseFlash>0)gPulseFlash=std::max(0.0f,gPulseFlash-dt);
-    gCameraYaw-=static_cast<float>(lookDX)*4.8f;
-    gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f,0.12f,0.85f);
+    gCameraYaw-=static_cast<float>(lookDX)*4.8f*gLookSensitivity;
+    gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f*gLookSensitivity,0.12f,0.85f);
 
     const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
     const bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
     const bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
     const bool pulsePressed=(buttons&BUTTON_PULSE)&&!(gPreviousButtons&BUTTON_PULSE);
     const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
+    const bool aimHeld=(buttons&BUTTON_AIM)!=0;
     gPreviousButtons=buttons;
 
     // Battle-royale insertion: the match begins aboard the aircraft.
     if(gDropState==1) {
         gDropTimer+=dt;
-        gPlanePosition.x=std::min(112.0f,-110.0f+22.0f*gDropTimer);
+        if(gDropTimer<PLANE_COUNTDOWN_SECONDS) gPlanePosition.x=-110.0f;
+        else gPlanePosition.x=std::min(112.0f,-110.0f+18.0f*(gDropTimer-PLANE_COUNTDOWN_SECONDS));
         gPlayer.x=gPlanePosition.x;gPlayer.z=gPlanePosition.z;
         gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
         gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
-        if(jumpPressed||gDropTimer>=10.0f) {
+        if((jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS)||gDropTimer>=19.5f) {
             gDropState=2;gJumpHeight=22.0f;gJumpVelocity=0.0f;
             gParachuteOpen=false;
             gTargets[0]={{gPlayer.x,1.25f,gPlayer.z-18.0f},3,true};
@@ -839,7 +912,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         gJumpHeight+=gJumpVelocity*dt;
         // Small air steering keeps the player responsive while descending.
         const float forward=static_cast<float>(moveY),strafe=static_cast<float>(moveX);
-        dx=std::cos(gCameraYaw)*strafe+std::sin(gCameraYaw)*forward;
+        dx=std::cos(gCameraYaw)*strafe-std::sin(gCameraYaw)*forward;
         dz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
         moveLength=std::sqrt(dx*dx+dz*dz);
         if(moveLength>0.08f) {
@@ -855,7 +928,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
     } else {
         const float forward=static_cast<float>(moveY),strafe=static_cast<float>(moveX);
-        dx=std::cos(gCameraYaw)*strafe+std::sin(gCameraYaw)*forward;
+        dx=std::cos(gCameraYaw)*strafe-std::sin(gCameraYaw)*forward;
         dz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
         moveLength=std::sqrt(dx*dx+dz*dz);
         moving=moveLength>0.08f;
@@ -884,6 +957,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         if(gJumpHeight<0){gJumpHeight=0;gJumpVelocity=0;}
     }
 
+    if(aimHeld&&gDropState>=2&&!moving) gPlayerYaw=gCameraYaw;
     if(swapPressed&&gDropState==3) {
         gWeaponType=(gWeaponType+1)%3;
         const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA"};
@@ -912,15 +986,29 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         firePulse();gPulseCooldown=gWeaponType==2?0.55f:0.24f;
     }
 
-    if(gDropState==3)updateBots(dt);
+    if(gDropState==3) {
+        updateBots(dt);
+        if(gSelectedMode!=3&&!gMatchFinished) {
+            gZoneDamageTimer=std::max(0.0f,gZoneDamageTimer-dt);
+            const float fromCenter=std::sqrt(gPlayer.x*gPlayer.x+gPlayer.z*gPlayer.z);
+            if(fromCenter>gZoneRadius&&gZoneDamageTimer<=0.0f) {
+                gPlayerHealth=std::max(0,gPlayerHealth-3);
+                gZoneDamageTimer=1.0f;
+                if(gPlayerHealth<=0){gMatchFinished=true;setStatus("ELIMINADO PELA ZONA • FIM DA PARTIDA");}
+                else setStatus("FORA DA ZONA SEGURA • VIDA "+std::to_string(gPlayerHealth)+"%");
+            }
+        }
+    }
     gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
     gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
-    Vec3 eye{gPlayer.x+std::sin(gCameraYaw)*9.0f,
-        gPlayer.y+3.8f+gCameraPitch*3.4f+gJumpHeight*0.35f,
-        gPlayer.z+std::cos(gCameraYaw)*9.0f};
+    const float cameraDistance=aimHeld?5.0f:9.0f;
+    const float cameraHeight=aimHeld?2.35f:(3.8f+gCameraPitch*3.4f);
+    Vec3 eye{gPlayer.x+std::sin(gCameraYaw)*cameraDistance,
+        gPlayer.y+cameraHeight+gJumpHeight*0.35f,
+        gPlayer.z+std::cos(gCameraYaw)*cameraDistance};
     Vec3 target{gPlayer.x,gPlayer.y+1.0f+gJumpHeight*0.45f,gPlayer.z};
     Mat4 view=lookAt(eye,target,{0,1,0});
-    gProjection=multiply(perspective(0.93f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
+    gProjection=multiply(perspective(aimHeld?0.62f:0.93f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
 
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
     drawWorld(gMatchTime);
