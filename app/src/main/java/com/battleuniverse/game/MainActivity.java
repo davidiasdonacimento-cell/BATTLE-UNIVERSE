@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.content.SharedPreferences;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -13,6 +14,8 @@ public final class MainActivity extends Activity {
     private HudOverlay hud;
     private ContentPackInstaller installer;
     private ContentLoadingView loadingView;
+    private AccountSyncManager accountSync;
+    private SharedPreferences profilePrefs;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
 
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -57,7 +60,20 @@ public final class MainActivity extends Activity {
             int[] settings=ContentPackInstaller.readIslandSettings(this);
             gameSurface.setContentPackData(settings[0],settings[1]);
         }
-        hud=new HudOverlay(this,gameSurface,getSharedPreferences("battle_universe_profile",MODE_PRIVATE));
+        profilePrefs=getSharedPreferences("battle_universe_profile",MODE_PRIVATE);
+        hud=new HudOverlay(this,gameSurface,profilePrefs);
+        hud.setGoogleAccountAction(()->{
+            if(accountSync==null)return;
+            if(accountSync.isSignedIn())accountSync.syncNow();
+            else accountSync.signInWithGoogle();
+        });
+        accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,email,message)->{
+            if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,email,message);
+        });
+        hud.setGoogleAccountStatus(accountSync.isConfigured(),accountSync.isSignedIn(),"",
+            accountSync.isConfigured()?"Entre com Google para sincronizar.":"Configuração Firebase pendente.");
+        accountSync.restoreExistingSession();
+
         root.addView(gameSurface,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
         root.addView(hud,new FrameLayout.LayoutParams(
@@ -88,6 +104,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onDestroy() {
         if(installer!=null)installer.shutdown();
+        if(accountSync!=null)accountSync.close();
         super.onDestroy();
     }
 }
