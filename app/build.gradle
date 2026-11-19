@@ -72,3 +72,16 @@ dependencies {
     implementation "androidx.credentials:credentials-play-services-auth:1.3.0"
     implementation "com.google.android.libraries.identity.googleid:googleid:1.1.1"
 }
+
+// Optional stable signing key injected by GitHub Actions secrets.
+// This keeps the APK signature consistent between CI builds and permits in-place updates.
+def stableKeystorePath = System.getenv("BU_KEYSTORE_PATH")
+if (stableKeystorePath != null && !stableKeystorePath.trim().isEmpty()) {
+    android.signingConfigs.create("ciStable") {
+        storeFile = file(stableKeystorePath)
+        storePassword = System.getenv("BU_KEYSTORE_PASSWORD")
+        keyAlias = System.getenv("BU_KEY_ALIAS")
+        keyPassword = System.getenv("BU_KEY_PASSWORD")
+    }
+    android.buildTypes.debug.signingConfig = android.signingConfigs.getByName("ciStable")
+}
