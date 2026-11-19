@@ -413,19 +413,19 @@ void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
 void drawWorld(float time) {
     // Expanded island arena: broad coast, inland districts, roads and forest belts.
     drawSphere({0,-1.05f,0},{520,0.55f,520},{0.025f,0.22f,0.36f});
-    const std::array<Vec3,7> beachColors{{
+    const std::array<Vec3,8> beachColors{{
         {0.78f,0.68f,0.44f},{0.24f,0.27f,0.38f},{0.68f,0.47f,0.29f},
-        {0.73f,0.84f,0.91f},{0.34f,0.39f,0.40f},{0.57f,0.70f,0.39f},{0.30f,0.40f,0.58f}
+        {0.73f,0.84f,0.91f},{0.34f,0.39f,0.40f},{0.57f,0.70f,0.39f},{0.30f,0.40f,0.58f},{0.50f,0.43f,0.34f}
     }};
-    const std::array<Vec3,7> landColors{{
+    const std::array<Vec3,8> landColors{{
         {0.17f,0.43f,0.23f},{0.19f,0.24f,0.31f},{0.49f,0.37f,0.24f},
-        {0.65f,0.78f,0.87f},{0.28f,0.34f,0.35f},{0.20f,0.48f,0.25f},{0.12f,0.20f,0.37f}
+        {0.65f,0.78f,0.87f},{0.28f,0.34f,0.35f},{0.20f,0.48f,0.25f},{0.12f,0.20f,0.37f},{0.31f,0.27f,0.21f}
     }};
-    const std::array<Vec3,7> roadColors{{
+    const std::array<Vec3,8> roadColors{{
         {0.34f,0.37f,0.39f},{0.12f,0.16f,0.22f},{0.40f,0.37f,0.32f},
-        {0.48f,0.57f,0.64f},{0.22f,0.27f,0.29f},{0.30f,0.39f,0.29f},{0.18f,0.26f,0.42f}
+        {0.48f,0.57f,0.64f},{0.22f,0.27f,0.29f},{0.30f,0.39f,0.29f},{0.18f,0.26f,0.42f},{0.31f,0.29f,0.25f}
     }};
-    const size_t mapStyle=static_cast<size_t>(std::clamp(gSelectedMap,0,6));
+    const size_t mapStyle=static_cast<size_t>(std::clamp(gSelectedMap,0,7));
     const Vec3 beach=beachColors[mapStyle],land=landColors[mapStyle],road=roadColors[mapStyle];
     drawSphere({0,-0.02f,0},{174,0.62f,174},beach);
     drawSphere({0,0.31f,0},{158,0.31f,158},land);
@@ -439,13 +439,13 @@ void drawWorld(float time) {
     drawCube({0,0.537f,112},{150.0f,0.06f,6.0f},road);
 
     for(size_t i=0;i<gBuildingPositions.size();++i) {
-        const std::array<Vec3,7> buildingTints{{
+        const std::array<Vec3,8> buildingTints{{
             {0.66f,0.61f,0.48f},{0.27f,0.30f,0.38f},{0.64f,0.48f,0.31f},
-            {0.66f,0.77f,0.84f},{0.38f,0.43f,0.44f},{0.55f,0.65f,0.43f},{0.25f,0.35f,0.54f}
+            {0.66f,0.77f,0.84f},{0.38f,0.43f,0.44f},{0.55f,0.65f,0.43f},{0.25f,0.35f,0.54f},{0.43f,0.37f,0.29f}
         }};
-        const std::array<Vec3,7> roofTints{{
+        const std::array<Vec3,8> roofTints{{
             {0.27f,0.20f,0.16f},{0.11f,0.18f,0.28f},{0.35f,0.23f,0.16f},
-            {0.38f,0.52f,0.62f},{0.16f,0.20f,0.22f},{0.23f,0.34f,0.22f},{0.08f,0.15f,0.30f}
+            {0.38f,0.52f,0.62f},{0.16f,0.20f,0.22f},{0.23f,0.34f,0.22f},{0.08f,0.15f,0.30f},{0.22f,0.18f,0.14f}
         }};
         Vec3 tint=buildingTints[mapStyle],roof=roofTints[mapStyle];
         const float width=buildingWidth(i),depth=buildingDepth(i),height=buildingHeight(i);
@@ -525,6 +525,13 @@ void drawWorld(float time) {
             drawSphere({x,10.8f,-76},{2.1f,0.6f,2.1f},{0.18f,0.78f,0.92f});
         }
         drawCube({76,1.1f,76},{22,0.6f,22},{0.16f,0.28f,0.48f});
+    } else if(gSelectedMap==7) {
+        for(int i=0;i<5;++i) {
+            float x=-78.0f+i*38.0f;
+            drawCube({x,1.1f,66},{12.0f,2.2f,3.0f},{0.32f,0.29f,0.24f});
+            drawCube({x+3.0f,3.0f,66},{3.0f,1.6f,3.0f},{0.48f,0.39f,0.28f});
+        }
+        drawCube({72,0.9f,-72},{24.0f,1.8f,16.0f},{0.27f,0.24f,0.20f});
     }
 }
 Vec3 localPoint(Vec3 base,float lx,float ly,float lz,float yaw) {
@@ -1187,7 +1194,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,j
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMap(JNIEnv*,jclass,jint id) {
-    gSelectedMap=std::clamp(static_cast<int>(id),0,6);
+    gSelectedMap=std::clamp(static_cast<int>(id),0,7);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint id) {
