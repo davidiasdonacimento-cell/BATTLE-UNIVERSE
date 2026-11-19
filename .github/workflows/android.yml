@@ -1,0 +1,111 @@
+name: BATTLE UNIVERSE Android
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: battle-universe-android-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Native Android build and content pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install content pack tools
+        run: python -m pip install --disable-pip-version-check numpy pillow
+
+      - name: Build real Season 01 content package
+        run: python scripts/build_content_pack.py
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK, NDK and CMake
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.0.12077973 cmake;3.22.1'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Run available Android unit tests and compile APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify APK, DEX and native ARM libraries
+        run: |
+          python - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          apk = Path("app/build/outputs/apk/debug/app-debug.apk")
+          assert apk.is_file() and apk.stat().st_size > 300_000, "APK ausente ou pequeno demais"
+          with ZipFile(apk) as z:
+              names = set(z.namelist())
+              assert "classes.dex" in names, "classes.dex não encontrado"
+              assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Biblioteca ARM64 ausente"
+              assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Biblioteca ARMv7 ausente"
+              bad = z.testzip()
+              assert bad is None, f"APK corrompido: {bad}"
+          print(f"APK válido: {apk.stat().st_size} bytes; DEX e libs ARM presentes")
+          PY
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          ls -lh build/battle-universe-season-01-pack.zip
+
+      - name: Publish verified Season 01 data pack
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: data-pack-v1
+          name: Battle Universe — Dados da Temporada 01
+          body: |
+            Pacote de conteúdo do Battle Universe.
+            Inclui modelos OBJ, texturas 1024px, configurações de mapas, missões,
+            shaders OpenGL ES 3.0 e áudio ambiente. O aplicativo valida SHA-256
+            e os hashes dos arquivos antes de ativar o pacote.
+          prerelease: true
+          files: |
+            build/battle-universe-season-01-pack.zip
+            build/content-pack-manifest.json
+          overwrite_files: true
+          fail_on_unmatched_files: true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BATTLE-UNIVERSE-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Season 01 package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BATTLE-UNIVERSE-season-01-content-pack
+          path: |
+            build/battle-universe-season-01-pack.zip
+            build/content-pack-manifest.json
+          if-no-files-found: error
+          retention-days: 14

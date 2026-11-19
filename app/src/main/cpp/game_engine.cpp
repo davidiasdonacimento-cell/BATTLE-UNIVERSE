@@ -3,6 +3,7 @@
 #include <android/log.h>
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <cmath>
 #include <mutex>
@@ -20,7 +21,7 @@ constexpr int BUTTON_INTERACT = 2;
 constexpr int BUTTON_BUILD = 4;
 constexpr int BUTTON_RUN = 8;
 constexpr int BUTTON_PULSE = 16;
-constexpr int BUILD_LIMIT = 12;
+constexpr int BUILD_CAPACITY = 24;
 constexpr int TARGET_COUNT = 3;
 
 struct Vec3 { float x, y, z; };
@@ -89,6 +90,7 @@ int gScreenMode=0, gSelectedCharacter=0, gSelectedMap=0, gSelectedMode=0, gQuali
 Mat4 gProjection=identity();
 int gWidth=1, gHeight=1;
 Vec3 gPlayer{0,0.55f,0};
+std::atomic<float> gPlayerXSnapshot{0.0f},gPlayerZSnapshot{0.0f};
 float gPlayerYaw=0, gCameraYaw=0, gCameraPitch=0.36f;
 float gJumpHeight=0, gJumpVelocity=0, gMatchTime=0, gZoneRadius=30;
 float gInteractCooldown=0;
@@ -97,8 +99,9 @@ std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
 struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; };
 std::array<BotState,BOT_COUNT> gBots{};
 struct BuildPiece { Vec3 pos; float yaw=0; int type=0; };
-std::array<BuildPiece,BUILD_LIMIT> gBuildPieces{};
-int gBuildCount=0, gBuildType=0, gWood=120;
+std::array<BuildPiece,BUILD_CAPACITY> gBuildPieces{};
+int gBuildCount=0, gBuildType=0, gWood=120, gBuildLimit=12, gResourceCount=5;
+bool gContentPackReady=false;
 float gBuildCooldown=0;
 struct TrainingTarget { Vec3 pos; int energy=3; bool active=true; };
 std::array<TrainingTarget,TARGET_COUNT> gTargets{{
@@ -319,6 +322,15 @@ void drawWorld(float time) {
     drawCube({-20,0.95f,-8},{3.2f,1.2f,2.6f},{0.34f,0.39f,0.35f},0.4f);
     drawCube({19,0.82f,-5},{2.5f,0.95f,3.1f},{0.36f,0.41f,0.34f},-0.3f);
     drawCube({-3,0.78f,23},{3.0f,0.8f,2.2f},{0.14f,0.37f,0.19f});
+    if(gContentPackReady) {
+        // Season 01 island extension: dock, light pylons and supply point.
+        drawCube({0,0.64f,-22},{7.5f,0.22f,5.5f},{0.38f,0.24f,0.14f});
+        for(int i=0;i<5;++i)
+            drawCube({-2.8f+i*1.4f,0.96f,-24.0f},{0.10f,0.55f,0.10f},{0.55f,0.40f,0.22f});
+        drawCube({-3.4f,1.12f,-19.3f},{0.85f,0.82f,0.85f},{0.22f,0.40f,0.48f});
+        drawCube({3.4f,1.12f,-19.3f},{0.85f,0.82f,0.85f},{0.22f,0.40f,0.48f});
+        drawSphere({0,1.35f,-22.0f},{0.24f,0.24f,0.24f},{0.12f,0.85f,0.95f});
+    }
 }
 Vec3 localPoint(Vec3 base,float lx,float ly,float lz,float yaw) {
     float c=std::cos(yaw), sn=std::sin(yaw);
@@ -386,7 +398,7 @@ void drawSafeZone() {
 void updateStatus() {
     std::ostringstream out;
     out<<"PULSO "<<gPulseAmmo<<"  |  MADEIRA "<<gWood<<"  |  CONSTRUÇÕES "<<gBuildCount
-       <<"/"<<BUILD_LIMIT<<"  |  ALVOS "<<gTrainingScore<<"  |  CRISTAIS "<<gCollected<<"/"<<CRYSTAL_COUNT;
+       <<"/"<<gBuildLimit<<"  |  ALVOS "<<gTrainingScore<<"  |  CRISTAIS "<<gCollected<<"/"<<gResourceCount;
     setStatus(out.str());
 }
 void resetBots() {
@@ -406,7 +418,7 @@ void updateBots(float dt) {
             target=localPoint(gPlayer,side,0,2.3f+0.45f*i,gPlayerYaw);
         } else {
             int nearest=-1;float best=1.0e9f;
-            for(int j=0;j<CRYSTAL_COUNT;++j) {
+            for(int j=0;j<gResourceCount;++j) {
                 if(gCrystalTaken[static_cast<size_t>(j)])continue;
                 Vec3 c=gCrystals[static_cast<size_t>(j)];
                 float dx=c.x-bot.pos.x,dz=c.z-bot.pos.z,d=dx*dx+dz*dz;
@@ -432,7 +444,7 @@ void updateBots(float dt) {
         bot.pos.x=std::clamp(bot.pos.x,-25.0f,25.0f);
         bot.pos.z=std::clamp(bot.pos.z,-25.0f,25.0f);
         if(!ally) {
-            for(int j=0;j<CRYSTAL_COUNT;++j) {
+            for(int j=0;j<gResourceCount;++j) {
                 if(gCrystalTaken[static_cast<size_t>(j)])continue;
                 Vec3 c=gCrystals[static_cast<size_t>(j)];
                 float ox=bot.pos.x-c.x,oz=bot.pos.z-c.z;
@@ -455,7 +467,7 @@ void updateBots(float dt) {
     }
 }
 void placeBuildPiece() {
-    if(gBuildCount>=BUILD_LIMIT||gWood<10) {
+    if(gBuildCount>=gBuildLimit||gWood<10) {
         setStatus(gWood<10?"RECURSOS INSUFICIENTES":"LIMITE DE CONSTRUÇÕES ATINGIDO");
         return;
     }
@@ -520,7 +532,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint mode) {
     gScreenMode=std::clamp(static_cast<int>(mode),0,1);
     if(gScreenMode==1){
-        gPlayer={0,0.55f,0};gMatchTime=0;gZoneRadius=30;gCollected=0;
+        gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);gMatchTime=0;gZoneRadius=30;gCollected=0;
         gCrystalTaken.fill(false);gBuildCount=0;gWood=120;gBuildType=0;
         gPulseAmmo=24;gTrainingScore=0;
         gTargets[0]={{0,1.25f,-10},3,true};
@@ -546,12 +558,19 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetQuality(JNIEnv*,jclass,jin
     gQuality=std::clamp(static_cast<int>(value),0,2);
 }
 extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetContentData(JNIEnv*,jclass,jint buildLimit,jint resourceCount) {
+    gBuildLimit=std::clamp(static_cast<int>(buildLimit),4,BUILD_CAPACITY);
+    gResourceCount=std::clamp(static_cast<int>(resourceCount),1,CRYSTAL_COUNT);
+    gContentPackReady=true;
+    updateStatus();
+}
+extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
-    gPlayer={0,0.55f,0};gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
+    gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
     gScreenMode=0;gSelectedCharacter=0;gSelectedMap=0;gSelectedMode=0;gQuality=1;
     gJumpHeight=0;gJumpVelocity=0;gMatchTime=0;gZoneRadius=30;
     gCollected=0;gPreviousButtons=0;gInteractCooldown=0;gCrystalTaken.fill(false);
-    gBuildCount=0;gBuildType=0;gWood=120;gBuildCooldown=0;
+    gBuildCount=0;gBuildType=0;gWood=120;gBuildCooldown=0;gBuildLimit=12;gResourceCount=5;gContentPackReady=false;
     gPulseAmmo=24;gTrainingScore=0;gPulseCooldown=0;gPulseFlash=0;
     gTargets[0]={{0,1.25f,-10},3,true};
     gTargets[1]={{-10,1.25f,-14},3,true};
@@ -620,6 +639,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         if(!blocked){gPlayer.x=nx;gPlayer.z=nz;}
         gPlayerYaw=std::atan2(dx,-dz);
+        gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
+        gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
     }
 
     bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
@@ -634,7 +655,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     gInteractCooldown=std::max(0.0f,gInteractCooldown-dt);
     if(interactPressed&&gInteractCooldown<=0.0f) {
         int nearest=-1;float bestDistance=3.8f;
-        for(int i=0;i<CRYSTAL_COUNT;++i) {
+        for(int i=0;i<gResourceCount;++i) {
             if(gCrystalTaken[static_cast<size_t>(i)])continue;
             float ox=gPlayer.x-gCrystals[static_cast<size_t>(i)].x;
             float oz=gPlayer.z-gCrystals[static_cast<size_t>(i)].z;
@@ -664,7 +685,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
 
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
     drawWorld(gMatchTime);
-    for(int i=0;i<CRYSTAL_COUNT;++i)
+    for(int i=0;i<gResourceCount;++i)
         if(!gCrystalTaken[static_cast<size_t>(i)])
             drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
     drawTargets(gMatchTime);
@@ -685,6 +706,17 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     statusTimer+=dt;
     if(statusTimer>=0.65f){statusTimer=0;updateStatus();}
     glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
+}
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetPlayerPosition(JNIEnv* env,jclass) {
+    jfloatArray result=env->NewFloatArray(2);
+    if(!result)return nullptr;
+    jfloat values[2]={
+        gPlayerXSnapshot.load(std::memory_order_relaxed),
+        gPlayerZSnapshot.load(std::memory_order_relaxed)
+    };
+    env->SetFloatArrayRegion(result,0,2,values);
+    return result;
 }
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetStatus(JNIEnv* env,jclass) {

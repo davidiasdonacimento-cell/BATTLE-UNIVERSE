@@ -248,10 +248,8 @@ public final class HudOverlay extends View {
         text(c,game.getGameStatus(),42,88,9,0xFFD5E7ED,Typeface.DEFAULT_BOLD);
 
         panel(c,22,112,280,66,0xB9071724,0x337AA0B2,14);
-        text(c,"VITALIDADE",40,137,9,0xFFB9D0DA,Typeface.DEFAULT_BOLD);
-        p.setColor(0xFF253B48);r.set(40,146,272,157);c.drawRoundRect(r,5,5,p);
-        p.setColor(0xFF47D9B3);r.set(40,146,272,157);c.drawRoundRect(r,5,5,p);
-        text(c,"100",244,139,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"ESTADO DA OPERAÇÃO",40,139,9,0xFFB9D0DA,Typeface.DEFAULT_BOLD);
+        text(c,"TREINAMENTO LOCAL ATIVO",40,160,13,0xFF79E8D0,Typeface.DEFAULT_BOLD);
 
         // Minimap visual; the game world remains rendered by OpenGL underneath.
         panel(c,1064,18,190,166,0xD9071724,0x6679DDEB,17);
@@ -259,8 +257,14 @@ public final class HudOverlay extends View {
         p.setColor(0xFF173A43);c.drawCircle(1159,105,59,p);
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(0xFF5DD6CE);c.drawCircle(1159,105,59,p);p.setStyle(Paint.Style.FILL);
         p.setColor(0xFF2C775F);c.drawCircle(1159,105,43,p);
-        p.setColor(0xFF6ED5E2);c.drawCircle(1159,105,5,p);
-        p.setColor(0xFFFFC66F);c.drawCircle(1131,82,4,p);c.drawCircle(1190,127,4,p);c.drawCircle(1178,72,4,p);
+        float[] worldPosition=game.getPlayerPosition();
+        float playerMapX=1159+Math.max(-22,Math.min(22,worldPosition[0]))*1.65f;
+        float playerMapY=105+Math.max(-22,Math.min(22,worldPosition[1]))*1.65f;
+        p.setColor(0xFF6ED5E2);c.drawCircle(playerMapX,playerMapY,6,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(Color.WHITE);c.drawCircle(playerMapX,playerMapY,8,p);p.setStyle(Paint.Style.FILL);
+        p.setColor(0xFFFFC66F);c.drawCircle(1159+8*1.65f,105-9*1.65f,4,p);
+        c.drawCircle(1159-10*1.65f,105-6*1.65f,4,p);
+        c.drawCircle(1159+12*1.65f,105+10*1.65f,4,p);
 
         // Touch zones match GameSurfaceView.controlAt().
         drawControl(c,998,310,43,"PULSO",0xFF185D7A,0xFF65E9F4);
@@ -270,10 +274,10 @@ public final class HudOverlay extends View {
         drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
 
         // Joystick esquerdo.
-        p.setColor(0x553D7183);c.drawCircle(179,569,66,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA8CE8EF);c.drawCircle(179,569,66,p);
-        p.setStyle(Paint.Style.FILL);p.setColor(0xAA8FCBD2);c.drawCircle(179,569,28,p);
-        p.setColor(0xFFECFFFF);c.drawCircle(179,569,7,p);
+        p.setColor(0x553D7183);c.drawCircle(179,544,66,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA8CE8EF);c.drawCircle(179,544,66,p);
+        p.setStyle(Paint.Style.FILL);p.setColor(0xAA8FCBD2);c.drawCircle(179,544,28,p);
+        p.setColor(0xFFECFFFF);c.drawCircle(179,544,7,p);
 
         pill(c,24,625,160,49,"VOLTAR AO LOBBY",0xDD173C4A,Color.WHITE);
         panel(c,420,650,440,40,0xBB071522,0x226A8EA0,14);

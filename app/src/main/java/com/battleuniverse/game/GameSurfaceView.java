@@ -9,6 +9,8 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, PULSE=16;
     private volatile float moveX, moveY, lookDX, lookDY;
     private volatile int buttons, screenMode, characterId, mapId, matchMode, quality=1;
+    private volatile int contentBuildLimit=12,contentResourceCount=5;
+    private volatile boolean contentPackReady=false;
     private int movePointer=-1, lookPointer=-1;
     private final int[] buttonPointers={-1,-1,-1,-1,-1};
     private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,PULSE};
@@ -43,6 +45,16 @@ public final class GameSurfaceView extends GLSurfaceView {
     public void setQuality(int value) {
         quality=Math.max(0,Math.min(2,value));
         queueEvent(()->nativeSetQuality(quality));
+    }
+    public void setContentPackData(int buildLimit,int resourceCount) {
+        int safeBuildLimit=Math.max(4,Math.min(24,buildLimit));
+        int safeResourceCount=Math.max(1,Math.min(12,resourceCount));
+        contentBuildLimit=safeBuildLimit;contentResourceCount=safeResourceCount;contentPackReady=true;
+        queueEvent(()->nativeSetContentData(contentBuildLimit,contentResourceCount));
+    }
+    public float[] getPlayerPosition() {
+        try { return nativeGetPlayerPosition(); }
+        catch (UnsatisfiedLinkError error) { return new float[]{0f,0f}; }
     }
     public String getGameStatus() {
         try { return nativeGetStatus(); }
@@ -99,7 +111,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             if(movePointer==-1 && x<w*0.38f && y>h*0.42f) {
                 movePointer=id;
                 moveOriginX=w*0.14f;
-                moveOriginY=h*0.79f;
+                moveOriginY=h*0.755f;
                 updateMovement(x,y,w,h);
             } else if(lookPointer==-1 && x>=w*0.40f) {
                 lookPointer=id; lastLookX=x; lastLookY=y;
@@ -149,7 +161,9 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetMap(int id);
     private static native void nativeSetMode(int id);
     private static native void nativeSetQuality(int value);
+    private static native void nativeSetContentData(int buildLimit,int resourceCount);
     private static native String nativeGetStatus();
+    private static native float[] nativeGetPlayerPosition();
 
     private final class GameRenderer implements GLSurfaceView.Renderer {
         private long previous;
@@ -161,6 +175,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             nativeSetMap(mapId);
             nativeSetMode(matchMode);
             nativeSetQuality(quality);
+            if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
             previous=System.nanoTime();
         }
         @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,
