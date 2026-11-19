@@ -8,7 +8,7 @@ graphics settings, sensitivity, and owned cosmetic items.
 ## 1. Create the Firebase Android app
 
 1. Create a Firebase project using a Google account you control.
-2. Add an Android app with package name `com.battleuniverse.game`.
+2. Add an Android app with package name `com.battleuniverse.game.debug`.
 3. Enable **Authentication > Sign-in method > Google**.
 4. Create a **Cloud Firestore** database.
 5. Add the SHA-1 fingerprint for the certificate that signs the APK you install.
@@ -17,6 +17,9 @@ graphics settings, sensitivity, and owned cosmetic items.
 ## 2. Add the configuration to GitHub Actions
 
 Do not commit `google-services.json` to this public repository.
+
+The workflow currently builds the **debug** APK, whose application ID is
+`com.battleuniverse.game.debug`. Register that exact package in Firebase.
 
 In the repository's Actions secrets, add a secret named
 `FIREBASE_GOOGLE_SERVICES_JSON` containing the complete contents of that file.
@@ -29,13 +32,21 @@ login is unavailable.
 Copy the rules from `firestore.rules` into Firebase Console > Firestore >
 Rules and publish them. Each player can read/write only their own UID document.
 
-## 4. APK signing matters
+## 4. Keep the APK signature stable
 
 Android only installs an APK as an update when its application ID and signing
-certificate match the installed app. The GitHub workflow currently creates a
-debug APK. For Google login across future CI builds, register the SHA-1 of the
-certificate used by those builds. A stable private signing key should be stored
-in GitHub Actions secrets, never committed to this public repository.
+certificate match the installed app. Create one private JKS keystore and store
+it in GitHub Actions secrets (never commit it to this public repository):
+
+- `BATTLE_UNIVERSE_KEYSTORE_BASE64`: Base64 of the JKS file
+- `BATTLE_UNIVERSE_KEYSTORE_PASSWORD`
+- `BATTLE_UNIVERSE_KEY_ALIAS`
+- `BATTLE_UNIVERSE_KEY_PASSWORD`
+
+The workflow uses that key to sign each debug APK when all four secrets are set.
+Add that keystore's SHA-1 fingerprint to the Firebase Android app before
+downloading the final `google-services.json`. Without a stable key, CI falls
+back to a temporary debug key and in-place updates/Google sign-in can break.
 
 ## Important
 
