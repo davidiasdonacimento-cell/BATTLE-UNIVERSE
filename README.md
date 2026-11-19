@@ -6,7 +6,10 @@ Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL E
 
 - IA dos bots ajustada para priorizar combate ao jogador após o pouso, manter distância de combate, mirar e exibir disparos de energia.
 - Sequência de transporte alterada para mover o avião desde o início e usar uma câmera elevada dentro da cabine.
-- Perfil local e resgate de código precisam ser implementados e validados em uma etapa própria; não considerar funcionalidades ausentes como prontas.
+- Perfil local com nickname editável, XP/nível, saldo de diamantes e resgate 100K; estado salvo em SharedPreferences.
+- Loja virtual local com três cosméticos de perfil, saldo e compras salvos no aparelho.
+- Menu Royale local com passe calculado por XP e bônus diário resgatável uma vez por dia.
+- O resgate 100K é limitado ao perfil local; apagar ou editar os dados do aplicativo pode reiniciar esse estado.
 - O instalador foi preparado para arquivos futuros de até 2 GiB e preserva downloads parciais quando a conexão cai.
 - **O pacote efetivamente publicado continua sendo o arquivo da Temporada 02, com 428.996.916 bytes (aprox. 409 MiB). O pacote de 2 GB ainda não foi gerado nem publicado.**
 - A compilação automática não substitui o teste físico no Android.
@@ -22,7 +25,7 @@ Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL E
 - Equipamento visual de energia fictício, sem armas reais.
 
 ### Estado desta etapa
-Esta é uma alteração do código. O APK ainda precisa passar pela compilação do GitHub Actions e por teste físico no Android. O pacote adicional de 2 GB continua em desenvolvimento: o pacote antigo da Temporada 02 não foi ampliado para 2 GB nesta entrega. Não considerar a versão testada no aparelho até a realização do teste físico.
+A execução do GitHub Actions 44534495237 terminou com sucesso, incluindo testes unitários disponíveis, compilação Android e verificações do APK/DEX/bibliotecas ARM. Isso confirma a compilação, não o teste físico no aparelho. O pacote adicional de 2 GB não foi gerado: o arquivo atualmente publicado permanece com 428.996.916 bytes (aprox. 409 MiB).
 
 ## Versão anterior 0.5.0-alpha — inserção no avião e batalha local
 
@@ -30,11 +33,11 @@ Esta é uma alteração do código. O APK ainda precisa passar pela compilação
 - Controles touchscreen usam o mesmo sistema de coordenadas da HUD, compatível com telas panorâmicas.
 - Convenção de orientação do personagem ajustada para o eixo frontal local -Z.
 - Aliados em Dupla/Esquadrão patrulham setores próprios e não seguem o jogador.
-- NPCs hostis patrulham/coletam recursos, aproximam-se em curta distância, têm integridade e podem ser desativados.
+- IA hostil atualizada para priorizar o jogador após o pouso, aproximar-se em formação espaçada, mirar e disparar pulsos de energia visíveis; ainda requer teste físico de equilíbrio e comportamento.
 - HUD nativa de jogo: minimapa com posição do jogador, joystick, disparo, troca de arma, construção, corrida, salto e interação.
 - Três armas de energia totalmente fictícias para o jogo: Pulso Plasma, Raio Arc e Nova. Munição, alternância, disparos visíveis, alvos de treino e dano aos bots.
 - Construção de paredes, plataformas e rampas, com madeira, limite, detecção de sobreposição e colisão de paredes.
-- Partida começa dentro de um avião de transporte aberto, com os 29 bots IA visíveis, contagem regressiva de 7 segundos e salto manual em terceira pessoa.
+- Sequência de avião atualizada: deslocamento desde o primeiro quadro, visão elevada dentro da cabine com 30 passageiros organizados em seis fileiras e salto disponível após a contagem.
 - Modo Battle Royale local com 29 adversários IA espalhados pelo mapa, vida, eliminações, ataques fictícios de energia e dano fora da zona segura; treinamento fica separado.
 - Mira de ombro com zoom de câmera, retículo central e disparo alinhado à direção da câmera.
 - Movimento relativo à câmera corrigido; a combinação simultânea de analógico, câmera e botões mantém o encaminhamento multitouch ativo.

@@ -88,12 +88,14 @@ public final class ContentPackInstaller {
             File staging=new File(root,"battle-content-staging");
             File installed=new File(root,"battle-content");
             File backup=new File(root,"battle-content-backup");
+            long expectedDownloadSize=-1L;
             try {
                 postProgress(0,1,"CONSULTANDO VERSÃO DO PACOTE...");
                 JSONObject manifest=downloadManifest();
                 String url=manifest.getString("url");
                 String expectedHash=manifest.getString("sha256").toLowerCase(Locale.US);
                 long expectedSize=manifest.getLong("size_bytes");
+                expectedDownloadSize=expectedSize;
                 int version=manifest.getInt("version");
                 if(version!=PACK_VERSION) throw new Exception("Versão de dados incompatível.");
                 if(expectedSize<=250L*1024L*1024L||expectedSize>MAX_DOWNLOAD_BYTES)
@@ -131,7 +133,9 @@ public final class ContentPackInstaller {
                 postProgress(expectedSize,expectedSize,"DADOS VERIFICADOS • REINICIANDO O JOGO...");
                 main.post(()->{running=false;listener.onSuccess();});
             } catch(Exception error) {
-                // Keep a partial .part file so the next attempt can resume an interrupted download.
+                // Keep incomplete data for resume, but discard a complete archive that failed validation.
+                if(expectedDownloadSize>0L && archive.isFile()
+                        && archive.length()>=expectedDownloadSize) archive.delete();
                 deleteTree(staging);
                 String message=error.getMessage()==null?"Falha desconhecida durante a instalação.":error.getMessage();
                 main.post(()->{running=false;listener.onFailure(message);});
@@ -156,6 +160,7 @@ public final class ContentPackInstaller {
     private void downloadArchive(String url,File output,long total) throws Exception {
         long existing=output.isFile()?output.length():0L;
         if(existing<0||existing>total) { output.delete(); existing=0L; }
+        if(existing==total) return; // Complete .part file: continue directly to SHA-256 validation.
 
         HttpURLConnection connection=(HttpURLConnection)new URL(url).openConnection();
         connection.setConnectTimeout(18000);
