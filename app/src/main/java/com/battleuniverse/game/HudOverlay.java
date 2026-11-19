@@ -576,13 +576,17 @@ public final class HudOverlay extends View {
             c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
         }
         if(gameStatus.startsWith("EMBARQUE")||gameStatus.startsWith("AVIÃO")) {
-            panel(c,22,170,330,92,0xD9081928,0x5579DDEB,16);
+            panel(c,22,170,330,110,0xD9081928,0x5579DDEB,16);
             eyebrow(c,40,195,"AERONAVE DE TRANSPORTE");
-            text(c,gameStatus.startsWith("EMBARQUE")?"EMBARQUE E AGUARDE A RAMPA":"CAMINHE PELO CORREDOR ATÉ A RAMPA",
-                40,222,11,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,"ANALÓGICO: MOVER  •  LADO DIREITO: CÂMERA",40,244,8,0xFF9FC6D3,Typeface.DEFAULT_BOLD);
-            pill(c,40,247,125,18,gameStatus.startsWith("EMBARQUE")?"PORTA FECHADA":"RAMPA LIBERADA",
-                0x553A6B7C,0xFFB9E8EF);
+            boolean rampReady=gameStatus.contains("RAMPA PRONTA");
+            text(c,gameStatus.startsWith("EMBARQUE")?"EMBARQUE E AGUARDE A RAMPA":
+                    (rampReady?"SAÍDA LIBERADA • TOQUE SALTAR":"CAMINHE PELO CORREDOR ATÉ A RAMPA"),
+                40,222,11,rampReady?0xFF83E9B2:Color.WHITE,
+                Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"ANALÓGICO: MOVER  •  LADO DIREITO: CÂMERA",40,240,8,0xFF9FC6D3,Typeface.DEFAULT_BOLD);
+            pill(c,40,250,160,20,gameStatus.startsWith("EMBARQUE")?"PORTA TRASEIRA FECHADA":
+                    (rampReady?"RAMPA PRONTA":"CAMINHE ATÉ A RAMPA"),
+                rampReady?0xFF176A75:0x553A6B7C,0xFFB9E8EF);
         }
 
         drawControl(c,890,310,38,game.isAimToggled()?"MIRA ON":"MIRA",
