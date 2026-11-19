@@ -1199,7 +1199,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(gPulseCooldown>0)gPulseCooldown=std::max(0.0f,gPulseCooldown-dt);
     if(gBuildCooldown>0)gBuildCooldown=std::max(0.0f,gBuildCooldown-dt);
     if(gPulseFlash>0)gPulseFlash=std::max(0.0f,gPulseFlash-dt);
-    gCameraYaw-=static_cast<float>(lookDX)*4.8f*gLookSensitivity;
+    gCameraYaw+=static_cast<float>(lookDX)*4.8f*gLookSensitivity;
     gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f*gLookSensitivity,0.12f,0.85f);
 
     const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
@@ -1311,8 +1311,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         moveLength=std::sqrt(dx*dx+dz*dz);
         if(moveLength>0.08f) {
             dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
-            gPlayer.x=std::clamp(gPlayer.x+dx*2.4f*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
-            gPlayer.z=std::clamp(gPlayer.z+dz*2.4f*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
+            const float nx=std::clamp(gPlayer.x+dx*2.4f*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
+            const float nz=std::clamp(gPlayer.z+dz*2.4f*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
+            moveWithCollision(gPlayer,nx,nz,0.42f);
             gPlayerYaw=std::atan2(-dx,-dz);
         }
         if(gJumpHeight<=0.0f) {
@@ -1417,7 +1418,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const float shoulder=aimHeld?1.08f:0.0f;
     Vec3 eye{
         gPlayer.x+std::sin(gCameraYaw)*cameraDistance+std::cos(gCameraYaw)*shoulder,
-        gPlayer.y+cameraHeight+gJumpHeight*0.30f,
+        gPlayer.y+cameraHeight+gJumpHeight*0.40f,
         gPlayer.z+std::cos(gCameraYaw)*cameraDistance-std::sin(gCameraYaw)*shoulder
     };
     const float lookAhead=aimHeld?28.0f:0.0f;
