@@ -32,6 +32,12 @@ public final class HudOverlay extends View {
         0xFF40B989,0xFFFFB454,0xFF4D79C7,0xFFB55BDD,0xFFE45B65};
     private static final int[] ROYALE_LEVELS={2,4,6,8,10,12};
     private static final long[] ROYALE_REWARDS={40,60,80,100,120,150};
+    private static final String[] MISSION_NAMES={"JOGUE UMA PARTIDA","ELIMINE 3 OPONENTES","COLETE 3 CRISTAIS"};
+    private static final String[] MISSION_HINTS={"Entre no campo e saia após o pouso.",
+        "Some eliminações durante as partidas.","Recolha cristais espalhados pelo mapa."};
+    private static final int[] MISSION_GOALS={1,3,3};
+    private static final long[] MISSION_XP={120,180,0};
+    private static final long[] MISSION_DIAMONDS={0,0,80};
     private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
     private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM"};
     private static final String[] CHARACTER_NAMES={"BLOOB","BLOOB TÁTICO","BLOOB NEON","BLOOB DOURADO"};
@@ -345,6 +351,89 @@ public final class HudOverlay extends View {
         text(c,"Recompensas locais • sem compras reais ou conexão online.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
+    private void ensureDailyMissionWindow() {
+        long day=System.currentTimeMillis()/86400000L;
+        if(prefs.getLong("missions_day",-1L)!=day) {
+            prefs.edit().putLong("missions_day",day)
+                .putInt("mission_matches",0).putInt("mission_eliminations",0)
+                .putInt("mission_crystals",0)
+                .putBoolean("mission_claimed_0",false)
+                .putBoolean("mission_claimed_1",false)
+                .putBoolean("mission_claimed_2",false).apply();
+        }
+    }
+    private int missionProgress(int index) {
+        if(index==0)return prefs.getInt("mission_matches",0);
+        if(index==1)return prefs.getInt("mission_eliminations",0);
+        if(index==2)return prefs.getInt("mission_crystals",0);
+        return 0;
+    }
+    private boolean missionClaimed(int index) {
+        return prefs.getBoolean("mission_claimed_"+index,false);
+    }
+    private void recordMissionProgressFromMatch() {
+        ensureDailyMissionWindow();
+        if(prefs.getBoolean("match_recorded_for_missions",false))return;
+        String status=game.getGameStatus();
+        if(!(status.startsWith("VIDA ")||status.startsWith("VITÓRIA")||status.startsWith("ELIMINADO")))return;
+        int eliminations=Math.max(0,game.getEliminations());
+        int crystals=Math.max(0,game.getCollectedResources());
+        prefs.edit()
+            .putInt("mission_matches",prefs.getInt("mission_matches",0)+1)
+            .putInt("mission_eliminations",Math.min(999,prefs.getInt("mission_eliminations",0)+eliminations))
+            .putInt("mission_crystals",Math.min(999,prefs.getInt("mission_crystals",0)+crystals))
+            .putBoolean("match_recorded_for_missions",true).apply();
+        toast("Progresso das missões diárias atualizado.");
+    }
+    private void claimMission(int index) {
+        if(index<0||index>=MISSION_GOALS.length)return;
+        ensureDailyMissionWindow();
+        if(missionClaimed(index)){toast("Esta missão já foi resgatada hoje.");return;}
+        if(missionProgress(index)<MISSION_GOALS[index]){toast("Continue jogando para concluir a missão.");return;}
+        long xp=prefs.getLong("xp",0L)+MISSION_XP[index];
+        long diamonds=prefs.getLong("diamonds",0L)+MISSION_DIAMONDS[index];
+        prefs.edit().putLong("xp",xp).putLong("diamonds",diamonds)
+            .putBoolean("mission_claimed_"+index,true).apply();
+        toast(MISSION_XP[index]>0?"+ "+MISSION_XP[index]+" XP recebidos!":
+            "+ "+MISSION_DIAMONDS[index]+" diamantes virtuais!");
+    }
+    private void drawMissionsPage(Canvas c) {
+        ensureDailyMissionWindow();
+        eyebrow(c,270,175,"DESAFIOS DIÁRIOS • ATUALIZAÇÃO AUTOMÁTICA");
+        title(c,"CENTRAL DE MISSÕES",270,224);
+        subtitle(c,"O progresso é registrado quando você sai de uma partida após o pouso.",270,252);
+        for(int i=0;i<MISSION_NAMES.length;i++) {
+            float x=270+i*192f;
+            int progress=Math.min(MISSION_GOALS[i],missionProgress(i));
+            boolean claimed=missionClaimed(i),ready=progress>=MISSION_GOALS[i];
+            panel(c,x,292,174,254,claimed?0xB51A4650:0xA91A3040,
+                claimed?0xFF4BD4C9:ready?0xFF51C9C4:0x335D8495,16);
+            pill(c,x+14,309,76,22,"DIÁRIA",0x553A6B7C,0xFFB9E8EF);
+            text(c,MISSION_NAMES[i],x+14,360,10,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,MISSION_HINTS[i],x+14,390,9,0xFFB3C8D4,Typeface.DEFAULT);
+            text(c,"PROGRESSO",x+14,438,8,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+            p.setColor(0xFF233F4F);r.set(x+14,451,x+160,461);c.drawRoundRect(r,5,5,p);
+            p.setColor(0xFF55DDE7);r.set(x+14,451,x+14+146f*(progress/(float)MISSION_GOALS[i]),461);c.drawRoundRect(r,5,5,p);
+            text(c,progress+" / "+MISSION_GOALS[i],x+14,484,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+            String reward=MISSION_XP[i]>0?"RECOMPENSA  "+MISSION_XP[i]+" XP":"RECOMPENSA  "+MISSION_DIAMONDS[i]+" ◆";
+            text(c,reward,x+14,507,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            pill(c,x+14,516,146,24,claimed?"RESGATADA":ready?"RESGATAR":"EM ANDAMENTO",
+                claimed?0xFF176A75:ready?0xFF345D79:0x553B6172,Color.WHITE);
+        }
+        panel(c,270,568,570,68,0x74101F2C,0x226A8EA0,15);
+        text(c,"3 DESAFIOS • RECOMPENSAS VIRTUAIS • RESET DIÁRIO",292,595,10,0xFF82E5DC,Typeface.DEFAULT_BOLD);
+        text(c,"Jogue, elimine adversários e colete cristais para avançar.",292,616,9,0xFF9CB4C1,Typeface.DEFAULT);
+    }
+    private void claimRoyaleTier(int index) {
+        if(index<0||index>=ROYALE_LEVELS.length)return;
+        int level=(int)Math.min(30L,1L+prefs.getLong("xp",0L)/500L);
+        String key="royale_tier_claimed_"+index;
+        if(prefs.getBoolean(key,false)){toast("Esta recompensa já foi resgatada.");return;}
+        if(level<ROYALE_LEVELS[index]){toast("Alcance o nível "+ROYALE_LEVELS[index]+" do passe.");return;}
+        prefs.edit().putLong("diamonds",prefs.getLong("diamonds",0L)+ROYALE_REWARDS[index])
+            .putBoolean(key,true).apply();
+        toast("Recompensa Royale resgatada!");
+    }
     private void claimDailyReward() {
         long day=System.currentTimeMillis()/86400000L;
         if(prefs.getLong("daily_reward_day",-1L)==day) {
@@ -356,6 +445,7 @@ public final class HudOverlay extends View {
             .putLong("daily_reward_day",day).apply();
         toast("+100 XP e +50 diamantes virtuais!");
     }
+
     private void showRedeemDialog() {
         EditText input=new EditText(getContext());
         input.setSingleLine(true); input.setHint("Digite 100K");
@@ -557,7 +647,10 @@ public final class HudOverlay extends View {
         if(page==GAME){
             if(e.getActionMasked()==MotionEvent.ACTION_DOWN){
                 float[] q=design(e.getX(),e.getY());
-                if(hit(q[0],q[1],24,625,160,49)){page=HOME;game.setGameScreen(false);invalidate();return true;}
+                if(hit(q[0],q[1],24,625,160,49)){
+                    recordMissionProgressFromMatch();
+                    page=HOME;game.setGameScreen(false);invalidate();return true;
+                }
                 forwarding=true;
             }
             if(forwarding){
@@ -573,20 +666,37 @@ public final class HudOverlay extends View {
     }
     private void tap(float x,float y){
         if(System.currentTimeMillis()-lastTap<110)return;lastTap=System.currentTimeMillis();
+        if(hapticsEnabled)performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
-        for(int i=0;i<NAV.length;i++){float nx=27+i*136f;if(hit(x,y,nx,111,132,38)){page=i;return;}}
+        for(int i=0;i<NAV.length;i++){
+            float nx=27+i*122f;
+            if(hit(x,y,nx,111,118,38)){page=i;return;}
+        }
         if(page==HOME){
             if(hit(x,y,270,328,275,112)){page=MODES_PAGE;return;}
             if(hit(x,y,558,328,292,112)){page=MAPS_PAGE;return;}
-            if(hit(x,y,270,468,342,78)){game.setCharacter(character);game.setMap(map);game.setMatchMode(mode);game.setGameScreen(true);page=GAME;return;}
+            if(hit(x,y,270,468,342,78)){
+                ensureDailyMissionWindow();
+                prefs.edit().putBoolean("match_recorded_for_missions",false).apply();
+                game.setCharacter(character);game.setMap(map);game.setMatchMode(mode);
+                game.setGameScreen(true);page=GAME;return;
+            }
+            if(hit(x,y,628,468,222,78)){page=ROYALE;return;}
         }else if(page==CHARACTERS){
-            for(int i=0;i<4;i++)if(hit(x,y,270+i*146,295,132,210)){character=i;game.setCharacter(i);prefs.edit().putInt("character",i).apply();toast("Operador "+CHARACTER_NAMES[i]+" selecionado");return;}
+            for(int i=0;i<4;i++)if(hit(x,y,270+i*146,295,132,210)){
+                character=i;game.setCharacter(i);prefs.edit().putInt("character",i).apply();
+                toast("Operador "+CHARACTER_NAMES[i]+" selecionado");return;
+            }
         }else if(page==MODES_PAGE){
-            for(int i=0;i<4;i++)if(hit(x,y,270+(i%2)*292,290+(i/2)*150,270,126)){mode=i;game.setMatchMode(i);prefs.edit().putInt("mode",i).apply();toast("Modo "+MODE_NAMES[i]+" selecionado");return;}
+            for(int i=0;i<4;i++)if(hit(x,y,270+(i%2)*292,290+(i/2)*150,270,126)){
+                mode=i;game.setMatchMode(i);prefs.edit().putInt("mode",i).apply();
+                toast("Modo "+MODE_NAMES[i]+" selecionado");return;
+            }
         }else if(page==MAPS_PAGE){
-            for(int i=0;i<3;i++)if(hit(x,y,270+i*190,292,174,258)){map=i;game.setMap(i);prefs.edit().putInt("map",i).apply();toast("Mapa "+MAP_NAMES[i]+" selecionado");return;}
-        }else if(page==INVENTORY){
-            if(hit(x,y,270,408,570,148)){toast("Veja seus cosméticos e itens adquiridos.");return;}
+            for(int i=0;i<3;i++)if(hit(x,y,270+i*190,292,174,258)){
+                map=i;game.setMap(i);prefs.edit().putInt("map",i).apply();
+                toast("Mapa "+MAP_NAMES[i]+" selecionado");return;
+            }
         }else if(page==PROFILE){
             if(hit(x,y,270,486,570,58)){
                 if(googleAccountAction!=null)googleAccountAction.run();
@@ -596,16 +706,54 @@ public final class HudOverlay extends View {
             if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
         }else if(page==SHOP){
-            for(int i=0;i<3;i++)if(hit(x,y,270+i*192,338,174,230)){purchaseShopItem(i);return;}
+            for(int i=0;i<SHOP_NAMES.length;i++){
+                float sx=270+(i%3)*192f,sy=326+(i/3)*108f;
+                if(hit(x,y,sx,sy,174,96)){purchaseShopItem(i);return;}
+            }
         }else if(page==ROYALE){
-            if(hit(x,y,294,556,220,30)){claimDailyReward();return;}
+            if(hit(x,y,681,423,138,30)){claimDailyReward();return;}
+            for(int i=0;i<ROYALE_LEVELS.length;i++){
+                float rx=270+(i%3)*192f,ry=476+(i/3)*88f;
+                if(hit(x,y,rx,ry,174,78)){claimRoyaleTier(i);return;}
+            }
+        }else if(page==MISSIONS){
+            for(int i=0;i<MISSION_NAMES.length;i++){
+                float mx=270+i*192f;
+                if(hit(x,y,mx,292,174,254)){claimMission(i);return;}
+            }
         }else if(page==SETTINGS){
-            if(hit(x,y,515,306,300,60)){quality=x<618?0:x<714?1:2;game.setQuality(quality);prefs.edit().putInt("quality",quality).apply();toast("Qualidade: "+QUALITY_NAMES[quality]);return;}
-            if(hit(x,y,715,414,110,52)){music=!music;prefs.edit().putBoolean("music",music).apply();toast(music?"Música ativada":"Música desativada");return;}
-            if(hit(x,y,715,495,110,52)){effects=!effects;prefs.edit().putBoolean("effects",effects).apply();toast(effects?"Efeitos ativados":"Efeitos desativados");return;}
-            if(hit(x,y,515,580,300,55)){lookSensitivity=x<618?0:x<714?1:2;game.setLookSensitivity(lookSensitivity);prefs.edit().putInt("look_sensitivity",lookSensitivity).apply();toast("Sensibilidade: "+new String[]{"baixa","média","alta"}[lookSensitivity]);}
+            if(hit(x,y,515,292,300,60)){
+                quality=x<620?0:x<720?1:2;game.setQuality(quality);
+                prefs.edit().putInt("quality",quality).apply();toast("Qualidade: "+QUALITY_NAMES[quality]);return;
+            }
+            if(hit(x,y,420,386,110,42)){
+                music=!music;prefs.edit().putBoolean("music",music).apply();
+                toast(music?"Música ativada":"Música desativada");return;
+            }
+            if(hit(x,y,718,386,110,42)){
+                effects=!effects;prefs.edit().putBoolean("effects",effects).apply();
+                toast(effects?"Efeitos ativados":"Efeitos desativados");return;
+            }
+            if(hit(x,y,515,460,300,50)){
+                lookSensitivity=x<620?0:x<720?1:2;game.setLookSensitivity(lookSensitivity);
+                prefs.edit().putInt("look_sensitivity",lookSensitivity).apply();
+                toast("Sensibilidade: "+new String[]{"baixa","média","alta"}[lookSensitivity]);return;
+            }
+            if(hit(x,y,680,545,145,38)){
+                invertCameraY=!invertCameraY;game.setInvertCameraY(invertCameraY);
+                prefs.edit().putBoolean("invert_camera_y",invertCameraY).apply();toast("Inversão da câmera atualizada");return;
+            }
+            if(hit(x,y,680,578,145,38)){
+                showMinimap=!showMinimap;prefs.edit().putBoolean("show_minimap",showMinimap).apply();
+                toast(showMinimap?"Minimapa visível":"Minimapa oculto");return;
+            }
+            if(hit(x,y,680,610,145,38)){
+                hapticsEnabled=!hapticsEnabled;prefs.edit().putBoolean("haptics",hapticsEnabled).apply();
+                toast(hapticsEnabled?"Vibração ativada":"Vibração desativada");return;
+            }
         }
     }
+
     public void setGoogleAccountAction(Runnable action) {
         googleAccountAction=action;
     }
