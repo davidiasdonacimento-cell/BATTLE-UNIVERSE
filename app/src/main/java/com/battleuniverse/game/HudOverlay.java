@@ -2,6 +2,11 @@ package com.battleuniverse.game;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.app.AlertDialog;
+import android.text.InputType;
+import android.widget.EditText;
+import java.text.NumberFormat;
+import java.util.Locale;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
@@ -13,8 +18,13 @@ import android.view.MotionEvent;
 import android.view.View;
 
 public final class HudOverlay extends View {
-    private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3, INVENTORY=4, SETTINGS=5, GAME=6;
-    private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS","INVENTÁRIO","AJUSTES"};
+    private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
+        INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, GAME=9;
+    private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
+        "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE"};
+    private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO"};
+    private static final String[] SHOP_KEYS={"shop_frame_neon","shop_emblem_bloob","shop_title_champion"};
+    private static final long[] SHOP_PRICES={500L,1000L,1500L};
     private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
     private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM"};
     private static final String[] CHARACTER_NAMES={"BLOOB","BLOOB TÁTICO","BLOOB NEON","BLOOB DOURADO"};
@@ -69,22 +79,29 @@ public final class HudOverlay extends View {
         pill(c,272,25,128,29,"LOBBY PRINCIPAL",0x332FD2E5,0xFF9BEAF4);
     }
     private void drawProfile(Canvas c) {
+        long xp=prefs.getLong("xp",0L);
+        long diamonds=prefs.getLong("diamonds",0L);
+        int level=(int)Math.min(30L,1L+xp/500L);
+        String nickname=prefs.getString("nickname","JOGADOR");
         panel(c,1000,17,246,60,0xC5152938,0x557AA0B8,15);
-        circle(c,1032,47,18,0xFF1F7584,0xFF65DCE7);
-        text(c,"D",1027,53,17,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"JOGADOR",1060,42,13,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"NÍVEL 01  •  0 XP",1060,60,10,0xFF9BB6C6,Typeface.DEFAULT);
-        text(c,"◆ 1.250",1176,51,12,0xFFFFC76B,Typeface.DEFAULT_BOLD);
+        circle(c,1032,47,18,0xFF1F7584,
+            prefs.getBoolean("shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
+        text(c,nickname.length()>11?nickname.substring(0,11):nickname,1060,42,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"NÍVEL "+String.format(Locale.US,"%02d",level)+"  •  "+xp+" XP",1060,60,9,0xFF9BB6C6,Typeface.DEFAULT);
+        text(c,"◆ "+formatDiamonds(diamonds),1176,51,11,0xFFFFC76B,Typeface.DEFAULT_BOLD);
+    }
+    private String formatDiamonds(long value) {
+        return NumberFormat.getIntegerInstance(new Locale("pt","BR")).format(value);
     }
     private void drawSidebar(Canvas c) {
         // In-game horizontal navigation, not an admin-style web sidebar.
         panel(c,24,105,1224,50,0xB90A1B2B,0x336CA4B7,16);
         for(int i=0;i<NAV.length;i++) {
-            float x=32+i*202f;boolean active=page==i;
-            panel(c,x,111,194,38,active?0xDD136276:0x22243B4D,
-                    active?0xFF35D6E5:0x225A8297,12);
-            drawNavIcon(c,i,x+23,130,active);
-            text(c,NAV[i],x+43,135,10,active?Color.WHITE:0xFFB8CBD7,
+            float x=27+i*136f;boolean active=page==i;
+            panel(c,x,111,132,38,active?0xDD136276:0x22243B4D,
+                    active?0xFF35D6E5:0x225A8297,10);
+            drawNavIcon(c,i,x+16,130,active);
+            text(c,NAV[i],x+30,134,8,active?Color.WHITE:0xFFB8CBD7,
                 Typeface.create(active?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
         }
     }
@@ -102,6 +119,8 @@ public final class HudOverlay extends View {
         if(page==HOME)drawHome(c); else if(page==CHARACTERS)drawCharacters(c);
         else if(page==MODES_PAGE)drawModes(c); else if(page==MAPS_PAGE)drawMaps(c);
         else if(page==INVENTORY)drawInventory(c); else if(page==SETTINGS)drawSettings(c);
+        else if(page==PROFILE)drawProfilePage(c); else if(page==SHOP)drawShopPage(c);
+        else if(page==ROYALE)drawRoyalePage(c);
     }
     private void drawHome(Canvas c){
         eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.1.0  /  OPERAÇÃO BLOOB");
@@ -182,14 +201,14 @@ public final class HudOverlay extends View {
         subtitle(c,"Gerencie os itens cosméticos desbloqueados no seu perfil local.",270,252);
         panel(c,270,292,570,92,0xAE193040,0x335D8495,17);
         eyebrow(c,292,320,"CARTEIRA");
-        text(c,"◆ 1.250",292,355,24,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"Moedas demonstrativas • progresso salvo neste aparelho",465,352,11,0xFF9EB6C4,Typeface.DEFAULT);
-        String[] items={"UNIFORME AZUL","MOCHILA TÁTICA","EMBLEMA INICIAL"};
+        text(c,"◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),292,355,24,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Diamantes virtuais • perfil salvo neste aparelho",465,352,11,0xFF9EB6C4,Typeface.DEFAULT);
         for(int i=0;i<3;i++){
-            float x=270+i*192;panel(c,x,408,174,148,0xA91A3040,0x335D8495,15);
-            circle(c,x+87,461,24,new int[]{0xFF2467A2,0xFF485D70,0xFFC58B43}[i],0xFFB5D6E1);
-            text(c,items[i],x+18,514,11,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,"DISPONÍVEL",x+18,535,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+            float x=270+i*192;boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            panel(c,x,408,174,148,0xA91A3040,0x335D8495,15);
+            circle(c,x+87,461,24,new int[]{0xFF8D42D7,0xFF08A9D8,0xFFE0A62B}[i],0xFFB5D6E1);
+            text(c,SHOP_NAMES[i],x+12,514,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,owned?"ADQUIRIDO":"NA LOJA",x+18,535,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
         }
     }
     private void drawSettings(Canvas c){
@@ -210,6 +229,126 @@ public final class HudOverlay extends View {
         String[] levels={"BAIXA","MÉDIA","ALTA"};
         for(int i=0;i<3;i++)pill(c,522+i*96,590,88,38,levels[i],lookSensitivity==i?0xFF176A75:0x553B6172,Color.WHITE);
     }
+    private void drawProfilePage(Canvas c) {
+        eyebrow(c,270,175,"CONTA LOCAL"); title(c,"PERFIL DO JOGADOR",270,224);
+        subtitle(c,"Seu progresso e seus diamantes ficam salvos neste aparelho.",270,252);
+        long xp=prefs.getLong("xp",0L),diamonds=prefs.getLong("diamonds",0L);
+        int level=(int)Math.min(30L,1L+xp/500L);
+        panel(c,270,286,570,196,0xAE193040,0x557AA9BC,18);
+        circle(c,326,365,38,0xFF1F7584,
+            prefs.getBoolean("shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
+        text(c,prefs.getString("nickname","JOGADOR"),382,346,23,Color.WHITE,
+            Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"NÍVEL "+level+"  •  "+xp+" XP",382,374,13,0xFF9FC0CF,Typeface.DEFAULT_BOLD);
+        text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,411,17,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,prefs.getBoolean("code_100k_redeemed",false)
+            ?"CÓDIGO 100K JÁ RESGATADO NESTE PERFIL"
+            :"CÓDIGO SECRETO 100K DISPONÍVEL",292,458,10,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+        panel(c,270,510,270,75,0xCC176A75,0xFF58DDE6,16);
+        text(c,"RESGATAR CÓDIGO",294,542,15,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Digite seu código secreto",294,563,10,0xFFD2F6F8,Typeface.DEFAULT);
+        panel(c,558,510,282,75,0xA91A3040,0x335D8495,16);
+        text(c,"EDITAR NICKNAME",582,542,15,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Alterar nome do perfil local",582,563,10,0xFF9EB6C4,Typeface.DEFAULT);
+        text(c,"Modo offline: limpar os dados do app pode reiniciar o perfil.",272,622,10,0xFF8FAAB8,Typeface.DEFAULT);
+    }
+    private void drawShopPage(Canvas c) {
+        eyebrow(c,270,175,"LOJA VIRTUAL • SEM PAGAMENTO REAL");
+        title(c,"LOJA DE COSMÉTICOS",270,224);
+        subtitle(c,"Use apenas os diamantes virtuais ganhos ou resgatados.",270,252);
+        panel(c,270,270,570,48,0xA91A3040,0x335D8495,14);
+        text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),292,301,16,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        for(int i=0;i<3;i++) {
+            float x=270+i*192; boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            panel(c,x,338,174,230,0xA91A3040,0x335D8495,16);
+            circle(c,x+87,397,34,new int[]{0xFF8D42D7,0xFF08A9D8,0xFFE0A62B}[i],0xFFB5D6E1);
+            text(c,SHOP_NAMES[i],x+14,460,10,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,owned?"JÁ ADQUIRIDO":"◆ "+SHOP_PRICES[i]+" DIAMANTES",x+14,486,10,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            pill(c,x+22,516,130,31,owned?"ADQUIRIDO":"COMPRAR",
+                owned?0xFF176A75:0xFF345D79,Color.WHITE);
+        }
+        text(c,"Itens cosméticos do perfil local. Não alteram dano ou desempenho.",272,608,10,0xFF8FAAB8,Typeface.DEFAULT);
+    }
+    private void drawRoyalePage(Canvas c) {
+        eyebrow(c,270,175,"PROGRESSÃO OFFLINE"); title(c,"MENU ROYALE",270,224);
+        subtitle(c,"Passe local calculado pelo XP salvo no perfil.",270,252);
+        long xp=prefs.getLong("xp",0L),dailyDay=System.currentTimeMillis()/86400000L;
+        int level=(int)Math.min(30L,1L+xp/500L),progress=(int)(xp%500L);
+        panel(c,270,286,570,175,0xAE193040,0x557AA9BC,18);
+        eyebrow(c,294,320,"PASSE ROYALE");
+        text(c,"NÍVEL "+level+" / 30",294,365,28,Color.WHITE,
+            Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,xp+" XP TOTAL  •  "+progress+" / 500 XP PARA O PRÓXIMO NÍVEL",294,397,11,0xFF9EB6C4,Typeface.DEFAULT_BOLD);
+        p.setColor(0xFF233F4F); r.set(294,416,814,431); c.drawRoundRect(r,8,8,p);
+        p.setColor(0xFF55DDE7); r.set(294,416,294+520*(progress/500f),431); c.drawRoundRect(r,8,8,p);
+        panel(c,270,485,570,112,0xA91A3040,0x335D8495,16);
+        eyebrow(c,294,515,"BÔNUS DIÁRIO");
+        text(c,"Receba 100 XP e 50 diamantes virtuais.",294,544,13,Color.WHITE,Typeface.DEFAULT_BOLD);
+        boolean claimed=prefs.getLong("daily_reward_day",-1L)==dailyDay;
+        pill(c,294,556,220,30,claimed?"RECOMPENSA COLETADA":"COLETAR RECOMPENSA",
+            claimed?0xFF176A75:0xFF345D79,Color.WHITE);
+        text(c,"O progresso e as recompensas são locais e offline.",272,625,10,0xFF8FAAB8,Typeface.DEFAULT);
+    }
+    private void claimDailyReward() {
+        long day=System.currentTimeMillis()/86400000L;
+        if(prefs.getLong("daily_reward_day",-1L)==day) {
+            toast("A recompensa diária já foi coletada."); return;
+        }
+        long xp=prefs.getLong("xp",0L),diamonds=prefs.getLong("diamonds",0L);
+        prefs.edit().putLong("xp",Math.min(Long.MAX_VALUE-100L,xp)+100L)
+            .putLong("diamonds",Math.min(Long.MAX_VALUE-50L,diamonds)+50L)
+            .putLong("daily_reward_day",day).apply();
+        toast("+100 XP e +50 diamantes virtuais!");
+    }
+    private void showRedeemDialog() {
+        EditText input=new EditText(getContext());
+        input.setSingleLine(true); input.setHint("Digite 100K");
+        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        new AlertDialog.Builder(getContext())
+            .setTitle("Resgatar código secreto")
+            .setMessage("O código 100K concede 100.000 diamantes virtuais uma única vez neste perfil local.")
+            .setView(input).setNegativeButton("CANCELAR",null)
+            .setPositiveButton("RESGATAR",(dialog,which)->redeemCode(input.getText().toString()))
+            .show();
+    }
+    private void redeemCode(String rawCode) {
+        String code=rawCode==null?"":rawCode.trim().toUpperCase(Locale.ROOT);
+        if(!"100K".equals(code)) { toast("Código inválido."); return; }
+        if(prefs.getBoolean("code_100k_redeemed",false)) {
+            toast("O código 100K já foi resgatado neste perfil."); return;
+        }
+        long current=prefs.getLong("diamonds",0L);
+        prefs.edit().putLong("diamonds",Math.min(Long.MAX_VALUE-100000L,current)+100000L)
+            .putBoolean("code_100k_redeemed",true).apply();
+        toast("+100.000 DIAMANTES VIRTUAIS!");
+    }
+    private void showNicknameDialog() {
+        EditText input=new EditText(getContext());
+        input.setSingleLine(true); input.setHint("Seu nickname");
+        input.setText(prefs.getString("nickname","JOGADOR"));
+        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        new AlertDialog.Builder(getContext()).setTitle("Editar nickname").setView(input)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("SALVAR",(dialog,which)->{
+                String value=input.getText().toString().trim();
+                if(value.isEmpty()) { toast("Digite um nickname."); return; }
+                if(value.length()>16)value=value.substring(0,16);
+                prefs.edit().putString("nickname",value).apply();
+                toast("Nickname atualizado.");
+            }).show();
+    }
+    private void purchaseShopItem(int index) {
+        if(index<0||index>=SHOP_NAMES.length)return;
+        if(prefs.getBoolean(SHOP_KEYS[index],false)) {
+            toast("Este item já está no seu inventário.");return;
+        }
+        long balance=prefs.getLong("diamonds",0L),price=SHOP_PRICES[index];
+        if(balance<price) { toast("Diamantes insuficientes.");return; }
+        prefs.edit().putLong("diamonds",balance-price)
+            .putBoolean(SHOP_KEYS[index],true).apply();
+        toast(SHOP_NAMES[index]+" adquirido!");
+    }
+
     private void drawTeam(Canvas c){
         panel(c,888,124,362,218,0x9B0B1D2C,0x337AA0B2,19);
         eyebrow(c,913,153,"SUA EQUIPE");
@@ -357,7 +496,8 @@ public final class HudOverlay extends View {
     }
     private void tap(float x,float y){
         if(System.currentTimeMillis()-lastTap<110)return;lastTap=System.currentTimeMillis();
-        for(int i=0;i<6;i++){float nx=32+i*202f;if(hit(x,y,nx,111,194,38)){page=i;return;}}
+        if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
+        for(int i=0;i<NAV.length;i++){float nx=27+i*136f;if(hit(x,y,nx,111,132,38)){page=i;return;}}
         if(page==HOME){
             if(hit(x,y,270,328,275,112)){page=MODES_PAGE;return;}
             if(hit(x,y,558,328,292,112)){page=MAPS_PAGE;return;}
@@ -369,7 +509,14 @@ public final class HudOverlay extends View {
         }else if(page==MAPS_PAGE){
             for(int i=0;i<3;i++)if(hit(x,y,270+i*190,292,174,258)){map=i;game.setMap(i);prefs.edit().putInt("map",i).apply();toast("Mapa "+MAP_NAMES[i]+" selecionado");return;}
         }else if(page==INVENTORY){
-            if(hit(x,y,270,408,570,148)){character=(character+1)%4;game.setCharacter(character);prefs.edit().putInt("character",character).apply();toast("Visual do operador atualizado");return;}
+            if(hit(x,y,270,408,570,148)){toast("Veja seus cosméticos e itens adquiridos.");return;}
+        }else if(page==PROFILE){
+            if(hit(x,y,270,510,270,75)){showRedeemDialog();return;}
+            if(hit(x,y,558,510,282,75)){showNicknameDialog();return;}
+        }else if(page==SHOP){
+            for(int i=0;i<3;i++)if(hit(x,y,270+i*192,338,174,230)){purchaseShopItem(i);return;}
+        }else if(page==ROYALE){
+            if(hit(x,y,294,556,220,30)){claimDailyReward();return;}
         }else if(page==SETTINGS){
             if(hit(x,y,515,306,300,60)){quality=x<618?0:x<714?1:2;game.setQuality(quality);prefs.edit().putInt("quality",quality).apply();toast("Qualidade: "+QUALITY_NAMES[quality]);return;}
             if(hit(x,y,715,414,110,52)){music=!music;prefs.edit().putBoolean("music",music).apply();toast(music?"Música ativada":"Música desativada");return;}
