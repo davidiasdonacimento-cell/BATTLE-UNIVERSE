@@ -535,7 +535,7 @@ void resetBots() {
                 std::clamp(gPlayer.z+offset.z,-112.0f,112.0f)};
         }
         gBots[static_cast<size_t>(i)]={gBotHomes[static_cast<size_t>(i)],0,0,static_cast<float>(i)*1.3f};
-        gBotAttackCooldown[static_cast<size_t>(i)]=1.2f+static_cast<float>(i%8)*0.38f;
+        gBotAttackCooldown[static_cast<size_t>(i)]=0.45f+static_cast<float>(i%5)*0.16f;
     }
 }
 void updateBots(float dt) {
@@ -574,7 +574,7 @@ void updateBots(float dt) {
             const float radial=playerDistance>0.05f
                 ?std::atan2(bot.pos.z-gPlayer.z,bot.pos.x-gPlayer.x):bot.phase;
             const float flank=std::sin(gMatchTime*0.34f+bot.phase)*0.34f;
-            const float desiredRadius=11.0f+static_cast<float>(i%6)*1.45f;
+            const float desiredRadius=13.0f+static_cast<float>(i%7)*1.55f;
             const float angle=radial+flank;
             target={gPlayer.x+std::cos(angle)*desiredRadius,0.55f,
                     gPlayer.z+std::sin(angle)*desiredRadius};
@@ -594,7 +594,7 @@ void updateBots(float dt) {
             const float inv=1.0f/std::max(0.001f,distance);
             const float dirX=dx*inv,dirZ=dz*inv;
             bot.yaw=std::atan2(-dirX,-dirZ);
-            bot.speed=ally?3.0f:(engaging?(playerDistance>24.0f?4.6f:2.2f):2.0f);
+            bot.speed=ally?3.0f:(engaging?(playerDistance>24.0f?5.0f:3.0f):2.2f);
             const float step=std::min(distance,bot.speed*dt);
             bot.pos.x+=dirX*step;bot.pos.z+=dirZ*step;
         }
@@ -608,11 +608,11 @@ void updateBots(float dt) {
             bot.aiming=attackDistance<52.0f;
             gBotAttackCooldown[static_cast<size_t>(i)]=
                 std::max(0.0f,gBotAttackCooldown[static_cast<size_t>(i)]-dt);
-            if(attackDistance>6.5f && attackDistance<42.0f
+            if(attackDistance>4.5f && attackDistance<58.0f
                     && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
-                bot.fireFlash=0.20f;
+                bot.fireFlash=0.55f;
                 gPlayerHealth=std::max(0,gPlayerHealth-2);
-                gBotAttackCooldown[static_cast<size_t>(i)]=2.4f+static_cast<float>(i%6)*0.32f;
+                gBotAttackCooldown[static_cast<size_t>(i)]=1.15f+static_cast<float>(i%5)*0.18f;
                 if(gPlayerHealth<=0) {
                     gMatchFinished=true;
                     setStatus("ELIMINADO • FIM DA PARTIDA");
@@ -930,8 +930,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             updateStatus();
         }
         // Elevated interior camera looks down the passenger cabin, not at the plane from outside.
-        Vec3 eye{gPlanePosition.x-0.8f,gPlanePosition.y+4.35f,gPlanePosition.z};
-        Vec3 target{gPlanePosition.x+3.8f,gPlanePosition.y+0.55f,gPlanePosition.z};
+        Vec3 eye{gPlanePosition.x-4.0f,gPlanePosition.y+0.82f,gPlanePosition.z};
+        Vec3 target{gPlanePosition.x+2.4f,gPlanePosition.y+0.92f,gPlanePosition.z};
         Mat4 view=lookAt(eye,target,{0,1,0});
         gProjection=multiply(perspective(1.02f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
@@ -1072,7 +1072,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         const float playerDx=bot.pos.x-gPlayer.x;
         const float playerDz=bot.pos.z-gPlayer.z;
         const float botDistance2=playerDx*playerDx+playerDz*playerDz;
-        const float renderDistance=gQuality==0?44.0f:(gQuality==1?64.0f:92.0f);
+        const float renderDistance=gQuality==0?64.0f:(gQuality==1?88.0f:112.0f);
         if(botDistance2>renderDistance*renderDistance)continue;
         const bool botAiming=bot.aiming||(!isAllyBot(i)&&botDistance2<34.0f*34.0f);
         drawCharacter(bot.pos,bot.yaw,botColor,true,
