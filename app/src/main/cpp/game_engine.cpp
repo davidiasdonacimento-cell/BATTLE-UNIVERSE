@@ -98,7 +98,7 @@ float gJumpHeight=0, gJumpVelocity=0, gMatchTime=0, gZoneRadius=30;
 float gInteractCooldown=0;
 int gCollected=0, gPreviousButtons=0;
 std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
-struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; };
+struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; float fireFlash=0; bool aiming=false; };
 std::array<int,BOT_COUNT> gBotHealth{};
 std::array<bool,BOT_COUNT> gBotActive{};
 std::array<float,BOT_COUNT> gBotRespawn{};
@@ -494,7 +494,7 @@ void updateStatus() {
     if(gDropState==1) {
         if(gDropTimer<PLANE_COUNTDOWN_SECONDS) {
             int remaining=static_cast<int>(std::ceil(PLANE_COUNTDOWN_SECONDS-gDropTimer));
-            out<<"EMBARQUE 30/30  •  DECOLAGEM EM "<<remaining<<"s  •  SALTO LIBERADO DEPOIS";
+            out<<"AVIÃO EM MOVIMENTO  •  SALTO DISPONÍVEL EM "<<remaining<<"s";
         } else {
             out<<"AVIÃO EM ROTA  •  30 PARTICIPANTES  •  TOQUE SALTAR";
         }
@@ -535,13 +535,16 @@ void resetBots() {
                 std::clamp(gPlayer.z+offset.z,-112.0f,112.0f)};
         }
         gBots[static_cast<size_t>(i)]={gBotHomes[static_cast<size_t>(i)],0,0,static_cast<float>(i)*1.3f};
-        gBotAttackCooldown[static_cast<size_t>(i)]=5.0f+static_cast<float>(i%5)*0.7f;
+        gBotAttackCooldown[static_cast<size_t>(i)]=1.2f+static_cast<float>(i%8)*0.38f;
     }
 }
 void updateBots(float dt) {
     if(gMatchFinished) return;
     for(int i=0;i<BOT_COUNT;++i) {
         BotState& bot=gBots[static_cast<size_t>(i)];
+        bot.fireFlash=std::max(0.0f,bot.fireFlash-dt);
+        bot.aiming=false;
+
         if(!gBotActive[static_cast<size_t>(i)]) {
             if(gSelectedMode==3) {
                 gBotRespawn[static_cast<size_t>(i)]=std::max(0.0f,gBotRespawn[static_cast<size_t>(i)]-dt);
@@ -554,86 +557,84 @@ void updateBots(float dt) {
         }
 
         const bool ally=isAllyBot(i);
+        const float toPlayerX=gPlayer.x-bot.pos.x;
+        const float toPlayerZ=gPlayer.z-bot.pos.z;
+        const float playerDistance=std::sqrt(toPlayerX*toPlayerX+toPlayerZ*toPlayerZ);
         Vec3 target=bot.pos;
-        if(ally) {
-            // Squad allies guard their own patrol sectors instead of tailing the player.
-            float phase=gMatchTime*0.24f+bot.phase;
-            const Vec3 home=gBotHomes[static_cast<size_t>(i)];
-            target={home.x+std::cos(phase)*5.5f,0.55f,home.z+std::sin(phase)*5.5f};
+        bool engaging=false;
+
+        if(ally && gDropState==3) {
+            const float formationAngle=bot.phase+static_cast<float>(i)*0.75f;
+            const float followRadius=7.5f+static_cast<float>(i%2)*2.0f;
+            target={gPlayer.x+std::cos(formationAngle)*followRadius,0.55f,
+                    gPlayer.z+std::sin(formationAngle)*followRadius};
+        } else if(!ally && gSelectedMode!=3 && gDropState==3 && playerDistance<112.0f) {
+            // Combat is the first priority. Bots no longer abandon the player to chase floor pickups.
+            engaging=true;
+            const float radial=playerDistance>0.05f
+                ?std::atan2(bot.pos.z-gPlayer.z,bot.pos.x-gPlayer.x):bot.phase;
+            const float flank=std::sin(gMatchTime*0.34f+bot.phase)*0.34f;
+            const float desiredRadius=11.0f+static_cast<float>(i%6)*1.45f;
+            const float angle=radial+flank;
+            target={gPlayer.x+std::cos(angle)*desiredRadius,0.55f,
+                    gPlayer.z+std::sin(angle)*desiredRadius};
         } else {
-            float playerDx=gPlayer.x-bot.pos.x,playerDz=gPlayer.z-bot.pos.z;
-            float playerDistance=std::sqrt(playerDx*playerDx+playerDz*playerDz);
-            if(playerDistance<26.0f) {
-                // Hostile training bots approach from a short offset, not in a circular orbit.
-                target={gPlayer.x+(i%2==0?-3.0f:3.0f),0.55f,
-                        gPlayer.z+(i<2?-5.0f:5.0f)};
-            } else {
-                int nearest=-1;float best=1.0e9f;
-                for(int j=0;j<gResourceCount;++j) {
-                    if(gCrystalTaken[static_cast<size_t>(j)])continue;
-                    Vec3 resource=gCrystals[static_cast<size_t>(j)];
-                    float dx=resource.x-bot.pos.x,dz=resource.z-bot.pos.z;
-                    float d=dx*dx+dz*dz;
-                    if(d<best){best=d;nearest=j;}
-                }
-                if(nearest>=0)target=gCrystals[static_cast<size_t>(nearest)];
-                else {
-                    float phase=gMatchTime*0.18f+bot.phase;
-                    Vec3 home=gBotHomes[static_cast<size_t>(i)];
-                    target={home.x+std::cos(phase)*9.0f,0.55f,home.z+std::sin(phase)*9.0f};
-                }
-            }
+            // Before the player lands, bots patrol their own sectors instead of camping on pickups.
+            const float phase=gMatchTime*(ally?0.24f:0.17f)+bot.phase;
+            const Vec3 home=gBotHomes[static_cast<size_t>(i)];
+            const float patrolRadius=ally?4.5f:7.0f;
+            target={home.x+std::cos(phase)*patrolRadius,0.55f,
+                    home.z+std::sin(phase)*patrolRadius};
         }
 
         float dx=target.x-bot.pos.x,dz=target.z-bot.pos.z;
         float distance=std::sqrt(dx*dx+dz*dz);
-        bot.speed=0;
-        if(distance>0.9f) {
-            float inv=1.0f/std::max(0.001f,distance);
-            dx*=inv;dz*=inv;
-            // Local character front is -Z; negate X so the mesh faces its travel vector.
-            bot.yaw=std::atan2(-dx,-dz);
-            bot.speed=ally?2.0f:2.8f;
-            float step=std::min(distance-0.55f,bot.speed*dt);
-            bot.pos.x+=dx*step;bot.pos.z+=dz*step;
+        bot.speed=0.0f;
+        if(distance>0.45f) {
+            const float inv=1.0f/std::max(0.001f,distance);
+            const float dirX=dx*inv,dirZ=dz*inv;
+            bot.yaw=std::atan2(-dirX,-dirZ);
+            bot.speed=ally?3.0f:(engaging?(playerDistance>24.0f?4.6f:2.2f):2.0f);
+            const float step=std::min(distance,bot.speed*dt);
+            bot.pos.x+=dirX*step;bot.pos.z+=dirZ*step;
         }
-        bot.pos.x=std::clamp(bot.pos.x,-116.0f,116.0f);
-        bot.pos.z=std::clamp(bot.pos.z,-116.0f,116.0f);
 
-        if(!ally) {
-            const float attackDx=gPlayer.x-bot.pos.x,attackDz=gPlayer.z-bot.pos.z;
+        if(engaging) {
+            const float attackDx=gPlayer.x-bot.pos.x;
+            const float attackDz=gPlayer.z-bot.pos.z;
             const float attackDistance=std::sqrt(attackDx*attackDx+attackDz*attackDz);
-            gBotAttackCooldown[static_cast<size_t>(i)]=std::max(0.0f,gBotAttackCooldown[static_cast<size_t>(i)]-dt);
-            if(gSelectedMode!=3 && gDropState==3 && attackDistance<23.0f && attackDistance>5.0f
+            // Aim at the player even while the bot strafes around its chosen combat position.
+            bot.yaw=std::atan2(-attackDx,-attackDz);
+            bot.aiming=attackDistance<52.0f;
+            gBotAttackCooldown[static_cast<size_t>(i)]=
+                std::max(0.0f,gBotAttackCooldown[static_cast<size_t>(i)]-dt);
+            if(attackDistance>6.5f && attackDistance<42.0f
                     && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
-                gPlayerHealth=std::max(0,gPlayerHealth-4);
-                gBotAttackCooldown[static_cast<size_t>(i)]=4.2f;
+                bot.fireFlash=0.20f;
+                gPlayerHealth=std::max(0,gPlayerHealth-2);
+                gBotAttackCooldown[static_cast<size_t>(i)]=2.4f+static_cast<float>(i%6)*0.32f;
                 if(gPlayerHealth<=0) {
                     gMatchFinished=true;
                     setStatus("ELIMINADO • FIM DA PARTIDA");
                 } else {
-                    std::ostringstream hit;hit<<"PULSO DE ENERGIA RECEBIDO • VIDA "<<gPlayerHealth<<"%";
+                    std::ostringstream hit;
+                    hit<<"DISPARO DE BOT • VIDA "<<gPlayerHealth<<"%";
                     setStatus(hit.str());
                 }
             }
-            for(int j=0;j<gResourceCount;++j) {
-                if(gCrystalTaken[static_cast<size_t>(j)])continue;
-                Vec3 resource=gCrystals[static_cast<size_t>(j)];
-                float ox=bot.pos.x-resource.x,oz=bot.pos.z-resource.z;
-                if(ox*ox+oz*oz<1.45f*1.45f) {
-                    gCrystalTaken[static_cast<size_t>(j)]=true;
-                    ++gCollected;gWood=std::min(250,gWood+5);
-                    break;
-                }
-            }
         }
+
+        bot.pos.x=std::clamp(bot.pos.x,-116.0f,116.0f);
+        bot.pos.z=std::clamp(bot.pos.z,-116.0f,116.0f);
+
+        // Light separation prevents the 29 opponents from stacking into one point.
         for(int other=0;other<i;++other) {
             if(!gBotActive[static_cast<size_t>(other)])continue;
-            Vec3 op=gBots[static_cast<size_t>(other)].pos;
-            float sx=bot.pos.x-op.x,sz=bot.pos.z-op.z;
-            float d2=sx*sx+sz*sz;
-            if(d2<1.2f*1.2f&&d2>0.001f) {
-                float push=0.20f/std::sqrt(d2);
+            const Vec3 op=gBots[static_cast<size_t>(other)].pos;
+            const float sx=bot.pos.x-op.x,sz=bot.pos.z-op.z;
+            const float d2=sx*sx+sz*sz;
+            if(d2<1.8f*1.8f&&d2>0.001f) {
+                const float push=0.28f/std::sqrt(d2);
                 bot.pos.x+=sx*push;bot.pos.z+=sz*push;
             }
         }
@@ -768,7 +769,7 @@ void drawTargets(float time) {
     }
 }
 void drawTransportPlane(Vec3 pos,float time) {
-    // Open cargo cabin keeps the player and the other 12 contestants visible in third person.
+    // Cabin view: 30 passengers are seated in six rows and five columns.
     drawCube({pos.x-0.35f,pos.y-0.68f,pos.z},{8.7f,0.22f,6.0f},{0.25f,0.30f,0.35f});
     drawCube({pos.x-0.35f,pos.y+0.26f,pos.z-2.95f},{8.7f,1.9f,0.20f},{0.43f,0.48f,0.54f});
     drawCube({pos.x-0.35f,pos.y+0.26f,pos.z+2.95f},{8.7f,1.9f,0.20f},{0.43f,0.48f,0.54f});
@@ -794,9 +795,8 @@ void drawTransportPlane(Vec3 pos,float time) {
     }};
     for(int i=0;i<=BOT_COUNT;++i) {
         const int row=i/5,col=i%5;
-        const float xOffset=row==2?-1.75f+static_cast<float>(col)*1.75f:
-            -3.5f+static_cast<float>(col)*1.75f;
-        const float zOffset=-1.28f+static_cast<float>(row)*1.28f;
+        const float xOffset=-3.45f+static_cast<float>(row)*1.28f;
+        const float zOffset=-2.10f+static_cast<float>(col)*1.05f;
         Vec3 passenger{pos.x+xOffset,pos.y-0.62f,pos.z+zOffset};
         const Vec3 outfit=i==0?flightOutfits[static_cast<size_t>(gSelectedCharacter)]:
             flightOutfits[static_cast<size_t>((i-1)%4)];
@@ -914,8 +914,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     // Battle-royale insertion: the match begins aboard the aircraft.
     if(gDropState==1) {
         gDropTimer+=dt;
-        if(gDropTimer<PLANE_COUNTDOWN_SECONDS) gPlanePosition.x=-110.0f;
-        else gPlanePosition.x=std::min(112.0f,-110.0f+18.0f*(gDropTimer-PLANE_COUNTDOWN_SECONDS));
+        // The aircraft moves from the first frame; the 7-second timer only gates the jump.
+        gPlanePosition.x=std::min(112.0f,-110.0f+11.2f*gDropTimer);
+        gPlanePosition.y=24.0f+std::sin(gMatchTime*0.72f)*0.22f;
         gPlayer.x=gPlanePosition.x;gPlayer.z=gPlanePosition.z;
         gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
         gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
@@ -928,10 +929,11 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             resetBots();
             updateStatus();
         }
-        Vec3 eye{gPlanePosition.x-20.0f,gPlanePosition.y+11.0f,gPlanePosition.z+28.0f};
-        Vec3 target{gPlanePosition.x,gPlanePosition.y,gPlanePosition.z};
+        // Elevated interior camera looks down the passenger cabin, not at the plane from outside.
+        Vec3 eye{gPlanePosition.x-0.8f,gPlanePosition.y+4.35f,gPlanePosition.z};
+        Vec3 target{gPlanePosition.x+3.8f,gPlanePosition.y+0.55f,gPlanePosition.z};
         Mat4 view=lookAt(eye,target,{0,1,0});
-        gProjection=multiply(perspective(0.90f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
+        gProjection=multiply(perspective(1.02f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
         drawWorld(gMatchTime);drawTransportPlane(gPlanePosition,gMatchTime);
         static float planeStatusTimer=0;planeStatusTimer+=dt;
@@ -1072,9 +1074,15 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         const float botDistance2=playerDx*playerDx+playerDz*playerDz;
         const float renderDistance=gQuality==0?44.0f:(gQuality==1?64.0f:92.0f);
         if(botDistance2>renderDistance*renderDistance)continue;
-        const bool botAiming=!isAllyBot(i)&&botDistance2<34.0f*34.0f;
+        const bool botAiming=bot.aiming||(!isAllyBot(i)&&botDistance2<34.0f*34.0f);
         drawCharacter(bot.pos,bot.yaw,botColor,true,
-            gMatchTime+bot.phase,std::min(1.0f,bot.speed/3.5f),botAiming,false,false);
+            gMatchTime+bot.phase,std::min(1.0f,bot.speed/4.6f),
+            botAiming,bot.fireFlash>0.0f,false);
+        if(bot.fireFlash>0.0f) {
+            const Vec3 muzzle=localPoint(bot.pos,0.0f,1.32f,-1.18f,bot.yaw);
+            const Vec3 impact{gPlayer.x,gPlayer.y+1.25f+gJumpHeight,gPlayer.z};
+            drawSegment({0,0,0},0.0f,muzzle,impact,0.055f,{0.18f,0.88f,1.0f});
+        }
         drawCube({bot.pos.x,bot.pos.y+2.72f,bot.pos.z},
             {0.70f*static_cast<float>(gBotHealth[static_cast<size_t>(i)])/3.0f,0.07f,0.07f},
             isAllyBot(i)?Vec3{0.20f,0.90f,0.55f}:Vec3{0.95f,0.30f,0.20f},bot.yaw);

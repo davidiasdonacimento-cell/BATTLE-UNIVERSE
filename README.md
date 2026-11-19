@@ -2,6 +2,15 @@
 
 Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL ES 3.0 para o motor de jogo. Não usa Godot, Unity, WebView, HTML, CSS ou JavaScript.
 
+## Estado da atualização 1.1.0
+
+- IA dos bots ajustada para priorizar combate ao jogador após o pouso, manter distância de combate, mirar e exibir disparos de energia.
+- Sequência de transporte alterada para mover o avião desde o início e usar uma câmera elevada dentro da cabine.
+- Perfil local e resgate de código precisam ser implementados e validados em uma etapa própria; não considerar funcionalidades ausentes como prontas.
+- O instalador foi preparado para arquivos futuros de até 2 GiB e preserva downloads parciais quando a conexão cai.
+- **O pacote efetivamente publicado continua sendo o arquivo da Temporada 02, com 428.996.916 bytes (aprox. 409 MiB). O pacote de 2 GB ainda não foi gerado nem publicado.**
+- A compilação automática não substitui o teste físico no Android.
+
 ## Versão 1.1.0 — primeira integração do Bloob
 
 ### Entrega inicial no código

@@ -25,8 +25,8 @@ import java.util.zip.ZipFile;
 public final class ContentPackInstaller {
     private static final String MANIFEST_URL =
         "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v2/content-pack-manifest.json";
-    private static final long MAX_DOWNLOAD_BYTES = 450L * 1024L * 1024L;
-    private static final long MAX_EXTRACTED_BYTES = 520L * 1024L * 1024L;
+    private static final long MAX_DOWNLOAD_BYTES = 2L * 1024L * 1024L * 1024L;
+    private static final long MAX_EXTRACTED_BYTES = 3L * 1024L * 1024L * 1024L;
     private static final int PACK_VERSION = 2;
 
     public interface Listener {
@@ -99,7 +99,7 @@ public final class ContentPackInstaller {
                 if(expectedSize<=250L*1024L*1024L||expectedSize>MAX_DOWNLOAD_BYTES)
                     throw new Exception("Tamanho do pacote fora do intervalo esperado para a Temporada 02.");
                 StatFs storage=new StatFs(root.getAbsolutePath());
-                long needed=expectedSize*2L+110L*1024L*1024L;
+                long needed=expectedSize*2L+256L*1024L*1024L;
                 if(storage.getAvailableBytes()<needed)
                     throw new Exception("Espaço insuficiente. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
@@ -131,7 +131,7 @@ public final class ContentPackInstaller {
                 postProgress(expectedSize,expectedSize,"DADOS VERIFICADOS • REINICIANDO O JOGO...");
                 main.post(()->{running=false;listener.onSuccess();});
             } catch(Exception error) {
-                archive.delete();
+                // Keep a partial .part file so the next attempt can resume an interrupted download.
                 deleteTree(staging);
                 String message=error.getMessage()==null?"Falha desconhecida durante a instalação.":error.getMessage();
                 main.post(()->{running=false;listener.onFailure(message);});
@@ -154,23 +154,50 @@ public final class ContentPackInstaller {
     }
 
     private void downloadArchive(String url,File output,long total) throws Exception {
-        HttpURLConnection connection=open(url);
-        try(InputStream in=new BufferedInputStream(connection.getInputStream());
-            FileOutputStream file=new FileOutputStream(output)) {
-            byte[] buffer=new byte[65536];int count;long received=0;
-            while((count=in.read(buffer))!=-1) {
-                received+=count;
-                if(received>MAX_DOWNLOAD_BYTES) throw new Exception("Download excedeu o limite de segurança.");
-                file.write(buffer,0,count);
-                if(received%262144<buffer.length) {
-                    postProgress(received,total,"BAIXANDO PACOTE DE CONTEÚDO...");
-                    postFileProgress("battle-universe-season-02-pack.zip",1,1,received,total);
-                }
+        long existing=output.isFile()?output.length():0L;
+        if(existing<0||existing>total) { output.delete(); existing=0L; }
+
+        HttpURLConnection connection=(HttpURLConnection)new URL(url).openConnection();
+        connection.setConnectTimeout(18000);
+        connection.setReadTimeout(45000);
+        connection.setInstanceFollowRedirects(true);
+        connection.setRequestProperty("User-Agent","BattleUniverse-Android/1.1");
+        connection.setRequestProperty("Accept","application/octet-stream");
+        if(existing>0) connection.setRequestProperty("Range","bytes="+existing+"-");
+
+        try {
+            int code=connection.getResponseCode();
+            if(existing>0 && code==200) {
+                // Server ignored Range: restart cleanly rather than append a duplicate archive.
+                existing=0L;
+            } else if(existing>0 && code==206) {
+                String range=connection.getHeaderField("Content-Range");
+                if(range==null||!range.startsWith("bytes "+existing+"-"))
+                    throw new Exception("O servidor retornou um intervalo de download inválido.");
+            } else if(code<200||code>=300) {
+                throw new Exception("Servidor de dados respondeu HTTP "+code+". Tente novamente.");
             }
-            file.getFD().sync();
-            if(received!=total) throw new Exception("Download incompleto. O arquivo recebido tem tamanho diferente do manifesto.");
-            postFileProgress("battle-universe-season-02-pack.zip",1,1,received,total);
-        } finally { connection.disconnect(); }
+            try(InputStream in=new BufferedInputStream(connection.getInputStream());
+                FileOutputStream file=new FileOutputStream(output,existing>0)) {
+                byte[] buffer=new byte[65536];int count;long received=existing;
+                while((count=in.read(buffer))!=-1) {
+                    received+=count;
+                    if(received>MAX_DOWNLOAD_BYTES||received>total)
+                        throw new Exception("Download excedeu o limite ou o tamanho informado.");
+                    file.write(buffer,0,count);
+                    if(received%262144<buffer.length) {
+                        postProgress(received,total,"BAIXANDO PACOTE DE CONTEÚDO...");
+                        postFileProgress("battle-universe-season-02-pack.zip",1,1,received,total);
+                    }
+                }
+                file.getFD().sync();
+                if(received!=total)
+                    throw new Exception("Download interrompido. O arquivo parcial foi preservado para continuar depois.");
+                postFileProgress("battle-universe-season-02-pack.zip",1,1,received,total);
+            }
+        } finally {
+            connection.disconnect();
+        }
     }
 
     private HttpURLConnection open(String address) throws Exception {
