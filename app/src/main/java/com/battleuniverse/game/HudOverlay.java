@@ -151,12 +151,12 @@ public final class HudOverlay extends View {
         // In-game horizontal navigation, not an admin-style web sidebar.
         panel(c,24,105,1224,50,0xB90A1B2B,0x336CA4B7,16);
         for(int i=0;i<NAV.length;i++) {
-            float x=24+i*111f;boolean active=page==i;
-            panel(c,x,111,108,38,active?0xDD136276:0x22243B4D,
-                    active?0xFF35D6E5:0x225A8297,8);
-            drawNavIcon(c,i,x+12,130,active);
-            text(c,NAV[i],x+22,134,6.5f,active?Color.WHITE:0xFFB8CBD7,
-                Typeface.create(active?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
+            float x=24+i*111f;boolean active=page==i;boolean royale=i==ROYALE;
+            panel(c,x,108,108,44,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
+                    active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),9);
+            drawNavIcon(c,i,x+12,130,active||royale);
+            text(c,NAV[i],x+22,134,royale?8:6.5f,active||royale?Color.WHITE:0xFFB8CBD7,
+                Typeface.create(active||royale?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
         }
     }
     private void drawNavIcon(Canvas c,int i,float x,float y,boolean active){
@@ -683,15 +683,17 @@ public final class HudOverlay extends View {
         }
 
         // Analógico dinâmico: a base aparece no toque e o botão acompanha o dedo.
-        float joyX=179f+(game.isMovingTouchActive()?game.getMoveTouchX()*54f:0f);
-        float joyY=544f-(game.isMovingTouchActive()?game.getMoveTouchY()*54f:0f);
-        p.setColor(0x553D7183);c.drawCircle(179,544,66,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA8CE8EF);c.drawCircle(179,544,66,p);
+        float baseX=game.isMovingTouchActive()?game.getMoveOriginDesignX():179f;
+        float baseY=game.isMovingTouchActive()?game.getMoveOriginDesignY():544f;
+        float joyX=baseX+(game.isMovingTouchActive()?game.getMoveTouchX()*54f:0f);
+        float joyY=baseY-(game.isMovingTouchActive()?game.getMoveTouchY()*54f:0f);
+        p.setColor(0x553D7183);c.drawCircle(baseX,baseY,66,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA8CE8EF);c.drawCircle(baseX,baseY,66,p);
         p.setStyle(Paint.Style.FILL);p.setColor(0xAA8FCBD2);c.drawCircle(joyX,joyY,28,p);
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.2f);p.setColor(0xFFE9FFFF);c.drawCircle(joyX,joyY,28,p);
         p.setStyle(Paint.Style.FILL);p.setColor(0xFFECFFFF);c.drawCircle(joyX,joyY,7,p);
         if(game.isMovingTouchActive()) {
-            p.setColor(0xAA7CEAF2);c.drawLine(179,544,joyX,joyY,p);
+            p.setColor(0xAA7CEAF2);c.drawLine(baseX,baseY,joyX,joyY,p);
         }
 
         pill(c,24,625,160,49,"SAIR DA PARTIDA",0xDD173C4A,Color.WHITE);
