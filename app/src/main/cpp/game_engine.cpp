@@ -884,12 +884,12 @@ void drawTransportPlaneCabin(Vec3 pos,float time) {
     // Rear cargo ramp opens after the flight countdown.
     drawCube({pos.x+15.85f,pos.y+0.55f,pos.z},{0.30f,2.45f,12.0f},{0.31f,0.38f,0.45f});
     if(gDropTimer>=PLANE_COUNTDOWN_SECONDS) {
-        drawCube({pos.x-17.5f,pos.y-0.46f,pos.z},{4.6f,0.18f,8.0f},{0.39f,0.46f,0.53f},0.0f,0.12f);
+        drawCube({pos.x-15.8f,pos.y-0.46f,pos.z},{4.6f,0.18f,8.0f},{0.39f,0.46f,0.53f},0.0f,0.12f);
         for(int side=-1;side<=1;side+=2)
-            drawCube({pos.x-17.5f,pos.y+0.18f,pos.z+static_cast<float>(side)*3.85f},
+            drawCube({pos.x-15.8f,pos.y+0.18f,pos.z+static_cast<float>(side)*3.85f},
                 {4.6f,0.48f,0.14f},{0.52f,0.61f,0.68f},0.0f,0.12f);
         for(int stripe=0;stripe<6;++stripe)
-            drawCube({pos.x-17.5f+stripe*0.72f,pos.y-0.34f,pos.z},
+            drawCube({pos.x-15.8f+stripe*0.72f,pos.y-0.34f,pos.z},
                 {0.12f,0.04f,7.5f},{0.93f,0.66f,0.20f});
     } else {
         drawCube({pos.x-16.0f,pos.y+0.76f,pos.z},{0.24f,2.0f,11.8f},{0.30f,0.37f,0.44f});
@@ -970,7 +970,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
     if(gScreenMode==1) {
         gPlayer={-110,0.55f,-32};
         gPlayerXSnapshot.store(gPlayer.x);gPlayerZSnapshot.store(gPlayer.z);
-        gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
+        gPlayerYaw=0;gCameraYaw=-PI*0.5f;gPlayerYaw=-PI*0.5f;gCameraPitch=0.36f;
         gMatchTime=0;gZoneRadius=112;gCollected=0;gCrystalTaken.fill(false);
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
@@ -1081,7 +1081,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
         gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
         if(gDropTimer>=PLANE_COUNTDOWN_SECONDS)gPlaneExteriorView=true;
-        const bool atRamp=gPlaneWalkX<=-11.0f && std::fabs(gPlaneWalkZ)<=4.2f;
+        const bool atRamp=gPlaneWalkX<=-12.8f && std::fabs(gPlaneWalkZ)<=4.2f;
         const bool playerJump=jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS&&atRamp;
         const bool forcedJump=gDropTimer>=34.0f;
         if(jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS&&!atRamp)
@@ -1335,4 +1335,12 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetStatus(JNIEnv* env,jclass) {
     std::lock_guard<std::mutex> lock(gStatusMutex);
     return env->NewStringUTF(gHudStatus.c_str());
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetEliminations(JNIEnv*,jclass) {
+    return static_cast<jint>(gEliminations);
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetCollected(JNIEnv*,jclass) {
+    return static_cast<jint>(gCollected);
 }
