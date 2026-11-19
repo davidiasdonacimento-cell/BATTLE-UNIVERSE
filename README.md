@@ -1,40 +1,52 @@
 # BATTLE UNIVERSE
 
-Jogo Android nativo em desenvolvimento ativo. Java gerencia a interface, controles e instalação de conteúdo; C++ com OpenGL ES 3.0 executa o motor de renderização e a lógica da sessão. Não usa Godot, Unity, WebView, HTML, CSS ou JavaScript.
+Jogo Android nativo em evolução, com Java para a camada Android e C++/OpenGL ES 3.0 para o motor de jogo. Não usa Godot, Unity, WebView, HTML, CSS ou JavaScript.
 
-## Versão 0.3.0-alpha
+## Versão 0.4.0-alpha — reconstrução da partida
 
-### Sistemas implementados nesta etapa
-- Lobby nativo com navegação para início, personagens, modos, mapas, inventário e configurações.
-- Controle de personagem em terceira pessoa; correção do sinal do joystick para que arrastar para cima mova para frente.
-- HUD de partida com minimapa visual, painel de status, joystick e controles para pulso, construção, corrida, pulo e interação.
-- Personagem humanoide estilizado com segmentos articulados e balanço de braços/pernas durante o movimento.
-- IA offline com objetivos de coleta, acompanhamento de equipe em Dupla/Esquadrão e separação entre NPCs.
-- Construção local com paredes, plataformas e rampas, custo de madeira, limite de peças e colisão com paredes.
-- Emissor de energia fictício para treino contra alvos flutuantes; munição, integridade dos alvos e pontuação.
-- Preferências locais de personagem, mapa, modo e qualidade.
-- Instalador de conteúdo com tela animada, download automático, verificação SHA-256 do pacote, verificação dos hashes internos, extração segura, substituição atômica e reinício após instalação.
-- Pacote da Temporada 01 com modelos OBJ, texturas 1024px, três configurações de mapa, missões, shaders ES 3.0 e áudio ambiente.
+### Correções e sistemas desta etapa
+- Controles touchscreen usam o mesmo sistema de coordenadas da HUD, compatível com telas panorâmicas.
+- Convenção de orientação do personagem ajustada para o eixo frontal local -Z.
+- Aliados em Dupla/Esquadrão patrulham setores próprios e não seguem o jogador.
+- NPCs hostis patrulham/coletam recursos, aproximam-se em curta distância, têm integridade e podem ser desativados.
+- HUD nativa de jogo: minimapa com posição do jogador, joystick, disparo, troca de arma, construção, corrida, salto e interação.
+- Três armas de energia totalmente fictícias para o jogo: Pulso Plasma, Raio Arc e Nova. Munição, alternância, disparos visíveis, alvos de treino e dano aos bots.
+- Construção de paredes, plataformas e rampas, com madeira, limite, detecção de sobreposição e colisão de paredes.
+- Partida começa em avião de transporte em movimento; o jogador escolhe quando saltar e desce com paraquedas.
+- Arena ampliada para cerca de 230 x 230 unidades jogáveis, com estradas, 16 estruturas e cinturão de vegetação.
+- Configurações e preferências continuam locais no aparelho.
 
-### Controles na partida
-- Joystick esquerdo: movimento.
-- Área direita: girar a câmera.
-- PULSO: usar carga do emissor fictício em alvos de treinamento.
-- CONSTRUIR: alterna entre parede, plataforma e rampa.
-- CORRER: manter pressionado para correr.
-- PULAR: salto.
-- USAR: coletar recurso próximo.
+### Controles
+- Joystick esquerdo: movimentação.
+- Arraste na metade direita: câmera.
+- DISPARAR: arma de energia equipada.
+- ARMA: alterna entre Pulso Plasma, Raio Arc e Nova.
+- CONSTRUIR: alterna parede, plataforma e rampa; cada peça custa madeira.
+- CORRER: manter pressionado.
+- SALTAR: salto normal ou salto do avião.
+- USAR: coleta recursos próximos.
 
-### Compilação
-O workflow em `.github/workflows/android.yml`:
-1. Configura Python, Java 17, Android SDK, NDK e CMake.
-2. Gera o pacote de dados e publica-o como release de pré-lançamento.
-3. Executa os testes Android disponíveis e compila o APK debug.
-4. Verifica `classes.dex`, bibliotecas ARM64/ARMv7 e a integridade ZIP do APK.
-5. Publica APK e pacote de dados como artefatos.
+## Conteúdo da Temporada 02
+O instalador na primeira abertura baixa automaticamente um pacote de conteúdo expandido de aproximadamente 300 MB (tamanho exato mostrado na tela). O arquivo inclui:
+- Modelo OBJ do avião de transporte, operador, emissor de energia, peças de construção e objetos de cenário.
+- Cinco conjuntos de materiais PBR com texturas 4K de albedo, normal e roughness e mapas AO 2K.
+- Oito arquivos de configuração de mapa.
+- Roster, missões, metadados das armas fictícias, shaders OpenGL ES 3.0 e quatro ambientes de áudio.
+
+O instalador valida o SHA-256 do ZIP e os hashes individuais dos arquivos, verifica caminhos antes da extração, limita o tamanho extraído, confere espaço livre e instala em uma pasta temporária antes de ativar. Se a conexão falhar, o usuário pode tentar novamente ou abrir o jogo-base.
+
+## Build e testes
+Workflow: `.github/workflows/android.yml`.
+- Configura Python, JDK 17, Android SDK, NDK 27 e CMake.
+- Gera o pacote de conteúdo e publica a release `data-pack-v2`.
+- Executa os testes Android disponíveis e compila APK debug.
+- Verifica `classes.dex`, libs ARM64/ARMv7 e integridade ZIP do APK.
+- Publica APK e pacote 4K como artefatos.
 
 ## Limitações conhecidas
-Esta é uma etapa jogável em evolução, não o jogo AAA completo. Os modelos ainda são estilizados e não vêm de captura de movimento ou rigs profissionais; há três cenários iniciais em vez dos oito mapas planejados; os NPCs seguem rotas e objetivos locais, mas não oferecem comportamento tático avançado; o modo online, veículos, sistema completo de destruição, áudio espacial e loja/passe integrados ainda não estão implementados. O pacote instalado valida e guarda os recursos, enquanto a integração de todos os modelos/texturas/áudio com o renderizador será feita em etapas separadas.
+Esta versão ainda não é um jogo AAA completo. Os personagens e cenários no renderizador continuam estilizados e feitos por malhas procedurais; o jogo ainda não importa os modelos OBJ e materiais 4K do pacote para a renderização em tempo real. A IA é local e simples, não há multiplayer online, sistema completo de inventário de armas, veículos dirigíveis, destruição avançada ou oito mapas renderizados individualmente. O pacote inclui os recursos e configurações correspondentes, mas sua integração completa ao motor é trabalho separado. A execução física no aparelho precisa ser testada depois da instalação.
 
-## APK
-Abra Actions, selecione a execução mais recente de **BATTLE UNIVERSE Android** e baixe o artefato `BATTLE-UNIVERSE-debug-apk`. Extraia o ZIP para encontrar `app-debug.apk`. É uma compilação debug para testes; a execução no aparelho deve ser validada separadamente.
+## Links
+- Repositório: https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE
+- Ações e APK: https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/actions
+- Dados da Temporada 02: https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/tag/data-pack-v2

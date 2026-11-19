@@ -6,15 +6,15 @@ import android.view.MotionEvent;
 import java.util.Arrays;
 
 public final class GameSurfaceView extends GLSurfaceView {
-    private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, PULSE=16;
-    private volatile float moveX, moveY, lookDX, lookDY;
-    private volatile int buttons, screenMode, characterId, mapId, matchMode, quality=1;
+    private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32;
+    private volatile float moveX,moveY,lookDX,lookDY;
+    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile boolean contentPackReady=false;
-    private int movePointer=-1, lookPointer=-1;
-    private final int[] buttonPointers={-1,-1,-1,-1,-1};
-    private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,PULSE};
-    private float moveOriginX, moveOriginY, lastLookX,lastLookY;
+    private int movePointer=-1,lookPointer=-1;
+    private final int[] buttonPointers={-1,-1,-1,-1,-1,-1};
+    private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,FIRE,SWAP};
+    private float moveOriginX,moveOriginY,lastLookX,lastLookY;
 
     public GameSurfaceView(Context context) {
         super(context);
@@ -47,96 +47,102 @@ public final class GameSurfaceView extends GLSurfaceView {
         queueEvent(()->nativeSetQuality(quality));
     }
     public void setContentPackData(int buildLimit,int resourceCount) {
-        int safeBuildLimit=Math.max(4,Math.min(24,buildLimit));
-        int safeResourceCount=Math.max(1,Math.min(12,resourceCount));
-        contentBuildLimit=safeBuildLimit;contentResourceCount=safeResourceCount;contentPackReady=true;
+        contentBuildLimit=Math.max(4,Math.min(24,buildLimit));
+        contentResourceCount=Math.max(1,Math.min(12,resourceCount));
+        contentPackReady=true;
         queueEvent(()->nativeSetContentData(contentBuildLimit,contentResourceCount));
     }
     public float[] getPlayerPosition() {
         try { return nativeGetPlayerPosition(); }
-        catch (UnsatisfiedLinkError error) { return new float[]{0f,0f}; }
+        catch(UnsatisfiedLinkError error) { return new float[]{0f,0f}; }
     }
     public String getGameStatus() {
         try { return nativeGetStatus(); }
-        catch (UnsatisfiedLinkError error) { return "INICIALIZANDO SISTEMAS..."; }
+        catch(UnsatisfiedLinkError error) { return "INICIALIZANDO SISTEMAS..."; }
     }
 
-    private int controlAt(float x,float y,float w,float h) {
+    private float scale(float w,float h) { return Math.min(w/1280f,h/720f); }
+    private float offsetX(float w,float s) { return (w-1280f*s)*0.5f; }
+    private float offsetY(float h,float s) { return (h-720f*s)*0.5f; }
+    private float designX(float x,float w,float s) { return (x-offsetX(w,s))/s; }
+    private float designY(float y,float h,float s) { return (y-offsetY(h,s))/s; }
+
+    // The HUD is drawn in a 1280x720 design canvas. Always hit-test in that
+    // same coordinate space; normalized screen fractions break on ultrawide phones.
+    private int controlAt(float px,float py,float w,float h) {
+        float s=scale(w,h);
+        float x=designX(px,w,s),y=designY(py,h,s);
         float[][] controls={
-            {0.90f,0.78f,JUMP},
-            {0.91f,0.56f,BUILD},
-            {0.75f,0.84f,INTERACT},
-            {0.75f,0.64f,RUN},
-            {0.78f,0.43f,PULSE}
+            {998f,310f,FIRE,48f},
+            {1165f,403f,BUILD,50f},
+            {960f,461f,RUN,47f},
+            {1065f,465f,SWAP,42f},
+            {1152f,562f,JUMP,52f},
+            {960f,605f,INTERACT,47f}
         };
-        float radius=Math.min(w,h)*0.085f;
-        for(float[] control:controls) {
-            float dx=x-control[0]*w, dy=y-control[1]*h;
-            if(dx*dx+dy*dy<=radius*radius) return (int)control[2];
+        for(float[] c:controls) {
+            float dx=x-c[0],dy=y-c[1],r=c[3];
+            if(dx*dx+dy*dy<=r*r) return (int)c[2];
         }
         return 0;
     }
-
     private void releasePointer(int id) {
-        if(id==movePointer) {
-            movePointer=-1; moveX=0; moveY=0;
-        }
-        if(id==lookPointer) lookPointer=-1;
-        for(int i=0;i<buttonPointers.length;i++) {
-            if(buttonPointers[i]==id) buttonPointers[i]=-1;
-        }
+        if(id==movePointer){movePointer=-1;moveX=moveY=0;}
+        if(id==lookPointer)lookPointer=-1;
+        for(int i=0;i<buttonPointers.length;i++)
+            if(buttonPointers[i]==id)buttonPointers[i]=-1;
         recalculateButtons();
     }
     private void recalculateButtons() {
         int mask=0;
         for(int i=0;i<buttonPointers.length;i++)
-            if(buttonPointers[i]!=-1) mask|=buttonBits[i];
+            if(buttonPointers[i]!=-1)mask|=buttonBits[i];
         buttons=mask;
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
-        int action=event.getActionMasked(), index=event.getActionIndex();
-        float w=Math.max(1,getWidth()), h=Math.max(1,getHeight());
-        if(action==MotionEvent.ACTION_DOWN || action==MotionEvent.ACTION_POINTER_DOWN) {
+        int action=event.getActionMasked(),index=event.getActionIndex();
+        float w=Math.max(1,getWidth()),h=Math.max(1,getHeight()),s=scale(w,h);
+        if(action==MotionEvent.ACTION_DOWN||action==MotionEvent.ACTION_POINTER_DOWN) {
             int id=event.getPointerId(index);
-            float x=event.getX(index), y=event.getY(index);
-            int control=controlAt(x,y,w,h);
+            float px=event.getX(index),py=event.getY(index);
+            int control=controlAt(px,py,w,h);
             if(control!=0) {
                 for(int i=0;i<buttonPointers.length;i++) {
-                    if(buttonBits[i]==control && buttonPointers[i]==-1) {
-                        buttonPointers[i]=id; recalculateButtons(); return true;
+                    if(buttonBits[i]==control&&buttonPointers[i]==-1) {
+                        buttonPointers[i]=id;recalculateButtons();return true;
                     }
                 }
             }
-            if(movePointer==-1 && x<w*0.38f && y>h*0.42f) {
+            float x=designX(px,w,s),y=designY(py,h,s);
+            if(movePointer==-1&&x<330f&&y>420f) {
                 movePointer=id;
-                moveOriginX=w*0.14f;
-                moveOriginY=h*0.755f;
-                updateMovement(x,y,w,h);
-            } else if(lookPointer==-1 && x>=w*0.40f) {
-                lookPointer=id; lastLookX=x; lastLookY=y;
+                moveOriginX=offsetX(w,s)+179f*s;
+                moveOriginY=offsetY(h,s)+544f*s;
+                updateMovement(px,py,w,h);
+            } else if(lookPointer==-1&&x>=390f&&y>145f) {
+                lookPointer=id;lastLookX=px;lastLookY=py;
             }
             return true;
         }
         if(action==MotionEvent.ACTION_MOVE) {
-            float radius=Math.max(55f,Math.min(w,h)*0.16f);
             for(int i=0;i<event.getPointerCount();i++) {
                 int id=event.getPointerId(i);
-                float x=event.getX(i), y=event.getY(i);
-                if(id==movePointer) updateMovement(x,y,w,h);
+                float x=event.getX(i),y=event.getY(i);
+                if(id==movePointer)updateMovement(x,y,w,h);
                 else if(id==lookPointer) {
                     lookDX+=(x-lastLookX)/w;
                     lookDY+=(y-lastLookY)/h;
-                    lastLookX=x; lastLookY=y;
+                    lastLookX=x;lastLookY=y;
                 }
             }
             return true;
         }
-        if(action==MotionEvent.ACTION_UP || action==MotionEvent.ACTION_POINTER_UP
-                || action==MotionEvent.ACTION_CANCEL) {
+        if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_POINTER_UP
+                ||action==MotionEvent.ACTION_CANCEL) {
             if(action==MotionEvent.ACTION_CANCEL) {
-                movePointer=-1; lookPointer=-1; moveX=moveY=0;
-                Arrays.fill(buttonPointers,-1); buttons=0;
+                movePointer=-1;lookPointer=-1;moveX=moveY=0;
+                Arrays.fill(buttonPointers,-1);buttons=0;
             } else releasePointer(event.getPointerId(index));
             return true;
         }
@@ -144,13 +150,12 @@ public final class GameSurfaceView extends GLSurfaceView {
     }
 
     private void updateMovement(float x,float y,float w,float h) {
-        float radius=Math.max(55f,Math.min(w,h)*0.16f);
+        float s=scale(w,h),radius=94f*s;
         moveX=clamp((x-moveOriginX)/radius,-1f,1f);
-        // Finger moving upward is positive forward; native engine uses this sign directly.
         moveY=clamp((moveOriginY-y)/radius,-1f,1f);
     }
-    private static float clamp(float v,float min,float max) {
-        return Math.max(min,Math.min(max,v));
+    private static float clamp(float value,float min,float max) {
+        return Math.max(min,Math.min(max,value));
     }
 
     private static native void nativeInit();
@@ -169,12 +174,8 @@ public final class GameSurfaceView extends GLSurfaceView {
         private long previous;
         @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,
                 javax.microedition.khronos.egl.EGLConfig config) {
-            nativeInit();
-            nativeSetScreen(screenMode);
-            nativeSetCharacter(characterId);
-            nativeSetMap(mapId);
-            nativeSetMode(matchMode);
-            nativeSetQuality(quality);
+            nativeInit();nativeSetScreen(screenMode);nativeSetCharacter(characterId);
+            nativeSetMap(mapId);nativeSetMode(matchMode);nativeSetQuality(quality);
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
             previous=System.nanoTime();
         }
@@ -186,8 +187,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             long now=System.nanoTime();
             float dt=Math.min(0.05f,Math.max(0.001f,(now-previous)/1_000_000_000f));
             previous=now;
-            float dx=lookDX,dy=lookDY;
-            lookDX=lookDY=0;
+            float dx=lookDX,dy=lookDY;lookDX=lookDY=0;
             nativeRender(dt,moveX,moveY,dx,dy,buttons);
         }
     }

@@ -76,17 +76,16 @@ public final class HudOverlay extends View {
         text(c,"◆ 1.250",1176,51,12,0xFFFFC76B,Typeface.DEFAULT_BOLD);
     }
     private void drawSidebar(Canvas c) {
-        panel(c,24,120,210,565,0xA80A1B2B,0x226CA4B7,22);
-        text(c,"MENU PRINCIPAL",45,151,10,0xFF6D91A7,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<NAV.length;i++){
-            float y=170+i*72; boolean active=page==i;
-            panel(c,35,y,188,56,active?0xDD136276:0x32243B4D,active?0xFF35D6E5:0x225A8297,14);
-            if(active){p.setColor(0xFF39D8E8);r.set(35,y+13,39,y+43);c.drawRoundRect(r,2,2,p);}
-            drawNavIcon(c,i,58,y+28,active);
-            text(c,NAV[i],82,y+34,13,active?Color.WHITE:0xFFB8CBD7,
-                    Typeface.create(active?"sans-serif":"sans-serif-medium",Typeface.NORMAL));
+        // In-game horizontal navigation, not an admin-style web sidebar.
+        panel(c,24,105,1224,50,0xB90A1B2B,0x336CA4B7,16);
+        for(int i=0;i<NAV.length;i++) {
+            float x=32+i*202f;boolean active=page==i;
+            panel(c,x,111,194,38,active?0xDD136276:0x22243B4D,
+                    active?0xFF35D6E5:0x225A8297,12);
+            drawNavIcon(c,i,x+23,130,active);
+            text(c,NAV[i],x+43,135,10,active?Color.WHITE:0xFFB8CBD7,
+                Typeface.create(active?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
         }
-        text(c,"VERSÃO 0.2  •  ANDROID",45,666,10,0xFF69899B,Typeface.DEFAULT);
     }
     private void drawNavIcon(Canvas c,int i,float x,float y,boolean active){
         p.setColor(active?0xFFE9FCFF:0xFF8AA8B8);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.2f);
@@ -123,7 +122,7 @@ public final class HudOverlay extends View {
         panel(c,628,468,222,78,0xB9183040,0x557AA9BC,17);
         text(c,"● SERVIDOR LOCAL",650,498,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
         text(c,"TREINAMENTO",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"Partidas iniciais com inteligência artificial",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
+        text(c,"Modo offline: adversários e aliados com objetivos próprios.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
         panel(c,270,608,580,58,0x70152B3A,0x225B8296,14);
         stat(c,292,642,"04","VAGAS NA EQUIPE");stat(c,468,642,"03","MAPAS PLANEJADOS");stat(c,665,642,"AI","COMPANHEIROS");
     }
@@ -224,7 +223,7 @@ public final class HudOverlay extends View {
         panel(c,888,477,362,183,0x74101F2C,0x226A8EA0,16);
         eyebrow(c,913,506,"DICA DE OPERAÇÃO");
         text(c,"Explore o mapa, colete recursos",913,540,13,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"e mantenha sua equipe por perto.",913,560,13,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"e deixe os aliados em patrulha independente.",913,560,11,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Novos sistemas serão adicionados em",913,599,10,0xFF7FA4B7,Typeface.DEFAULT);
         text(c,"atualizações incrementais do projeto.",913,616,10,0xFF7FA4B7,Typeface.DEFAULT);
     }
@@ -242,47 +241,44 @@ public final class HudOverlay extends View {
         for(int i=0;i<5;i++){double a=-Math.PI*.85+i*Math.PI*.42;c.drawLine(x+3,y-26,x+3+(float)Math.cos(a)*15,y-26+(float)Math.sin(a)*11,p);}
     }
     private void drawGame(Canvas c){
-        panel(c,22,18,370,82,0xD9081928,0x6679DDEB,17);
+        panel(c,22,18,385,85,0xD9081928,0x6679DDEB,17);
         text(c,"BATTLE UNIVERSE",42,48,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"OPERAÇÃO ILHA  •  "+MAP_NAMES[map],42,70,10,0xFF6FE0E6,Typeface.DEFAULT_BOLD);
-        text(c,game.getGameStatus(),42,88,9,0xFFD5E7ED,Typeface.DEFAULT_BOLD);
+        text(c,"OPERAÇÃO  •  "+MAP_NAMES[map],42,70,10,0xFF6FE0E6,Typeface.DEFAULT_BOLD);
+        text(c,game.getGameStatus(),42,89,9,0xFFD5E7ED,Typeface.DEFAULT_BOLD);
 
-        panel(c,22,112,280,66,0xB9071724,0x337AA0B2,14);
-        text(c,"ESTADO DA OPERAÇÃO",40,139,9,0xFFB9D0DA,Typeface.DEFAULT_BOLD);
-        text(c,"TREINAMENTO LOCAL ATIVO",40,160,13,0xFF79E8D0,Typeface.DEFAULT_BOLD);
+        panel(c,22,112,278,46,0xB9071724,0x337AA0B2,13);
+        text(c,"SESSÃO OFFLINE  •  IA LOCAL",38,141,11,0xFF79E8D0,Typeface.DEFAULT_BOLD);
 
-        // Minimap visual; the game world remains rendered by OpenGL underneath.
         panel(c,1064,18,190,166,0xD9071724,0x6679DDEB,17);
         eyebrow(c,1080,40,"MINIMAPA");
         p.setColor(0xFF173A43);c.drawCircle(1159,105,59,p);
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(0xFF5DD6CE);c.drawCircle(1159,105,59,p);p.setStyle(Paint.Style.FILL);
         p.setColor(0xFF2C775F);c.drawCircle(1159,105,43,p);
         float[] worldPosition=game.getPlayerPosition();
-        float playerMapX=1159+Math.max(-22,Math.min(22,worldPosition[0]))*1.65f;
-        float playerMapY=105+Math.max(-22,Math.min(22,worldPosition[1]))*1.65f;
+        float playerMapX=1159+Math.max(-48,Math.min(48,worldPosition[0]))*0.88f;
+        float playerMapY=105+Math.max(-48,Math.min(48,worldPosition[1]))*0.88f;
         p.setColor(0xFF6ED5E2);c.drawCircle(playerMapX,playerMapY,6,p);
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(Color.WHITE);c.drawCircle(playerMapX,playerMapY,8,p);p.setStyle(Paint.Style.FILL);
-        p.setColor(0xFFFFC66F);c.drawCircle(1159+8*1.65f,105-9*1.65f,4,p);
-        c.drawCircle(1159-10*1.65f,105-6*1.65f,4,p);
-        c.drawCircle(1159+12*1.65f,105+10*1.65f,4,p);
+        p.setColor(0xFFFFC66F);c.drawCircle(1159+8*0.88f,105-9*0.88f,4,p);
+        c.drawCircle(1159-10*0.88f,105-6*0.88f,4,p);
+        c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
 
-        // Touch zones match GameSurfaceView.controlAt().
-        drawControl(c,998,310,43,"PULSO",0xFF185D7A,0xFF65E9F4);
+        drawControl(c,998,310,43,"DISPARAR",0xFF185D7A,0xFF65E9F4);
         drawControl(c,1165,403,43,"CONSTRUIR",0xFF66502A,0xFFFFD27A);
         drawControl(c,960,461,39,"CORRER",0xFF285D49,0xFF83E9B2);
-        drawControl(c,1152,562,47,"PULAR",0xFF7B3D35,0xFFFFA28F);
+        drawControl(c,1065,465,34,"ARMA",0xFF354F79,0xFF9DC7FF);
+        drawControl(c,1152,562,47,"SALTAR",0xFF7B3D35,0xFFFFA28F);
         drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
 
-        // Joystick esquerdo.
         p.setColor(0x553D7183);c.drawCircle(179,544,66,p);
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA8CE8EF);c.drawCircle(179,544,66,p);
         p.setStyle(Paint.Style.FILL);p.setColor(0xAA8FCBD2);c.drawCircle(179,544,28,p);
         p.setColor(0xFFECFFFF);c.drawCircle(179,544,7,p);
 
-        pill(c,24,625,160,49,"VOLTAR AO LOBBY",0xDD173C4A,Color.WHITE);
+        pill(c,24,625,160,49,"SAIR DA PARTIDA",0xDD173C4A,Color.WHITE);
         panel(c,420,650,440,40,0xBB071522,0x226A8EA0,14);
-        text(c,"ESQUERDA: MOVIMENTO  •  DIREITA: CÂMERA",445,675,10,0xFFDAEAF0,Typeface.DEFAULT_BOLD);
-        postInvalidateDelayed(250);
+        text(c,"JOYSTICK: MOVER   •   ARRASTE À DIREITA: CÂMERA",438,675,9,0xFFDAEAF0,Typeface.DEFAULT_BOLD);
+        postInvalidateDelayed(120);
     }
     private void drawControl(Canvas c,float x,float y,float radius,String label,int fill,int edge){
         p.setColor(0x443ED9E8);c.drawCircle(x,y,radius+7,p);
@@ -342,7 +338,7 @@ public final class HudOverlay extends View {
     }
     private void tap(float x,float y){
         if(System.currentTimeMillis()-lastTap<110)return;lastTap=System.currentTimeMillis();
-        for(int i=0;i<6;i++){float ny=170+i*72;if(hit(x,y,35,ny,188,56)){page=i;return;}}
+        for(int i=0;i<6;i++){float nx=32+i*202f;if(hit(x,y,nx,111,194,38)){page=i;return;}}
         if(page==HOME){
             if(hit(x,y,270,328,275,112)){page=MODES_PAGE;return;}
             if(hit(x,y,558,328,292,112)){page=MAPS_PAGE;return;}

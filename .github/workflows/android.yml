@@ -32,7 +32,7 @@ jobs:
       - name: Install content pack tools
         run: python -m pip install --disable-pip-version-check numpy pillow
 
-      - name: Build real Season 01 content package
+      - name: Build expanded Season 02 4K content package
         run: python scripts/build_content_pack.py
 
       - name: Set up JDK 17
@@ -71,23 +71,24 @@ jobs:
           print(f"APK válido: {apk.stat().st_size} bytes; DEX e libs ARM presentes")
           PY
           ls -lh app/build/outputs/apk/debug/app-debug.apk
-          ls -lh build/battle-universe-season-01-pack.zip
+          ls -lh build/battle-universe-season-02-pack.zip
+          test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 262144000
 
-      - name: Publish verified Season 01 data pack
+      - name: Publish verified Season 02 4K data pack
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: data-pack-v1
-          name: Battle Universe — Dados da Temporada 01
+          tag_name: data-pack-v2
+          name: Battle Universe — Conteúdo Expandido 4K
           body: |
-            Pacote de conteúdo do Battle Universe.
-            Inclui modelos OBJ, texturas 1024px, configurações de mapas, missões,
-            shaders OpenGL ES 3.0 e áudio ambiente. O aplicativo valida SHA-256
-            e os hashes dos arquivos antes de ativar o pacote.
+            Pacote expandido do Battle Universe.
+            Inclui avião de transporte, modelos OBJ, materiais PBR 4K, oito mapas,
+            missões, shaders OpenGL ES 3.0 e quatro ambientes de áudio.
+            O aplicativo valida o SHA-256 do pacote e de cada arquivo antes da instalação.
           prerelease: true
           files: |
-            build/battle-universe-season-01-pack.zip
+            build/battle-universe-season-02-pack.zip
             build/content-pack-manifest.json
           overwrite_files: true
           fail_on_unmatched_files: true
@@ -100,12 +101,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload Season 01 package artifact
+      - name: Upload Season 02 4K package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BATTLE-UNIVERSE-season-01-content-pack
+          name: BATTLE-UNIVERSE-season-02-4k-content-pack
           path: |
-            build/battle-universe-season-01-pack.zip
+            build/battle-universe-season-02-pack.zip
             build/content-pack-manifest.json
           if-no-files-found: error
           retention-days: 14

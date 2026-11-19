@@ -15,12 +15,13 @@
 namespace {
 constexpr float PI = 3.14159265358979323846f;
 constexpr int BOT_COUNT = 4;
-constexpr int CRYSTAL_COUNT = 5;
+constexpr int CRYSTAL_COUNT = 12;
 constexpr int BUTTON_JUMP = 1;
 constexpr int BUTTON_INTERACT = 2;
 constexpr int BUTTON_BUILD = 4;
 constexpr int BUTTON_RUN = 8;
 constexpr int BUTTON_PULSE = 16;
+constexpr int BUTTON_SWAP = 32;
 constexpr int BUILD_CAPACITY = 24;
 constexpr int TARGET_COUNT = 3;
 
@@ -97,7 +98,14 @@ float gInteractCooldown=0;
 int gCollected=0, gPreviousButtons=0;
 std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
 struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; };
+std::array<int,BOT_COUNT> gBotHealth{{3,3,3,3}};
+std::array<bool,BOT_COUNT> gBotActive{{true,true,true,true}};
+std::array<float,BOT_COUNT> gBotRespawn{};
+bool isAllyBot(int index) {
+    return (gSelectedMode==1&&index==0)||(gSelectedMode==2&&index<3);
+}
 std::array<BotState,BOT_COUNT> gBots{};
+std::array<Vec3,BOT_COUNT> gBotHomes{{{-24,0.55f,-16},{25,0.55f,-18},{-29,0.55f,27},{32,0.55f,25}}};
 struct BuildPiece { Vec3 pos; float yaw=0; int type=0; };
 std::array<BuildPiece,BUILD_CAPACITY> gBuildPieces{};
 int gBuildCount=0, gBuildType=0, gWood=120, gBuildLimit=12, gResourceCount=5;
@@ -107,14 +115,19 @@ struct TrainingTarget { Vec3 pos; int energy=3; bool active=true; };
 std::array<TrainingTarget,TARGET_COUNT> gTargets{{
     {{-12,1.25f,-13},3,true}, {{13,1.25f,-12},3,true}, {{2,1.25f,18},3,true}
 }};
-int gPulseAmmo=24, gTrainingScore=0;
-float gPulseCooldown=0, gPulseFlash=0;
-Vec3 gPulseHitPosition{0,1.4f,-5};
+int gPulseAmmo=40, gTrainingScore=0, gWeaponType=0;
+float gPulseCooldown=0, gPulseFlash=0, gDropTimer=0;
+int gDropState=0; // 0 lobby, 1 transport plane, 2 parachute descent, 3 ground
+Vec3 gPlanePosition{-110,24,-32};
+Vec3 gPulseStartPosition{0,1.5f,0},gPulseHitPosition{0,1.4f,-8};
+bool gParachuteOpen=false;
 std::mutex gStatusMutex;
 std::string gHudStatus="CARREGANDO CENÁRIO 3D...";
 
 const std::array<Vec3,CRYSTAL_COUNT> gCrystals{{
-    {8,0.55f,-9},{-10,0.55f,-6},{12,0.55f,10},{-14,0.55f,12},{0,0.55f,19}
+    {8,0.55f,-18},{-24,0.55f,-12},{32,0.55f,18},{-42,0.55f,31},
+    {55,0.55f,-46},{-63,0.55f,-52},{73,0.55f,62},{-82,0.55f,75},
+    {96,0.55f,-73},{15,0.55f,91},{-102,0.55f,8},{103,0.55f,88}
 }};
 
 void setStatus(const std::string& value) {
@@ -291,46 +304,79 @@ void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
     drawCube({x+w*0.28f,2.7f,z-d*0.5f-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
 }
 void drawWorld(float time) {
-    drawSphere({0,-1.05f,0},{260,0.55f,260},{0.025f,0.27f,0.43f});
-    Vec3 beach=gSelectedMap==2?Vec3{0.66f,0.43f,0.24f}:Vec3{0.78f,0.66f,0.42f};
-    Vec3 land=gSelectedMap==1?Vec3{0.22f,0.27f,0.32f}:(gSelectedMap==2?Vec3{0.47f,0.35f,0.22f}:Vec3{0.18f,0.43f,0.22f});
-    drawSphere({0,-0.02f,0},{68,0.65f,68},beach);
-    drawSphere({0,0.40f,0},{54,0.25f,54},land);
-    drawCube({0,0.535f,0},{4.2f,0.045f,31},{0.48f,0.43f,0.32f});
-    drawCube({-9,0.535f,2},{13,0.05f,2.5f},{0.43f,0.45f,0.43f});
-    drawCube({9,0.535f,-4},{12,0.05f,2.5f},{0.43f,0.45f,0.43f});
-    drawBuilding(-10,-13,8,6,4.2f,{0.72f,0.65f,0.48f},{0.33f,0.19f,0.15f});
-    drawBuilding(11,-13,7,6,3.8f,{0.73f,0.76f,0.72f},{0.16f,0.31f,0.43f});
-    drawBuilding(-14,9,6,5.5f,3.4f,{0.72f,0.57f,0.39f},{0.40f,0.22f,0.16f});
-    drawBuilding(14,10,7,6,4.5f,{0.64f,0.70f,0.66f},{0.22f,0.29f,0.32f});
-    const std::array<Vec3,12> trees{{
-        {-22,0,-18},{-20,0,1},{-22,0,19},{-8,0,22},{8,0,23},{22,0,20},
-        {22,0,2},{22,0,-19},{2,0,-23},{-13,0,-22},{-7,0,11},{8,0,7}
+    // Expanded island arena: broad coast, inland districts, roads and forest belts.
+    drawSphere({0,-1.05f,0},{420,0.55f,420},{0.025f,0.22f,0.36f});
+    Vec3 beach=gSelectedMap==2?Vec3{0.68f,0.47f,0.29f}:Vec3{0.78f,0.68f,0.44f};
+    Vec3 land=gSelectedMap==1?Vec3{0.19f,0.24f,0.31f}:
+        (gSelectedMap==2?Vec3{0.49f,0.37f,0.24f}:Vec3{0.17f,0.43f,0.23f});
+    drawSphere({0,-0.02f,0},{146,0.62f,146},beach);
+    drawSphere({0,0.31f,0},{128,0.31f,128},land);
+
+    // Long roads create readable navigation across the larger play space.
+    Vec3 road=gSelectedMap==2?Vec3{0.40f,0.37f,0.32f}:Vec3{0.34f,0.37f,0.39f};
+    drawCube({0,0.535f,0},{8.0f,0.06f,250.0f},road);
+    drawCube({0,0.536f,0},{250.0f,0.06f,8.0f},road);
+    drawCube({-48,0.536f,-48},{5.0f,0.06f,120.0f},road,0.60f);
+    drawCube({51,0.536f,48},{5.0f,0.06f,120.0f},road,-0.60f);
+    drawCube({0,0.537f,-82},{110.0f,0.06f,6.0f},road);
+    drawCube({0,0.537f,83},{110.0f,0.06f,6.0f},road);
+
+    const std::array<Vec3,16> buildings{{
+        {-76,0,-70},{-38,0,-76},{12,0,-78},{57,0,-73},
+        {79,0,-22},{-81,0,-18},{-72,0,35},{-34,0,72},
+        {15,0,76},{64,0,72},{32,0,-30},{-38,0,-24},
+        {-7,0,37},{78,0,35},{-91,0,82},{91,0,-86}
     }};
-    size_t treeLimit=gQuality==0?7:trees.size();
-    for(size_t i=0;i<treeLimit;++i){
+    for(size_t i=0;i<buildings.size();++i) {
+        Vec3 tint=gSelectedMap==1?Vec3{0.27f+0.025f*(i%3),0.30f,0.38f}:
+            (gSelectedMap==2?Vec3{0.64f,0.48f,0.31f}:Vec3{0.66f,0.61f,0.48f});
+        Vec3 roof=gSelectedMap==1?Vec3{0.11f,0.18f,0.28f}:
+            (gSelectedMap==2?Vec3{0.35f,0.23f,0.16f}:Vec3{0.27f,0.20f,0.16f});
+        float width=7.0f+static_cast<float>(i%3)*2.1f;
+        float depth=6.0f+static_cast<float>(i%2)*2.0f;
+        float height=4.0f+static_cast<float>(i%4)*1.5f;
+        drawBuilding(buildings[i].x,buildings[i].z,width,depth,height,tint,roof);
+        drawCube({buildings[i].x,0.72f+height+0.30f,buildings[i].z},
+            {width*0.52f,0.22f,depth*0.55f},
+            gSelectedMap==1?Vec3{0.14f,0.74f,0.83f}:Vec3{0.35f,0.40f,0.43f});
+        if(i%3==0)
+            drawCylinder({buildings[i].x+width*0.30f,height+1.0f,buildings[i].z},
+                {0.20f,1.4f,0.20f},{0.60f,0.66f,0.69f});
+    }
+
+    // A forest ring and smaller groves break up sightlines and make the island feel broad.
+    const std::array<Vec3,32> trees{{
+        {-112,0,-88},{-105,0,-52},{-112,0,-12},{-110,0,36},{-104,0,88},
+        {-82,0,109},{-45,0,111},{-4,0,111},{39,0,108},{82,0,105},
+        {111,0,78},{112,0,38},{110,0,-6},{112,0,-49},{91,0,-111},
+        {49,0,-113},{8,0,-112},{-35,0,-111},{-77,0,-108},{-93,0,12},
+        {-91,0,56},{-61,0,42},{-55,0,-45},{-4,0,-51},{45,0,-43},
+        {56,0,20},{39,0,54},{-20,0,58},{-6,0,12},{24,0,13},
+        {5,0,-20},{-28,0,18}
+    }};
+    size_t treeLimit=gQuality==0?8:(gQuality==1?14:24);
+    for(size_t i=0;i<treeLimit;++i) {
         float sway=std::sin(time*0.8f+static_cast<float>(i))*0.035f;
-        if(gSelectedMap==0) drawPalm(trees[i].x,trees[i].z,0.82f+0.08f*static_cast<float>(i%3)+sway);
+        float scale=0.80f+0.08f*static_cast<float>(i%4)+sway;
+        if(gSelectedMap==0) drawPalm(trees[i].x,trees[i].z,scale);
         else if(gSelectedMap==1) {
-            drawCylinder({trees[i].x,1.2f,trees[i].z},{0.12f,2.1f,0.12f},{0.20f,0.28f,0.25f});
-            drawSphere({trees[i].x,2.6f,trees[i].z},{1.0f,1.0f,1.0f},{0.17f,0.24f,0.28f});
+            drawCylinder({trees[i].x,1.2f,trees[i].z},{0.16f,2.3f,0.16f},{0.20f,0.25f,0.26f});
+            drawSphere({trees[i].x,2.8f,trees[i].z},{1.2f,1.4f,1.0f},{0.12f,0.24f,0.30f});
         } else {
-            drawCylinder({trees[i].x,0.9f,trees[i].z},{0.12f,1.7f,0.12f},{0.30f,0.24f,0.16f});
-            drawSphere({trees[i].x,1.9f,trees[i].z},{0.30f,0.8f,0.30f},{0.20f,0.43f,0.25f});
+            drawCylinder({trees[i].x,0.9f,trees[i].z},{0.14f,1.8f,0.14f},{0.31f,0.24f,0.15f});
+            drawCone({trees[i].x,2.0f,trees[i].z},{1.25f,2.0f,1.25f},{0.22f,0.39f,0.24f});
         }
     }
-    drawCube({-20,0.95f,-8},{3.2f,1.2f,2.6f},{0.34f,0.39f,0.35f},0.4f);
-    drawCube({19,0.82f,-5},{2.5f,0.95f,3.1f},{0.36f,0.41f,0.34f},-0.3f);
-    drawCube({-3,0.78f,23},{3.0f,0.8f,2.2f},{0.14f,0.37f,0.19f});
-    if(gContentPackReady) {
-        // Season 01 island extension: dock, light pylons and supply point.
-        drawCube({0,0.64f,-22},{7.5f,0.22f,5.5f},{0.38f,0.24f,0.14f});
-        for(int i=0;i<5;++i)
-            drawCube({-2.8f+i*1.4f,0.96f,-24.0f},{0.10f,0.55f,0.10f},{0.55f,0.40f,0.22f});
-        drawCube({-3.4f,1.12f,-19.3f},{0.85f,0.82f,0.85f},{0.22f,0.40f,0.48f});
-        drawCube({3.4f,1.12f,-19.3f},{0.85f,0.82f,0.85f},{0.22f,0.40f,0.48f});
-        drawSphere({0,1.35f,-22.0f},{0.24f,0.24f,0.24f},{0.12f,0.85f,0.95f});
-    }
+
+    // Distinct points of interest: pier, supply yard, lookout and water.
+    drawCube({-14,0.64f,-112},{12.0f,0.22f,12.0f},{0.38f,0.24f,0.14f});
+    for(int i=0;i<7;++i)
+        drawCube({-18.5f+i*1.5f,0.96f,-117.0f},{0.10f,0.55f,0.10f},{0.55f,0.40f,0.22f});
+    drawCube({85,0.75f,-102},{18,0.42f,11},{0.22f,0.28f,0.32f});
+    drawCube({-91,0.72f,99},{18,0.36f,16},{0.40f,0.34f,0.27f});
+    drawSphere({-58,0.02f,32},{18,0.22f,27},{0.08f,0.36f,0.48f});
+    drawCylinder({53,4.0f,9},{0.28f,7.0f,0.28f},{0.42f,0.43f,0.42f});
+    drawSphere({53,7.6f,9},{1.6f,0.5f,1.6f},{0.90f,0.58f,0.22f});
 }
 Vec3 localPoint(Vec3 base,float lx,float ly,float lz,float yaw) {
     float c=std::cos(yaw), sn=std::sin(yaw);
@@ -378,8 +424,8 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSegment(p,yaw,shoulderR,elbowR,0.105f,color);drawSegment(p,yaw,elbowR,handR,0.085f,skin);
     drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.115f,0.13f,0.115f},skin,yaw);
     drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.115f,0.13f,0.115f},skin,yaw);
-    drawCylinder(localPoint(p,0.49f,0.91f+bob,swing*0.72f-0.10f,yaw),{0.095f,0.34f,0.095f},{0.12f,0.72f,0.86f},yaw,0.0f,0.18f);
-    drawSphere(localPoint(p,0.49f,1.08f+bob,swing*0.72f-0.10f,yaw),{0.12f,0.12f,0.12f},{0.45f,0.95f,1.0f},yaw);
+    drawCylinder(localPoint(p,0.49f,0.93f+bob,swing*0.72f-0.20f,yaw),{0.105f,0.42f,0.105f},{0.12f,0.72f,0.86f},yaw,0.0f,-PI*0.5f);
+    drawSphere(localPoint(p,0.49f,0.93f+bob,swing*0.72f-0.43f,yaw),{0.12f,0.12f,0.12f},{0.45f,0.95f,1.0f},yaw);
 }
 void drawCrystal(Vec3 p,float time,int index) {
     float bob=std::sin(time*2.2f+index)*0.16f, spin=time*0.55f+index*0.7f;
@@ -395,87 +441,142 @@ void drawSafeZone() {
                  {0.62f,0.18f,0.18f},{0.13f,0.77f,0.92f},-a);
     }
 }
+const char* weaponName() {
+    static const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA"};
+    return names[std::clamp(gWeaponType,0,2)];
+}
 void updateStatus() {
     std::ostringstream out;
-    out<<"PULSO "<<gPulseAmmo<<"  |  MADEIRA "<<gWood<<"  |  CONSTRUÇÕES "<<gBuildCount
-       <<"/"<<gBuildLimit<<"  |  ALVOS "<<gTrainingScore<<"  |  CRISTAIS "<<gCollected<<"/"<<gResourceCount;
+    if(gDropState==1) {
+        out<<"AVIÃO DE TRANSPORTE  |  TOQUE EM SALTAR";
+    } else if(gDropState==2) {
+        out<<(gParachuteOpen?"PARAQUEDAS ABERTO":"QUEDA LIVRE")
+           <<"  |  "<<weaponName()<<"  |  MADEIRA "<<gWood;
+    } else {
+        static const char* buildNames[]={"PAREDE","PLATAFORMA","RAMPA"};
+        out<<weaponName()<<"  CARGA "<<gPulseAmmo<<"  |  MADEIRA "<<gWood
+           <<"  |  CONSTRUÇÕES "<<gBuildCount<<"/"<<gBuildLimit
+           <<"  |  PRÓXIMA "<<buildNames[gBuildType]<<"  |  PONTOS "<<gTrainingScore;
+    }
     setStatus(out.str());
 }
 void resetBots() {
-    const std::array<Vec3,BOT_COUNT> starts{{
-        {-14,0.55f,-4},{14,0.55f,-5},{-13,0.55f,14},{13,0.55f,13}
+    const std::array<Vec3,BOT_COUNT> offsets{{
+        {-19,0.55f,-10},{19,0.55f,-13},{-21,0.55f,17},{22,0.55f,18}
     }};
-    for(int i=0;i<BOT_COUNT;++i)
-        gBots[static_cast<size_t>(i)]={starts[static_cast<size_t>(i)],0,0,static_cast<float>(i)*1.3f};
+    for(int i=0;i<BOT_COUNT;++i) {
+        const Vec3 offset=offsets[static_cast<size_t>(i)];
+        gBotHomes[static_cast<size_t>(i)]={
+            std::clamp(gPlayer.x+offset.x,-112.0f,112.0f),0.55f,
+            std::clamp(gPlayer.z+offset.z,-112.0f,112.0f)};
+        gBots[static_cast<size_t>(i)]={gBotHomes[static_cast<size_t>(i)],0,0,static_cast<float>(i)*1.3f};
+        gBotHealth[static_cast<size_t>(i)]=3;
+        gBotActive[static_cast<size_t>(i)]=true;
+        gBotRespawn[static_cast<size_t>(i)]=0;
+    }
 }
 void updateBots(float dt) {
     for(int i=0;i<BOT_COUNT;++i) {
         BotState& bot=gBots[static_cast<size_t>(i)];
+        if(!gBotActive[static_cast<size_t>(i)]) {
+            gBotRespawn[static_cast<size_t>(i)]=std::max(0.0f,gBotRespawn[static_cast<size_t>(i)]-dt);
+            if(gBotRespawn[static_cast<size_t>(i)]<=0.0f) {
+                bot.pos=gBotHomes[static_cast<size_t>(i)];
+                bot.speed=0;gBotHealth[static_cast<size_t>(i)]=3;
+                gBotActive[static_cast<size_t>(i)]=true;
+            } else continue;
+        }
+
+        const bool ally=isAllyBot(i);
         Vec3 target=bot.pos;
-        bool ally=(gSelectedMode==1&&i==0)||(gSelectedMode==2&&i<3);
         if(ally) {
-            float side=(i%2==0?-1.0f:1.0f)*(1.7f+0.5f*(i/2));
-            target=localPoint(gPlayer,side,0,2.3f+0.45f*i,gPlayerYaw);
+            // Squad allies guard their own patrol sectors instead of tailing the player.
+            float phase=gMatchTime*0.24f+bot.phase;
+            const Vec3 home=gBotHomes[static_cast<size_t>(i)];
+            target={home.x+std::cos(phase)*5.5f,0.55f,home.z+std::sin(phase)*5.5f};
         } else {
-            int nearest=-1;float best=1.0e9f;
-            for(int j=0;j<gResourceCount;++j) {
-                if(gCrystalTaken[static_cast<size_t>(j)])continue;
-                Vec3 c=gCrystals[static_cast<size_t>(j)];
-                float dx=c.x-bot.pos.x,dz=c.z-bot.pos.z,d=dx*dx+dz*dz;
-                if(d<best){best=d;nearest=j;}
-            }
-            if(nearest>=0)target=gCrystals[static_cast<size_t>(nearest)];
-            else {
-                float phase=gMatchTime*0.25f+bot.phase;
-                target={std::cos(phase)*17.0f,0.55f,std::sin(phase)*17.0f};
+            float playerDx=gPlayer.x-bot.pos.x,playerDz=gPlayer.z-bot.pos.z;
+            float playerDistance=std::sqrt(playerDx*playerDx+playerDz*playerDz);
+            if(playerDistance<26.0f) {
+                // Hostile training bots approach from a short offset, not in a circular orbit.
+                target={gPlayer.x+(i%2==0?-3.0f:3.0f),0.55f,
+                        gPlayer.z+(i<2?-5.0f:5.0f)};
+            } else {
+                int nearest=-1;float best=1.0e9f;
+                for(int j=0;j<gResourceCount;++j) {
+                    if(gCrystalTaken[static_cast<size_t>(j)])continue;
+                    Vec3 resource=gCrystals[static_cast<size_t>(j)];
+                    float dx=resource.x-bot.pos.x,dz=resource.z-bot.pos.z;
+                    float d=dx*dx+dz*dz;
+                    if(d<best){best=d;nearest=j;}
+                }
+                if(nearest>=0)target=gCrystals[static_cast<size_t>(nearest)];
+                else {
+                    float phase=gMatchTime*0.18f+bot.phase;
+                    Vec3 home=gBotHomes[static_cast<size_t>(i)];
+                    target={home.x+std::cos(phase)*9.0f,0.55f,home.z+std::sin(phase)*9.0f};
+                }
             }
         }
+
         float dx=target.x-bot.pos.x,dz=target.z-bot.pos.z;
         float distance=std::sqrt(dx*dx+dz*dz);
         bot.speed=0;
-        if(distance>0.85f) {
+        if(distance>0.9f) {
             float inv=1.0f/std::max(0.001f,distance);
             dx*=inv;dz*=inv;
-            bot.yaw=std::atan2(dx,-dz);
-            bot.speed=ally?3.5f:2.15f;
-            float step=std::min(distance-0.45f,bot.speed*dt);
+            // Local character front is -Z; negate X so the mesh faces its travel vector.
+            bot.yaw=std::atan2(-dx,-dz);
+            bot.speed=ally?2.0f:2.8f;
+            float step=std::min(distance-0.55f,bot.speed*dt);
             bot.pos.x+=dx*step;bot.pos.z+=dz*step;
         }
-        bot.pos.x=std::clamp(bot.pos.x,-25.0f,25.0f);
-        bot.pos.z=std::clamp(bot.pos.z,-25.0f,25.0f);
+        bot.pos.x=std::clamp(bot.pos.x,-116.0f,116.0f);
+        bot.pos.z=std::clamp(bot.pos.z,-116.0f,116.0f);
+
         if(!ally) {
             for(int j=0;j<gResourceCount;++j) {
                 if(gCrystalTaken[static_cast<size_t>(j)])continue;
-                Vec3 c=gCrystals[static_cast<size_t>(j)];
-                float ox=bot.pos.x-c.x,oz=bot.pos.z-c.z;
+                Vec3 resource=gCrystals[static_cast<size_t>(j)];
+                float ox=bot.pos.x-resource.x,oz=bot.pos.z-resource.z;
                 if(ox*ox+oz*oz<1.45f*1.45f) {
                     gCrystalTaken[static_cast<size_t>(j)]=true;
-                    ++gCollected;gWood=std::min(200,gWood+5);
+                    ++gCollected;gWood=std::min(250,gWood+5);
                     break;
                 }
             }
         }
         for(int other=0;other<i;++other) {
+            if(!gBotActive[static_cast<size_t>(other)])continue;
             Vec3 op=gBots[static_cast<size_t>(other)].pos;
             float sx=bot.pos.x-op.x,sz=bot.pos.z-op.z;
             float d2=sx*sx+sz*sz;
-            if(d2<1.15f*1.15f&&d2>0.001f) {
-                float inv=0.18f/std::sqrt(d2);
-                bot.pos.x+=sx*inv;bot.pos.z+=sz*inv;
+            if(d2<1.2f*1.2f&&d2>0.001f) {
+                float push=0.20f/std::sqrt(d2);
+                bot.pos.x+=sx*push;bot.pos.z+=sz*push;
             }
         }
     }
 }
 void placeBuildPiece() {
-    if(gBuildCount>=gBuildLimit||gWood<10) {
-        setStatus(gWood<10?"RECURSOS INSUFICIENTES":"LIMITE DE CONSTRUÇÕES ATINGIDO");
-        return;
+    if(gBuildCount>=gBuildLimit||gBuildCount>=BUILD_CAPACITY) {
+        setStatus("LIMITE DE CONSTRUÇÕES ATINGIDO");return;
     }
-    Vec3 forward{std::sin(gPlayerYaw),0,-std::cos(gPlayerYaw)};
-    Vec3 pos{gPlayer.x+forward.x*3.0f,0.68f,gPlayer.z+forward.z*3.0f};
-    gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,gBuildType};
+    if(gWood<10) {setStatus("MADEIRA INSUFICIENTE • COLETE RECURSOS");return;}
+    const Vec3 forward{-std::sin(gPlayerYaw),0,-std::cos(gPlayerYaw)};
+    Vec3 pos{gPlayer.x+forward.x*4.2f,0.68f,gPlayer.z+forward.z*4.2f};
+    // Prevent a new part from occupying the same placement point as another part.
+    for(int i=0;i<gBuildCount;++i) {
+        float dx=pos.x-gBuildPieces[static_cast<size_t>(i)].pos.x;
+        float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;
+        if(dx*dx+dz*dz<5.0f) {setStatus("LOCAL DE CONSTRUÇÃO BLOQUEADO");return;}
+    }
+    const int placedType=gBuildType;
+    gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,placedType};
     ++gBuildCount;gWood-=10;gBuildType=(gBuildType+1)%3;
-    updateStatus();
+    const char* names[]={"PAREDE","PLATAFORMA","RAMPA"};
+    std::ostringstream out;out<<names[placedType]<<" CONSTRUÍDA  |  "<<gWood<<" MADEIRA RESTANTE";
+    setStatus(out.str());
 }
 void drawBuildPieces() {
     for(int i=0;i<gBuildCount;++i) {
@@ -486,30 +587,66 @@ void drawBuildPieces() {
             drawCube({b.pos.x+0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.70f,0.51f,0.30f},b.yaw);
         } else if(b.type==1) {
             drawCube({b.pos.x,0.78f,b.pos.z},{3.0f,0.22f,3.0f},{0.52f,0.37f,0.23f},b.yaw);
+            drawCube({b.pos.x,0.62f,b.pos.z-1.28f},{3.0f,0.10f,0.16f},{0.72f,0.51f,0.30f},b.yaw);
         } else {
-            drawCube({b.pos.x,0.95f,b.pos.z},{3.0f,0.20f,3.0f},{0.58f,0.41f,0.24f},b.yaw,0.0f,0.22f);
+            drawCube({b.pos.x,0.98f,b.pos.z},{3.0f,0.20f,3.0f},{0.58f,0.41f,0.24f},b.yaw,0.0f,0.26f);
+            drawCube({b.pos.x,1.32f,b.pos.z-0.8f},{3.0f,0.12f,0.20f},{0.72f,0.53f,0.32f},b.yaw,0.0f,0.26f);
         }
     }
 }
 void firePulse() {
-    if(gPulseAmmo<=0){setStatus("PULSO SEM CARGA");return;}
-    --gPulseAmmo;gPulseFlash=0.16f;
-    gPulseHitPosition={gPlayer.x+std::sin(gPlayerYaw)*7.0f,1.5f,gPlayer.z-std::cos(gPlayerYaw)*7.0f};
-    const float fx=std::sin(gPlayerYaw),fz=-std::cos(gPlayerYaw);
-    int hit=-1;float best=18.0f;
+    if(gPulseAmmo<=0){setStatus("SEM CARGA • COLETE ENERGIA");return;}
+    --gPulseAmmo;
+    gPulseFlash=0.18f;
+    gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gPlayerYaw);
+    const float fx=-std::sin(gPlayerYaw),fz=-std::cos(gPlayerYaw);
+    const float range=gWeaponType==2?36.0f:45.0f;
+    const float tolerance=gWeaponType==1?2.5f:1.7f;
+    const int damage=gWeaponType==2?3:(gWeaponType==1?2:1);
+    float best=range;
+    int hitTarget=-1,hitBot=-1;
     for(int i=0;i<TARGET_COUNT;++i) {
         TrainingTarget& target=gTargets[static_cast<size_t>(i)];
         if(!target.active)continue;
         float dx=target.pos.x-gPlayer.x,dz=target.pos.z-gPlayer.z;
         float along=dx*fx+dz*fz,side=std::fabs(dx*fz-dz*fx);
-        if(along>0.8f&&along<18.0f&&side<1.25f&&along<best){best=along;hit=i;}
+        if(along>0.8f&&along<best&&side<tolerance) {
+            best=along;hitTarget=i;hitBot=-1;
+        }
     }
-    if(hit>=0) {
-        TrainingTarget& target=gTargets[static_cast<size_t>(hit)];
-        --target.energy;gPulseHitPosition=target.pos;
-        if(target.energy<=0){target.active=false;gTrainingScore+=100;gWood=std::min(200,gWood+5);}
+    for(int i=0;i<BOT_COUNT;++i) {
+        if(!gBotActive[static_cast<size_t>(i)]||isAllyBot(i))continue;
+        const Vec3 pos=gBots[static_cast<size_t>(i)].pos;
+        float dx=pos.x-gPlayer.x,dz=pos.z-gPlayer.z;
+        float along=dx*fx+dz*fz,side=std::fabs(dx*fz-dz*fx);
+        if(along>0.8f&&along<best&&side<tolerance*1.5f) {
+            best=along;hitTarget=-1;hitBot=i;
+        }
     }
-    updateStatus();
+    gPulseHitPosition={gPlayer.x+fx*best,gPlayer.y+1.45f+gJumpHeight,gPlayer.z+fz*best};
+    if(hitTarget>=0) {
+        TrainingTarget& target=gTargets[static_cast<size_t>(hitTarget)];
+        target.energy=std::max(0,target.energy-damage);
+        gPulseHitPosition=target.pos;
+        if(target.energy==0) {
+            target.active=false;gTrainingScore+=100;gWood=std::min(250,gWood+5);
+            setStatus("ALVO DE TREINO DESATIVADO  •  +100 PONTOS");
+        }
+    } else if(hitBot>=0) {
+        gBotHealth[static_cast<size_t>(hitBot)]=std::max(0,gBotHealth[static_cast<size_t>(hitBot)]-damage);
+        gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
+        if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
+            gBotActive[static_cast<size_t>(hitBot)]=false;
+            gBotRespawn[static_cast<size_t>(hitBot)]=12.0f;
+            gTrainingScore+=150;gWood=std::min(250,gWood+10);
+            setStatus("BOT DESATIVADO  •  +150 PONTOS");
+        }
+    }
+    if(hitTarget<0&&hitBot<0) {
+        const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA"};
+        std::ostringstream out;out<<names[gWeaponType]<<" DISPARADO  •  SEM ALVO NO TRAJETO";
+        setStatus(out.str());
+    }
 }
 void drawTargets(float time) {
     for(int i=0;i<TARGET_COUNT;++i) {
@@ -523,22 +660,73 @@ void drawTargets(float time) {
             drawCube({target.pos.x-0.42f+ring*0.42f,target.pos.y+0.70f,target.pos.z},
                 {0.28f,0.07f,0.08f},{0.24f,0.95f,0.92f});
     }
-    if(gPulseFlash>0.0f)
-        drawSphere(gPulseHitPosition,{0.33f,0.33f,0.33f},{0.25f,0.96f,1.0f});
+    if(gPulseFlash>0.0f) {
+        Vec3 boltColor=gWeaponType==2?Vec3{0.92f,0.46f,0.16f}:
+            (gWeaponType==1?Vec3{0.38f,0.75f,1.0f}:Vec3{0.25f,0.96f,1.0f});
+        drawSegment({0,0,0},0.0f,gPulseStartPosition,gPulseHitPosition,
+            gWeaponType==2?0.19f:0.10f,boltColor);
+        drawSphere(gPulseHitPosition,{0.33f,0.33f,0.33f},boltColor);
+    }
+}
+void drawTransportPlane(Vec3 pos,float time) {
+    // Original stylized transport aircraft, with broad wings, tail and twin engines.
+    drawCylinder(pos,{0.72f,10.5f,0.72f},{0.60f,0.65f,0.69f},0.0f,-PI*0.5f,0.0f);
+    drawCone({pos.x+5.55f,pos.y,pos.z},{1.1f,2.0f,1.1f},{0.77f,0.80f,0.83f},0.0f,-PI*0.5f,0.0f);
+    drawCube({pos.x-0.15f,pos.y-0.15f,pos.z},{0.55f,0.16f,17.5f},{0.52f,0.58f,0.64f});
+    drawCube({pos.x-4.3f,pos.y+0.05f,pos.z},{0.42f,0.13f,7.2f},{0.56f,0.61f,0.66f});
+    drawCube({pos.x-4.2f,pos.y+1.0f,pos.z},{2.5f,0.16f,0.22f},{0.38f,0.46f,0.53f});
+    drawCylinder({pos.x-1.0f,pos.y-0.72f,pos.z-5.0f},{0.65f,2.2f,0.65f},{0.28f,0.33f,0.38f},0.0f,-PI*0.5f,0.0f);
+    drawCylinder({pos.x-1.0f,pos.y-0.72f,pos.z+5.0f},{0.65f,2.2f,0.65f},{0.28f,0.33f,0.38f},0.0f,-PI*0.5f,0.0f);
+    for(int i=0;i<5;++i) {
+        float x=pos.x-3.2f+i*1.45f;
+        drawSphere({x,pos.y+0.32f,pos.z-0.30f},{0.33f,0.15f,0.40f},{0.10f,0.63f,0.79f});
+        drawSphere({x,pos.y+0.32f,pos.z+0.30f},{0.33f,0.15f,0.40f},{0.10f,0.63f,0.79f});
+    }
+    float pulse=0.12f+0.06f*std::sin(time*7.0f);
+    drawSphere({pos.x-1.0f,pos.y-0.72f,pos.z-6.3f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
+    drawSphere({pos.x-1.0f,pos.y-0.72f,pos.z+6.3f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
+    const std::array<Vec3,4> flightOutfits{{
+        {0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},
+        {0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}
+    }};
+    for(int i=0;i<4;++i) {
+        Vec3 passenger{pos.x-2.8f,pos.y+0.12f,pos.z-3.6f+i*2.4f};
+        drawCharacter(passenger,-PI*0.5f,
+            i==0?flightOutfits[static_cast<size_t>(gSelectedCharacter)]:
+                flightOutfits[static_cast<size_t>(i)],true,time+static_cast<float>(i),0.0f);
+    }
+}
+void drawParachute(Vec3 player) {
+    if(gDropState!=2||!gParachuteOpen)return;
+    Vec3 canopy{player.x,player.y+gJumpHeight+7.2f,player.z};
+    drawSphere(canopy,{3.3f,1.15f,3.3f},{0.83f,0.24f,0.19f});
+    drawSegment({0,0,0},0.0f,{player.x-0.42f,player.y+gJumpHeight+1.5f,player.z},
+        {canopy.x-2.1f,canopy.y-0.3f,canopy.z},0.025f,{0.88f,0.88f,0.84f});
+    drawSegment({0,0,0},0.0f,{player.x+0.42f,player.y+gJumpHeight+1.5f,player.z},
+        {canopy.x+2.1f,canopy.y-0.3f,canopy.z},0.025f,{0.88f,0.88f,0.84f});
+    drawSegment({0,0,0},0.0f,{player.x,player.y+gJumpHeight+1.6f,player.z-0.25f},
+        {canopy.x,canopy.y-0.2f,canopy.z-2.0f},0.025f,{0.88f,0.88f,0.84f});
 }
 } // namespace
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint mode) {
     gScreenMode=std::clamp(static_cast<int>(mode),0,1);
-    if(gScreenMode==1){
-        gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);gMatchTime=0;gZoneRadius=30;gCollected=0;
-        gCrystalTaken.fill(false);gBuildCount=0;gWood=120;gBuildType=0;
-        gPulseAmmo=24;gTrainingScore=0;
-        gTargets[0]={{0,1.25f,-10},3,true};
-        gTargets[1]={{-10,1.25f,-14},3,true};
-        gTargets[2]={{10,1.25f,-14},3,true};
+    if(gScreenMode==1) {
+        gPlayer={-110,0.55f,-32};
+        gPlayerXSnapshot.store(gPlayer.x);gPlayerZSnapshot.store(gPlayer.z);
+        gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
+        gMatchTime=0;gZoneRadius=112;gCollected=0;gCrystalTaken.fill(false);
+        gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
+        gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
+        gDropState=1;gDropTimer=0;gPlanePosition={-110,24,-32};
+        gJumpHeight=0;gJumpVelocity=0;gParachuteOpen=false;gPreviousButtons=0;
+        gTargets[0]={{0,1.25f,-17},3,true};
+        gTargets[1]={{-18,1.25f,-28},3,true};
+        gTargets[2]={{20,1.25f,-31},3,true};
         resetBots();updateStatus();
+    } else {
+        gDropState=0;gJumpHeight=0;gJumpVelocity=0;gParachuteOpen=false;
     }
 }
 extern "C" JNIEXPORT void JNICALL
@@ -568,10 +756,11 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
     gScreenMode=0;gSelectedCharacter=0;gSelectedMap=0;gSelectedMode=0;gQuality=1;
-    gJumpHeight=0;gJumpVelocity=0;gMatchTime=0;gZoneRadius=30;
+    gJumpHeight=0;gJumpVelocity=0;gMatchTime=0;gZoneRadius=112;
     gCollected=0;gPreviousButtons=0;gInteractCooldown=0;gCrystalTaken.fill(false);
-    gBuildCount=0;gBuildType=0;gWood=120;gBuildCooldown=0;gBuildLimit=12;gResourceCount=5;gContentPackReady=false;
-    gPulseAmmo=24;gTrainingScore=0;gPulseCooldown=0;gPulseFlash=0;
+    gBuildCount=0;gBuildType=0;gWood=180;gBuildCooldown=0;gBuildLimit=12;gResourceCount=5;gContentPackReady=false;
+    gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
+    gDropState=0;gDropTimer=0;gPlanePosition={-110,24,-32};gParachuteOpen=false;
     gTargets[0]={{0,1.25f,-10},3,true};
     gTargets[1]={{-10,1.25f,-14},3,true};
     gTargets[2]={{10,1.25f,-14},3,true};
@@ -592,69 +781,117 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(!gProgram||!gCubeVbo){glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);return;}
     const float dt=std::clamp(static_cast<float>(deltaSeconds),0.001f,0.05f);
     gMatchTime+=dt;
+    gZoneRadius=std::max(38.0f,112.0f-gMatchTime*0.12f);
     if(gPulseCooldown>0)gPulseCooldown=std::max(0.0f,gPulseCooldown-dt);
     if(gBuildCooldown>0)gBuildCooldown=std::max(0.0f,gBuildCooldown-dt);
     if(gPulseFlash>0)gPulseFlash=std::max(0.0f,gPulseFlash-dt);
+    gCameraYaw-=static_cast<float>(lookDX)*4.8f;
+    gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f,0.12f,0.85f);
 
-    if(gScreenMode==0) {
-        Vec3 eye{std::sin(gMatchTime*0.035f)*3.0f,7.0f,25.0f};
-        Vec3 target{3.1f,1.25f,0.0f};
+    const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
+    const bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
+    const bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
+    const bool pulsePressed=(buttons&BUTTON_PULSE)&&!(gPreviousButtons&BUTTON_PULSE);
+    const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
+    gPreviousButtons=buttons;
+
+    // Battle-royale insertion: the match begins aboard the aircraft.
+    if(gDropState==1) {
+        gDropTimer+=dt;
+        gPlanePosition.x=std::min(112.0f,-110.0f+22.0f*gDropTimer);
+        gPlayer.x=gPlanePosition.x;gPlayer.z=gPlanePosition.z;
+        gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
+        gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
+        if(jumpPressed||gDropTimer>=10.0f) {
+            gDropState=2;gJumpHeight=22.0f;gJumpVelocity=0.0f;
+            gParachuteOpen=false;
+            gTargets[0]={{gPlayer.x,1.25f,gPlayer.z-18.0f},3,true};
+            gTargets[1]={{gPlayer.x-16.0f,1.25f,gPlayer.z-27.0f},3,true};
+            gTargets[2]={{gPlayer.x+17.0f,1.25f,gPlayer.z-28.0f},3,true};
+            resetBots();
+            updateStatus();
+        }
+        Vec3 eye{gPlanePosition.x-20.0f,gPlanePosition.y+11.0f,gPlanePosition.z+28.0f};
+        Vec3 target{gPlanePosition.x,gPlanePosition.y,gPlanePosition.z};
         Mat4 view=lookAt(eye,target,{0,1,0});
-        gProjection=multiply(perspective(0.88f,static_cast<float>(gWidth)/gHeight,0.1f,220.0f),view);
+        gProjection=multiply(perspective(0.90f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
-        drawWorld(gMatchTime);
-        const std::array<Vec3,4> formation{{{2.8f,0.55f,1.0f},{4.4f,0.55f,-0.5f},{6.1f,0.55f,-0.7f},{7.7f,0.55f,0.9f}}};
-        const std::array<Vec3,4> outfits{{{0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},{0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}}};
-        for(int i=0;i<4;++i)
-            drawCharacter(formation[static_cast<size_t>(i)],PI,
-                i==0?outfits[static_cast<size_t>(gSelectedCharacter)]:outfits[static_cast<size_t>(i)],
-                true,gMatchTime+static_cast<float>(i),0.0f);
+        drawWorld(gMatchTime);drawTransportPlane(gPlanePosition,gMatchTime);
+        static float planeStatusTimer=0;planeStatusTimer+=dt;
+        if(planeStatusTimer>0.7f){planeStatusTimer=0;updateStatus();}
         glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
         return;
     }
 
-    gZoneRadius=std::max(14.0f,30.0f-gMatchTime*0.010f);
-    gCameraYaw-=static_cast<float>(lookDX)*4.8f;
-    gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f,0.12f,0.85f);
-    // moveY is positive when the player drags the joystick upward.
-    const float forward=static_cast<float>(moveY),strafe=static_cast<float>(moveX);
-    float dx=std::cos(gCameraYaw)*strafe+std::sin(gCameraYaw)*forward;
-    float dz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
-    float moveLength=std::sqrt(dx*dx+dz*dz);
-    bool moving=moveLength>0.08f;
-    if(moving) {
-        dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
-        const float speed=(buttons&BUTTON_RUN)?8.0f:5.2f;
-        float nx=std::clamp(gPlayer.x+dx*speed*dt,-25.0f,25.0f);
-        float nz=std::clamp(gPlayer.z+dz*speed*dt,-25.0f,25.0f);
-        // Placed walls are solid; floors and ramps remain traversable.
-        bool blocked=false;
-        for(int i=0;i<gBuildCount;++i) {
-            const BuildPiece& piece=gBuildPieces[static_cast<size_t>(i)];
-            if(piece.type!=0)continue;
-            float rx=nx-piece.pos.x,rz=nz-piece.pos.z;
-            float c=std::cos(piece.yaw),sn=std::sin(piece.yaw);
-            float localX=c*rx-sn*rz,localZ=sn*rx+c*rz;
-            if(std::fabs(localX)<1.75f&&std::fabs(localZ)<0.72f){blocked=true;break;}
+    float dx=0.0f,dz=0.0f;
+    float moveLength=0.0f;
+    bool moving=false;
+    if(gDropState==2) {
+        if(!gParachuteOpen) {
+            gJumpVelocity-=9.8f*dt;
+            if(gJumpHeight<12.0f) {
+                gParachuteOpen=true;
+                gJumpVelocity=std::max(gJumpVelocity,-2.8f);
+            }
+        } else {
+            gJumpVelocity=std::max(-3.0f,gJumpVelocity-0.8f*dt);
         }
-        if(!blocked){gPlayer.x=nx;gPlayer.z=nz;}
-        gPlayerYaw=std::atan2(dx,-dz);
-        gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
-        gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
+        gJumpHeight+=gJumpVelocity*dt;
+        // Small air steering keeps the player responsive while descending.
+        const float forward=static_cast<float>(moveY),strafe=static_cast<float>(moveX);
+        dx=std::cos(gCameraYaw)*strafe+std::sin(gCameraYaw)*forward;
+        dz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
+        moveLength=std::sqrt(dx*dx+dz*dz);
+        if(moveLength>0.08f) {
+            dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
+            gPlayer.x=std::clamp(gPlayer.x+dx*2.4f*dt,-116.0f,116.0f);
+            gPlayer.z=std::clamp(gPlayer.z+dz*2.4f*dt,-116.0f,116.0f);
+            gPlayerYaw=std::atan2(-dx,-dz);
+        }
+        if(gJumpHeight<=0.0f) {
+            gJumpHeight=0.0f;gJumpVelocity=0.0f;gParachuteOpen=false;gDropState=3;
+            gPlayerXSnapshot.store(gPlayer.x);gPlayerZSnapshot.store(gPlayer.z);
+            updateStatus();
+        }
+    } else {
+        const float forward=static_cast<float>(moveY),strafe=static_cast<float>(moveX);
+        dx=std::cos(gCameraYaw)*strafe+std::sin(gCameraYaw)*forward;
+        dz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
+        moveLength=std::sqrt(dx*dx+dz*dz);
+        moving=moveLength>0.08f;
+        if(moving) {
+            dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
+            const float speed=(buttons&BUTTON_RUN)?8.0f:5.2f;
+            float nx=std::clamp(gPlayer.x+dx*speed*dt,-116.0f,116.0f);
+            float nz=std::clamp(gPlayer.z+dz*speed*dt,-116.0f,116.0f);
+            bool blocked=false;
+            for(int i=0;i<gBuildCount;++i) {
+                const BuildPiece& piece=gBuildPieces[static_cast<size_t>(i)];
+                if(piece.type!=0)continue;
+                float rx=nx-piece.pos.x,rz=nz-piece.pos.z;
+                float c=std::cos(piece.yaw),sn=std::sin(piece.yaw);
+                float localX=c*rx-sn*rz,localZ=sn*rx+c*rz;
+                if(std::fabs(localX)<1.75f&&std::fabs(localZ)<0.72f){blocked=true;break;}
+            }
+            if(!blocked){gPlayer.x=nx;gPlayer.z=nz;}
+            // Match the model's -Z forward axis to the actual travel direction.
+            gPlayerYaw=std::atan2(-dx,-dz);
+            gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
+            gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
+        }
+        if(jumpPressed&&gJumpHeight<=0.001f)gJumpVelocity=6.2f;
+        gJumpHeight+=gJumpVelocity*dt;gJumpVelocity-=16.0f*dt;
+        if(gJumpHeight<0){gJumpHeight=0;gJumpVelocity=0;}
     }
 
-    bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
-    bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
-    bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
-    bool pulsePressed=(buttons&BUTTON_PULSE)&&!(gPreviousButtons&BUTTON_PULSE);
-    gPreviousButtons=buttons;
-    if(jumpPressed&&gJumpHeight<=0.001f)gJumpVelocity=6.2f;
-    gJumpHeight+=gJumpVelocity*dt;gJumpVelocity-=16.0f*dt;
-    if(gJumpHeight<0){gJumpHeight=0;gJumpVelocity=0;}
-
+    if(swapPressed&&gDropState==3) {
+        gWeaponType=(gWeaponType+1)%3;
+        const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA"};
+        std::string message="EQUIPADO: ";message+=names[gWeaponType];setStatus(message);
+    }
     gInteractCooldown=std::max(0.0f,gInteractCooldown-dt);
-    if(interactPressed&&gInteractCooldown<=0.0f) {
-        int nearest=-1;float bestDistance=3.8f;
+    if(interactPressed&&gDropState==3&&gInteractCooldown<=0.0f) {
+        int nearest=-1;float bestDistance=4.5f;
         for(int i=0;i<gResourceCount;++i) {
             if(gCrystalTaken[static_cast<size_t>(i)])continue;
             float ox=gPlayer.x-gCrystals[static_cast<size_t>(i)].x;
@@ -664,47 +901,53 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         if(nearest>=0) {
             gCrystalTaken[static_cast<size_t>(nearest)]=true;++gCollected;
-            gWood=std::min(200,gWood+15);gInteractCooldown=0.35f;
-            updateStatus();
-        }
+            gWood=std::min(250,gWood+20);gInteractCooldown=0.35f;
+            setStatus("RECURSO COLETADO  •  +20 MADEIRA");
+        } else setStatus("NENHUM RECURSO PRÓXIMO");
     }
-    if(buildPressed&&gBuildCooldown<=0.0f) {
+    if(buildPressed&&gDropState==3&&gBuildCooldown<=0.0f) {
         placeBuildPiece();gBuildCooldown=0.32f;
     }
-    if(pulsePressed&&gPulseCooldown<=0.0f) {
-        firePulse();gPulseCooldown=0.22f;
+    if(pulsePressed&&gDropState==3&&gPulseCooldown<=0.0f) {
+        firePulse();gPulseCooldown=gWeaponType==2?0.55f:0.24f;
     }
 
-    updateBots(dt);
+    if(gDropState==3)updateBots(dt);
+    gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
+    gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
     Vec3 eye{gPlayer.x+std::sin(gCameraYaw)*9.0f,
         gPlayer.y+3.8f+gCameraPitch*3.4f+gJumpHeight*0.35f,
         gPlayer.z+std::cos(gCameraYaw)*9.0f};
     Vec3 target{gPlayer.x,gPlayer.y+1.0f+gJumpHeight*0.45f,gPlayer.z};
     Mat4 view=lookAt(eye,target,{0,1,0});
-    gProjection=multiply(perspective(0.93f,static_cast<float>(gWidth)/gHeight,0.1f,180.0f),view);
+    gProjection=multiply(perspective(0.93f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
 
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
     drawWorld(gMatchTime);
     for(int i=0;i<gResourceCount;++i)
         if(!gCrystalTaken[static_cast<size_t>(i)])
             drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
-    drawTargets(gMatchTime);
-    drawBuildPieces();
+    drawTargets(gMatchTime);drawBuildPieces();
 
     const std::array<Vec3,4> outfits{{{0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},
         {0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}}};
     for(int i=0;i<BOT_COUNT;++i) {
+        if(!gBotActive[static_cast<size_t>(i)])continue;
         const BotState& bot=gBots[static_cast<size_t>(i)];
-        drawCharacter(bot.pos,bot.yaw,{0.82f,0.38f,0.22f},true,
+        Vec3 botColor=isAllyBot(i)?Vec3{0.16f,0.62f,0.43f}:Vec3{0.82f,0.34f,0.19f};
+        drawCharacter(bot.pos,bot.yaw,botColor,true,
             gMatchTime+bot.phase,std::min(1.0f,bot.speed/3.5f));
+        drawCube({bot.pos.x,bot.pos.y+2.72f,bot.pos.z},
+            {0.70f*static_cast<float>(gBotHealth[static_cast<size_t>(i)])/3.0f,0.07f,0.07f},
+            isAllyBot(i)?Vec3{0.20f,0.90f,0.55f}:Vec3{0.95f,0.30f,0.20f},bot.yaw);
     }
     Vec3 playerDraw=gPlayer;playerDraw.y+=gJumpHeight;
     drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
         false,gMatchTime,moving?std::min(1.0f,moveLength):0.0f);
+    drawParachute(gPlayer);
 
-    static float statusTimer=0;
-    statusTimer+=dt;
-    if(statusTimer>=0.65f){statusTimer=0;updateStatus();}
+    static float statusTimer=0;statusTimer+=dt;
+    if(statusTimer>=0.85f){statusTimer=0;updateStatus();}
     glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
 }
 extern "C" JNIEXPORT jfloatArray JNICALL

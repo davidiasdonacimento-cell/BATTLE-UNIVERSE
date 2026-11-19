@@ -3,6 +3,7 @@ package com.battleuniverse.game;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.StatFs;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedInputStream;
@@ -24,10 +25,10 @@ import java.util.zip.ZipInputStream;
 
 public final class ContentPackInstaller {
     private static final String MANIFEST_URL =
-        "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v1/content-pack-manifest.json";
-    private static final long MAX_DOWNLOAD_BYTES = 80L * 1024L * 1024L;
-    private static final long MAX_EXTRACTED_BYTES = 120L * 1024L * 1024L;
-    private static final int PACK_VERSION = 1;
+        "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v2/content-pack-manifest.json";
+    private static final long MAX_DOWNLOAD_BYTES = 450L * 1024L * 1024L;
+    private static final long MAX_EXTRACTED_BYTES = 520L * 1024L * 1024L;
+    private static final int PACK_VERSION = 2;
 
     public interface Listener {
         void onProgress(long downloaded,long total,String status);
@@ -51,8 +52,9 @@ public final class ContentPackInstaller {
         File marker=new File(root,"installed.json");
         File island=new File(root,"worlds/island.json");
         File model=new File(root,"models/operator_field.obj");
-        File texture=new File(root,"textures/island_ground_albedo.png");
-        if(!marker.isFile()||!island.isFile()||!model.isFile()||!texture.isFile()) return false;
+        File plane=new File(root,"models/transport_plane.obj");
+        File texture=new File(root,"textures/island_ground_albedo_4k.png");
+        if(!marker.isFile()||!island.isFile()||!model.isFile()||!plane.isFile()||!texture.isFile()) return false;
         try(FileInputStream in=new FileInputStream(marker)) {
             byte[] data=new byte[(int)Math.min(marker.length(),8192)];
             int n=in.read(data);
@@ -94,8 +96,13 @@ public final class ContentPackInstaller {
                 long expectedSize=manifest.getLong("size_bytes");
                 int version=manifest.getInt("version");
                 if(version!=PACK_VERSION) throw new Exception("Versão de dados incompatível.");
-                if(expectedSize<=0||expectedSize>MAX_DOWNLOAD_BYTES)
-                    throw new Exception("Tamanho do pacote fora do limite seguro.");
+                if(expectedSize<=250L*1024L*1024L||expectedSize>MAX_DOWNLOAD_BYTES)
+                    throw new Exception("Tamanho do pacote fora do intervalo esperado para a Temporada 02.");
+                StatFs storage=new StatFs(root.getAbsolutePath());
+                long needed=expectedSize*2L+110L*1024L*1024L;
+                if(storage.getAvailableBytes()<needed)
+                    throw new Exception("Espaço insuficiente. Libere pelo menos "+
+                        String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
                 downloadArchive(url,archive,expectedSize);
                 String actualHash=sha256(archive);
                 if(!actualHash.equals(expectedHash)) throw new Exception("Falha na verificação SHA-256. O pacote foi descartado.");

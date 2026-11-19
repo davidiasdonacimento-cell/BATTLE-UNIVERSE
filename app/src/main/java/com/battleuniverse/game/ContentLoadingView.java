@@ -72,7 +72,7 @@ public final class ContentLoadingView extends View {
         text(canvas,"BATTLE",555,105,39,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(canvas,"UNIVERSE",690,105,39,0xFF54DCE9,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(canvas,"EXPANSÃO DE CONTEÚDO  •  TEMPORADA 01",640,390,17,0xFFD4EAF2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-        text(canvas,"Modelos 3D  •  Texturas 2K  •  Mapas  •  Áudio ambiente",640,420,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
+        text(canvas,"Avião e modelos 3D  •  Materiais PBR 4K  •  8 mapas  •  Áudio",640,420,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
 
         rect.set(345,460,935,472);
         paint.setColor(0xFF1B3448);canvas.drawRoundRect(rect,8,8,paint);
