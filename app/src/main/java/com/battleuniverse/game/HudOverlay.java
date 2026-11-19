@@ -84,7 +84,7 @@ public final class HudOverlay extends View {
             if(active){p.setColor(0xFF39D8E8);r.set(35,y+13,39,y+43);c.drawRoundRect(r,2,2,p);}
             drawNavIcon(c,i,58,y+28,active);
             text(c,NAV[i],82,y+34,13,active?Color.WHITE:0xFFB8CBD7,
-                    Typeface.create("sans-serif",active?Typeface.BOLD:Typeface.MEDIUM));
+                    Typeface.create(active?"sans-serif":"sans-serif-medium",Typeface.NORMAL));
         }
         text(c,"VERSÃO 0.2  •  ANDROID",45,666,10,0xFF69899B,Typeface.DEFAULT);
     }
@@ -266,6 +266,13 @@ public final class HudOverlay extends View {
     private void pill(Canvas c,float x,float y,float w,float h,String s,int fill,int color){
         p.setShader(null);p.setColor(fill);r.set(x,y,x+w,y+h);c.drawRoundRect(r,h/2,h/2,p);
         p.setTypeface(Typeface.DEFAULT_BOLD);p.setTextSize(h<=26?8:9);p.setColor(color);c.drawText(s,x+(w-p.measureText(s))/2,y+h*.66f,p);
+    }
+    private void gradientButton(Canvas c,float x,float y,float w,float h,String label,String sub,int a,int b){
+        p.setShader(new LinearGradient(x,y,x+w,y+h,a,b,Shader.TileMode.CLAMP));
+        r.set(x,y,x+w,y+h);c.drawRoundRect(r,18,18,p);p.setShader(null);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor(0x44FFFFFF);c.drawRoundRect(r,18,18,p);p.setStyle(Paint.Style.FILL);
+        text(c,label,x+62,y+34,20,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,sub,x+62,y+55,9,0xFFFFF1E4,Typeface.DEFAULT_BOLD);
     }
     private void circle(Canvas c,float x,float y,float radius,int fill,int stroke){
         p.setStyle(Paint.Style.FILL);p.setColor(fill);c.drawCircle(x,y,radius,p);p.setStyle(Paint.Style.STROKE);
