@@ -632,12 +632,19 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.11f,0.12f,0.11f},shell,yaw);
 
     if(bot||gWeaponType>=0) {
-        drawCube(localPoint(p,0,1.32f+bob,-0.75f+recoil,yaw),
-            {0.22f,0.16f,0.52f},{0.055f,0.105f,0.15f},yaw);
-        drawCube(localPoint(p,0,1.43f+bob,-0.70f+recoil,yaw),
-            {0.12f,0.055f,0.22f},{0.12f,0.73f,0.86f},yaw);
-        drawCube(localPoint(p,0,1.32f+bob,-1.05f+recoil,yaw),
-            {0.105f,0.105f,0.20f},{0.12f,0.62f,0.78f},yaw);
+        if(!bot&&gWeaponType==3) {
+            drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),{0.18f,0.14f,0.40f},{0.045f,0.075f,0.085f},yaw);
+            drawCube(localPoint(p,0,1.40f+bob,-0.77f+recoil,yaw),{0.11f,0.045f,0.24f},{0.18f,0.30f,0.30f},yaw);
+            drawCube(localPoint(p,0,1.18f+bob,-0.74f+recoil,yaw),{0.10f,0.20f,0.12f},{0.06f,0.10f,0.11f},yaw);
+            drawCube(localPoint(p,0,1.31f+bob,-1.02f+recoil,yaw),{0.07f,0.08f,0.24f},{0.12f,0.20f,0.22f},yaw);
+        } else {
+            drawCube(localPoint(p,0,1.32f+bob,-0.75f+recoil,yaw),
+                {0.22f,0.16f,0.52f},{0.055f,0.105f,0.15f},yaw);
+            drawCube(localPoint(p,0,1.43f+bob,-0.70f+recoil,yaw),
+                {0.12f,0.055f,0.22f},{0.12f,0.73f,0.86f},yaw);
+            drawCube(localPoint(p,0,1.32f+bob,-1.05f+recoil,yaw),
+                {0.105f,0.105f,0.20f},{0.12f,0.62f,0.78f},yaw);
+        }
         drawSphere(localPoint(p,0,1.32f+bob,-1.18f+recoil,yaw),
             {firing?0.14f:0.085f,firing?0.14f:0.085f,firing?0.14f:0.085f},
             firing?Vec3{0.45f,0.98f,1.0f}:Vec3{0.10f,0.80f,0.95f},yaw);
@@ -717,7 +724,7 @@ void updateStatus() {
            <<"  •  MIRA E CÂMERA LIVRES  •  "<<weaponName();
     } else if(gSelectedMode==3) {
         out<<"TREINAMENTO  •  "<<weaponName()<<"  CARGA "
-           <<(gWeaponType==3?"INFINITA":(gWeaponType<0?"0":std::to_string(gWeaponAmmo[static_cast<size_t>(gWeaponType)])))
+           <<(gSelectedMode==3?"INFINITA":(gWeaponType<0?"0":std::to_string(gWeaponAmmo[static_cast<size_t>(gWeaponType)])))
            <<"  •  MADEIRA "<<gWood<<"  •  PONTOS "<<gTrainingScore;
     } else {
         int remaining=0;
@@ -1032,8 +1039,8 @@ void firePulse() {
         }
     }
     if(hitTarget<0&&hitBot<0) {
-        const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA"};
-        std::ostringstream out;out<<names[gWeaponType]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
+        const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI"};
+        std::ostringstream out;out<<names[std::clamp(gWeaponType,0,3)]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
         setStatus(out.str());
     }
 }
