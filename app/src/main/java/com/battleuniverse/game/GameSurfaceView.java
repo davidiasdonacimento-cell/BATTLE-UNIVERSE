@@ -52,11 +52,25 @@ public final class GameSurfaceView extends GLSurfaceView {
             final float w = Math.max(1, getWidth());
             final float h = Math.max(1, getHeight());
 
-            if (buttonPointer == -1 && x > w * 0.75f && y > h * 0.72f) {
+            final float pad = Math.min(w, h) * 0.09f;
+            final float jumpX = w - pad * 0.85f;
+            final float jumpY = h - pad * 0.92f;
+            final float collectX = w - pad * 2.00f;
+            final float collectY = h - pad * 1.95f;
+            final float jumpRadius = pad * 0.55f;
+            final float collectRadius = pad * 0.50f;
+            final float jumpDx = x - jumpX;
+            final float jumpDy = y - jumpY;
+            final float collectDx = x - collectX;
+            final float collectDy = y - collectY;
+
+            if (buttonPointer == -1
+                    && jumpDx * jumpDx + jumpDy * jumpDy <= jumpRadius * jumpRadius) {
                 buttonPointer = id;
                 activeButton = ACTION_JUMP;
                 buttons |= ACTION_JUMP;
-            } else if (buttonPointer == -1 && x > w * 0.68f && y > h * 0.52f) {
+            } else if (buttonPointer == -1
+                    && collectDx * collectDx + collectDy * collectDy <= collectRadius * collectRadius) {
                 buttonPointer = id;
                 activeButton = ACTION_INTERACT;
                 buttons |= ACTION_INTERACT;
@@ -138,7 +152,6 @@ public final class GameSurfaceView extends GLSurfaceView {
 
         @Override
         public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,
-                                     javax.microedition.khronos.egl.EGLConfig config,
                                      int width, int height) {
             nativeResize(width, height);
         }
