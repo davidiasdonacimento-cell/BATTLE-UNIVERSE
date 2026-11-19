@@ -14,7 +14,6 @@ public final class MainActivity extends Activity {
     private ContentPackInstaller installer;
     private ContentLoadingView loadingView;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
-    private boolean gameStarted=false;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -25,7 +24,6 @@ public final class MainActivity extends Activity {
     }
 
     private void startContentSetup() {
-        gameStarted=false;
         loadingView=new ContentLoadingView(this);
         setContentView(loadingView);
         loadingView.setProgress(0,0,"PREPARANDO INSTALAÇÃO...");
@@ -34,9 +32,15 @@ public final class MainActivity extends Activity {
             @Override public void onProgress(long downloaded,long total,String status) {
                 if(loadingView!=null)loadingView.setProgress(downloaded,total,status);
             }
+            @Override public void onFileProgress(String fileName,int index,int count,long done,long size) {
+                if(loadingView!=null)loadingView.setFileProgress(fileName,index,count,done,size);
+            }
             @Override public void onSuccess() {
-                if(loadingView!=null)loadingView.setProgress(1,1,"DADOS ÍNTEGROS • REINICIANDO O JOGO...");
-                mainHandler.postDelayed(()->recreate(),950);
+                if(loadingView!=null)loadingView.setStatus("CONTEÚDO VALIDADO • REINICIANDO E ABRINDO A PARTIDA...");
+                mainHandler.postDelayed(()->{
+                    if(!isFinishing()&&ContentPackInstaller.isInstalled(MainActivity.this)) recreate();
+                    else if(!isFinishing()) startContentSetup();
+                },1100);
             }
             @Override public void onFailure(String message) {
                 if(loadingView!=null)loadingView.setFailure(message,
@@ -47,7 +51,6 @@ public final class MainActivity extends Activity {
     }
 
     private void launchGame(boolean contentPackReady) {
-        gameStarted=true;
         FrameLayout root=new FrameLayout(this);
         gameSurface=new GameSurfaceView(this);
         if(contentPackReady) {

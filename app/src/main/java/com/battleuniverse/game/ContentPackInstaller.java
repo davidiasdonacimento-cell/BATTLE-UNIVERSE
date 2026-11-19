@@ -7,21 +7,20 @@ import android.os.StatFs;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
+import java.util.Enumeration;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
 
 public final class ContentPackInstaller {
     private static final String MANIFEST_URL =
@@ -32,6 +31,7 @@ public final class ContentPackInstaller {
 
     public interface Listener {
         void onProgress(long downloaded,long total,String status);
+        void onFileProgress(String fileName,int index,int count,long done,long size);
         void onSuccess();
         void onFailure(String message);
     }
@@ -104,9 +104,10 @@ public final class ContentPackInstaller {
                     throw new Exception("Espaço insuficiente. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
                 downloadArchive(url,archive,expectedSize);
+                postProgress(expectedSize,expectedSize,"VERIFICANDO INTEGRIDADE DO PACOTE...");
                 String actualHash=sha256(archive);
                 if(!actualHash.equals(expectedHash)) throw new Exception("Falha na verificação SHA-256. O pacote foi descartado.");
-                postProgress(expectedSize,expectedSize,"VERIFICANDO E INSTALANDO ARQUIVOS...");
+                postProgress(expectedSize,expectedSize,"PREPARANDO INSTALAÇÃO DOS ARQUIVOS...");
                 deleteTree(staging);
                 if(!staging.mkdirs()&&!staging.isDirectory()) throw new Exception("Não foi possível criar a pasta temporária.");
                 extractAndVerify(archive,staging);
@@ -155,17 +156,20 @@ public final class ContentPackInstaller {
     private void downloadArchive(String url,File output,long total) throws Exception {
         HttpURLConnection connection=open(url);
         try(InputStream in=new BufferedInputStream(connection.getInputStream());
-            FileOutputStream file=new FileOutputStream(output);
-            OutputStream out=new BufferedOutputStream(file)) {
+            FileOutputStream file=new FileOutputStream(output)) {
             byte[] buffer=new byte[65536];int count;long received=0;
             while((count=in.read(buffer))!=-1) {
                 received+=count;
                 if(received>MAX_DOWNLOAD_BYTES) throw new Exception("Download excedeu o limite de segurança.");
-                out.write(buffer,0,count);
-                if(received%262144<buffer.length) postProgress(received,total,"BAIXANDO PACOTE DE CONTEÚDO...");
+                file.write(buffer,0,count);
+                if(received%262144<buffer.length) {
+                    postProgress(received,total,"BAIXANDO PACOTE DE CONTEÚDO...");
+                    postFileProgress("battle-universe-season-02-pack.zip",1,1,received,total);
+                }
             }
-            out.flush();file.getFD().sync();
+            file.getFD().sync();
             if(received!=total) throw new Exception("Download incompleto. O arquivo recebido tem tamanho diferente do manifesto.");
+            postFileProgress("battle-universe-season-02-pack.zip",1,1,received,total);
         } finally { connection.disconnect(); }
     }
 
@@ -174,7 +178,7 @@ public final class ContentPackInstaller {
         connection.setConnectTimeout(18000);
         connection.setReadTimeout(25000);
         connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("User-Agent","BattleUniverse-Android/0.3");
+        connection.setRequestProperty("User-Agent","BattleUniverse-Android/0.4");
         connection.setRequestProperty("Accept","application/octet-stream, application/json");
         int code=connection.getResponseCode();
         if(code<200||code>=300) {
@@ -185,13 +189,27 @@ public final class ContentPackInstaller {
     }
 
     private void extractAndVerify(File archive,File destination) throws Exception {
-        long expanded=0;int entries=0;
+        long totalExpanded=0,expanded=0;
+        int totalFiles=0;
         String rootPath=destination.getCanonicalPath()+File.separator;
-        try(ZipInputStream zip=new ZipInputStream(new BufferedInputStream(new FileInputStream(archive)))) {
-            ZipEntry entry;
-            byte[] buffer=new byte[32768];
-            while((entry=zip.getNextEntry())!=null) {
-                if(++entries>1500) throw new Exception("O pacote contém entradas demais.");
+        try(ZipFile zip=new ZipFile(archive)) {
+            Enumeration<? extends ZipEntry> scan=zip.entries();
+            while(scan.hasMoreElements()) {
+                ZipEntry entry=scan.nextElement();
+                if(entry.isDirectory()) continue;
+                if(++totalFiles>1500) throw new Exception("O pacote contém arquivos demais.");
+                long size=entry.getSize();
+                if(size<0) throw new Exception("Não foi possível medir um arquivo do pacote.");
+                totalExpanded+=size;
+                if(totalExpanded>MAX_EXTRACTED_BYTES)
+                    throw new Exception("O conteúdo descompactado excede o limite permitido.");
+            }
+            if(totalFiles==0) throw new Exception("O pacote não contém arquivos.");
+
+            Enumeration<? extends ZipEntry> entries=zip.entries();
+            int currentFile=0;
+            while(entries.hasMoreElements()) {
+                ZipEntry entry=entries.nextElement();
                 String name=entry.getName().replace('\\','/');
                 if(name.startsWith("/")||name.contains("../")||name.equals(".."))
                     throw new Exception("Caminho inseguro encontrado no pacote.");
@@ -200,28 +218,47 @@ public final class ContentPackInstaller {
                 if(!canonical.startsWith(rootPath)) throw new Exception("Arquivo fora da pasta do jogo.");
                 if(entry.isDirectory()) {
                     if(!out.mkdirs()&&!out.isDirectory()) throw new Exception("Falha ao criar pasta do conteúdo.");
-                } else {
-                    File parent=out.getParentFile();
-                    if(parent!=null&&!parent.mkdirs()&&!parent.isDirectory())
-                        throw new Exception("Falha ao preparar pasta do conteúdo.");
-                    try(FileOutputStream stream=new FileOutputStream(out)) {
-                        int n;
-                        while((n=zip.read(buffer))!=-1) {
-                            expanded+=n;
-                            if(expanded>MAX_EXTRACTED_BYTES) throw new Exception("O conteúdo descompactado excede o limite.");
-                            stream.write(buffer,0,n);
+                    continue;
+                }
+
+                currentFile++;
+                File parent=out.getParentFile();
+                if(parent!=null&&!parent.mkdirs()&&!parent.isDirectory())
+                    throw new Exception("Falha ao preparar pasta do conteúdo.");
+                long fileDone=0,fileSize=entry.getSize(),lastReport=0;
+                try(InputStream input=new BufferedInputStream(zip.getInputStream(entry));
+                    FileOutputStream output=new FileOutputStream(out)) {
+                    byte[] buffer=new byte[32768];
+                    int n;
+                    while((n=input.read(buffer))!=-1) {
+                        expanded+=n;
+                        fileDone+=n;
+                        if(expanded>MAX_EXTRACTED_BYTES) throw new Exception("O conteúdo descompactado excede o limite.");
+                        output.write(buffer,0,n);
+                        long now=System.currentTimeMillis();
+                        if(now-lastReport>=100) {
+                            postProgress(expanded,totalExpanded,"INSTALANDO ARQUIVO "+currentFile+"/"+totalFiles+"...");
+                            postFileProgress(name,currentFile,totalFiles,fileDone,fileSize);
+                            lastReport=now;
                         }
                     }
+                    output.getFD().sync();
                 }
-                zip.closeEntry();
+                if(fileDone!=fileSize) throw new Exception("Extração incompleta: "+name);
+                postProgress(expanded,totalExpanded,"INSTALANDO ARQUIVO "+currentFile+"/"+totalFiles+"...");
+                postFileProgress(name,currentFile,totalFiles,fileDone,fileSize);
             }
         }
+
         File packManifest=new File(destination,"manifest.json");
         if(!packManifest.isFile()) throw new Exception("Manifesto interno não encontrado.");
         JSONObject json=readJson(packManifest);
         if(json.optInt("version",-1)!=PACK_VERSION) throw new Exception("Versão interna do conteúdo não confere.");
         JSONArray files=json.optJSONArray("files");
         if(files==null||files.length()<10) throw new Exception("O pacote está incompleto.");
+        long verifyTotal=0;
+        for(int i=0;i<files.length();i++) verifyTotal+=files.getJSONObject(i).getLong("size");
+        long verified=0;
         for(int i=0;i<files.length();i++) {
             JSONObject item=files.getJSONObject(i);
             String path=item.getString("path");
@@ -230,6 +267,9 @@ public final class ContentPackInstaller {
                 throw new Exception("Arquivo ausente ou incompleto: "+path);
             if(!sha256(file).equalsIgnoreCase(item.getString("sha256")))
                 throw new Exception("Integridade inválida: "+path);
+            verified+=file.length();
+            postProgress(verified,verifyTotal,"CONFERINDO SHA-256 "+(i+1)+"/"+files.length()+"...");
+            postFileProgress(path,i+1,files.length(),file.length(),file.length());
         }
         JSONArray required=json.optJSONArray("required");
         if(required==null) throw new Exception("Lista de arquivos obrigatórios ausente.");
@@ -260,6 +300,9 @@ public final class ContentPackInstaller {
 
     private void postProgress(long done,long total,String status) {
         main.post(()->listener.onProgress(done,total,status));
+    }
+    private void postFileProgress(String name,int index,int count,long done,long size) {
+        main.post(()->listener.onFileProgress(name,index,count,done,size));
     }
     private void deleteTree(File file) {
         if(file==null||!file.exists()) return;

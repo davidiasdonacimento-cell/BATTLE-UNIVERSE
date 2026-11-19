@@ -10,11 +10,20 @@ import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
+import java.util.ArrayList;
 import java.util.Locale;
 
 public final class ContentLoadingView extends View {
+    private static final class FileRow {
+        final String name;
+        float progress;
+        boolean complete;
+        FileRow(String value) { name=value; }
+    }
+
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect=new RectF();
+    private final ArrayList<FileRow> recentFiles=new ArrayList<>();
     private float progress=0f,scale=1f,offsetX,offsetY;
     private long downloaded=0,total=0,started=System.currentTimeMillis();
     private String status="PREPARANDO CONEXÃO SEGURA...";
@@ -34,12 +43,37 @@ public final class ContentLoadingView extends View {
         error="";
         postInvalidate();
     }
+
+    public void setStatus(String message) {
+        status=message==null?status:message;
+        postInvalidate();
+    }
+
+    public void setFileProgress(String name,int index,int count,long done,long size) {
+        String safe=name==null?"Arquivo do jogo":name.replace('\\','/');
+        int found=-1;
+        for(int i=0;i<recentFiles.size();i++) {
+            if(recentFiles.get(i).name.equals(safe)){found=i;break;}
+        }
+        if(found<0) {
+            for(FileRow row:recentFiles) row.complete=true;
+            recentFiles.add(new FileRow(safe));
+            while(recentFiles.size()>4) recentFiles.remove(0);
+            found=recentFiles.size()-1;
+        }
+        FileRow row=recentFiles.get(found);
+        row.progress=size>0?Math.max(0f,Math.min(1f,(float)done/(float)size)):0f;
+        row.complete=size>0&&done>=size;
+        postInvalidate();
+    }
+
     public void setFailure(String message,Runnable retry,Runnable continueBase) {
         error=message==null?"Não foi possível concluir a instalação.":message;
         status="NÃO FOI POSSÍVEL INSTALAR O PACOTE";
         retryAction=retry;continueAction=continueBase;
         postInvalidate();
     }
+
     public boolean hasError(){return !error.isEmpty();}
 
     @Override protected void onDraw(Canvas canvas) {
@@ -65,36 +99,55 @@ public final class ContentLoadingView extends View {
             paint.setStrokeWidth(i==0?2.2f:1.2f);
             paint.setColor(i==0?0xFF38D5E4:0x4438D5E4);
             float radius=84+i*18+(float)Math.sin(t*1.5f+i)*4f;
-            canvas.drawCircle(640,248,radius,paint);
+            canvas.drawCircle(640,228,radius,paint);
         }
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF66F0F0);canvas.drawCircle(640,248,7,paint);
+        paint.setColor(0xFF66F0F0);canvas.drawCircle(640,228,7,paint);
         text(canvas,"BATTLE",555,105,39,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(canvas,"UNIVERSE",690,105,39,0xFF54DCE9,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(canvas,"EXPANSÃO DE CONTEÚDO  •  TEMPORADA 01",640,390,17,0xFFD4EAF2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-        text(canvas,"Avião e modelos 3D  •  Materiais PBR 4K  •  8 mapas  •  Áudio",640,420,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
+        text(canvas,"EXPANSÃO DE CONTEÚDO  •  TEMPORADA 02",640,365,17,0xFFD4EAF2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        text(canvas,"Modelos 3D  •  Materiais PBR 4K  •  8 mapas  •  Áudio",640,391,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
 
-        rect.set(345,460,935,472);
+        rect.set(260,414,1020,428);
         paint.setColor(0xFF1B3448);canvas.drawRoundRect(rect,8,8,paint);
-        rect.set(345,460,345+590*progress,472);
-        paint.setShader(new LinearGradient(345,460,935,472,0xFF36B9D0,0xFF69F0D2,Shader.TileMode.CLAMP));
+        rect.set(260,414,260+760*progress,428);
+        paint.setShader(new LinearGradient(260,414,1020,428,0xFF36B9D0,0xFF69F0D2,Shader.TileMode.CLAMP));
         canvas.drawRoundRect(rect,8,8,paint);paint.setShader(null);
-        text(canvas,String.format(Locale.US,"%d%%",(int)(progress*100)),640,510,27,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
-        text(canvas,status,640,548,12,0xFF9FCCD9,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        text(canvas,String.format(Locale.US,"%d%%",(int)(progress*100)),640,468,28,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
+        text(canvas,status,640,493,12,0xFF9FCCD9,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
         String size=total>0?String.format(Locale.US,"%.1f MB / %.1f MB",downloaded/1048576f,total/1048576f):"AGUARDANDO SERVIDOR";
-        text(canvas,size,640,576,10,0xFF7898AA,Typeface.DEFAULT,Paint.Align.CENTER);
+        text(canvas,size,640,516,10,0xFF7898AA,Typeface.DEFAULT,Paint.Align.CENTER);
+
         if(!error.isEmpty()) {
-            panel(canvas,275,600,350,58,0xFF16475B,0xFF53DDE7);
-            panel(canvas,655,600,350,58,0xFF263545,0xFF6F8798);
-            text(canvas,"TENTAR NOVAMENTE",450,636,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-            text(canvas,"ABRIR JOGO BASE",830,636,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-            text(canvas,error,640,688,10,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
+            panel(canvas,275,570,350,58,0xFF16475B,0xFF53DDE7);
+            panel(canvas,655,570,350,58,0xFF263545,0xFF6F8798);
+            text(canvas,"TENTAR NOVAMENTE",450,606,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,"ABRIR JOGO BASE",830,606,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,shortText(error,105),640,665,10,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
         } else {
-            text(canvas,"OS ARQUIVOS SÃO CONFERIDOS ANTES DE SEREM ATIVADOS.",640,640,10,0xFF648DA1,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-            text(canvas,"NÃO FECHE O JOGO DURANTE A INSTALAÇÃO.",640,660,9,0xFF4B7186,Typeface.DEFAULT,Paint.Align.CENTER);
-            postInvalidateDelayed(40);
+            text(canvas,"ARQUIVOS DO JOGO  •  PROGRESSO INDIVIDUAL",260,548,11,0xFF64DDE8,Typeface.DEFAULT_BOLD);
+            for(int i=0;i<recentFiles.size();i++) {
+                FileRow row=recentFiles.get(i);
+                float y=568+i*29;
+                text(canvas,shortText(row.name,72),270,y,10,0xFFB8D6E2,Typeface.DEFAULT);
+                String percent=row.complete?"OK":String.format(Locale.US,"%d%%",(int)(row.progress*100));
+                text(canvas,percent,1008,y,9,row.complete?0xFF69F0D2:0xFF8DB7C7,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
+                rect.set(270,y+5,1010,y+10);
+                paint.setColor(0xFF1B3448);canvas.drawRoundRect(rect,3,3,paint);
+                rect.set(270,y+5,270+740*row.progress,y+10);
+                paint.setColor(row.complete?0xFF56D9B8:0xFF36B9D0);
+                canvas.drawRoundRect(rect,3,3,paint);
+            }
+            text(canvas,"Cada arquivo é conferido antes de ser ativado.",640,692,9,0xFF648DA1,Typeface.DEFAULT,Paint.Align.CENTER);
+            postInvalidateDelayed(70);
         }
         canvas.restore();
+    }
+
+    private String shortText(String value,int max) {
+        if(value==null)return "";
+        if(value.length()<=max)return value;
+        return "…"+value.substring(value.length()-max+1);
     }
 
     private void text(Canvas c,String value,float x,float y,float size,int color,Typeface face) {
@@ -114,7 +167,7 @@ public final class ContentLoadingView extends View {
     @Override public boolean onTouchEvent(MotionEvent event) {
         if(event.getActionMasked()==MotionEvent.ACTION_UP&&!error.isEmpty()) {
             float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
-            if(y>=590&&y<=665) {
+            if(y>=550&&y<=635) {
                 if(x>=275&&x<=625&&retryAction!=null)retryAction.run();
                 else if(x>=655&&x<=1005&&continueAction!=null)continueAction.run();
                 performClick();
