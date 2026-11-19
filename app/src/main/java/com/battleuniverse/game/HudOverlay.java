@@ -11,6 +11,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
@@ -87,11 +88,31 @@ public final class HudOverlay extends View {
     }
 
     private void drawLobby(Canvas c) {
-        p.setShader(new LinearGradient(0,0,900,0,new int[]{0xF2071421,0xC8071421,0x00071421},null,Shader.TileMode.CLAMP));
-        c.drawRect(0,0,930,720,p); p.setShader(null);
-        p.setColor(0x81071421); c.drawRect(0,0,1280,96,p);
-        p.setColor(0x5579DDEB); c.drawRect(0,94,1280,96,p);
-        drawBrand(c); drawProfile(c); drawSidebar(c); drawPage(c); drawTeam(c);
+        drawLobbyBackdrop(c);
+        p.setColor(0xB9071421);c.drawRect(0,0,1280,96,p);
+        p.setColor(0x5579DDEB);c.drawRect(0,94,1280,96,p);
+        drawBrand(c);drawProfile(c);drawSidebar(c);drawPage(c);drawTeam(c);
+    }
+    private void drawLobbyBackdrop(Canvas c) {
+        p.setShader(new LinearGradient(0,0,1280,720,
+            new int[]{0xFF071521,0xFF102A3B,0xFF0A1825},null,Shader.TileMode.CLAMP));
+        c.drawRect(0,0,1280,720,p);p.setShader(null);
+        p.setColor(0xFF102D3A);c.drawOval(680,300,1360,920,p);
+        p.setColor(0xFF123A45);c.drawOval(820,390,1410,850,p);
+        p.setColor(0xFF173D46);c.drawOval(920,450,1370,800,p);
+        p.setColor(0x4429BFD0);c.drawCircle(1070,250,145,p);
+        p.setColor(0x2227B7D2);c.drawCircle(1070,250,190,p);
+        Path ridge=new Path();ridge.moveTo(0,520);ridge.lineTo(190,430);ridge.lineTo(330,488);
+        ridge.lineTo(510,382);ridge.lineTo(690,470);ridge.lineTo(880,398);
+        ridge.lineTo(1040,468);ridge.lineTo(1280,350);ridge.lineTo(1280,720);
+        ridge.lineTo(0,720);ridge.close();p.setColor(0xFF0B2430);c.drawPath(ridge,p);
+        p.setColor(0x4439D7E8);p.setStrokeWidth(1.2f);
+        for(int i=0;i<7;i++)c.drawLine(0,570+i*22,1280,500+i*22,p);
+        for(int i=0;i<34;i++) {
+            float x=(i*173)%1280,y=170+(i*97)%380;
+            p.setColor(i%3==0?0xAA70DDE6:0x557CA7B9);c.drawCircle(x,y,i%4==0?1.8f:1.0f,p);
+        }
+        p.setColor(0x3322D7E8);c.drawRect(0,96,1280,98,p);
     }
 
     private void drawBrand(Canvas c) {
@@ -146,7 +167,7 @@ public final class HudOverlay extends View {
         else if(page==MISSIONS)drawMissionsPage(c);
     }
     private void drawHome(Canvas c){
-        eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.2.2  /  OPERAÇÃO BLOOB");
+        eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.3.0  /  OPERAÇÃO BLOOB");
         text(c,"SUA PRÓXIMA",272,224,37,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"JORNADA COMEÇA AQUI.",272,267,37,0xFF55DDE7,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"Monte sua equipe, escolha o destino e entre na batalha.",274,296,14,0xFFB3C8D4,Typeface.DEFAULT);
@@ -163,8 +184,8 @@ public final class HudOverlay extends View {
         gradientButton(c,270,468,342,78,"JOGAR AGORA","ENTRAR NA PARTIDA",0xFFFFB45E,0xFFE97543);
         text(c,"▶",292,516,21,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
         panel(c,628,468,222,78,0xB9183040,0x557AA9BC,17);
-        text(c,"● PARTIDA LOCAL",650,498,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
-        text(c,"BATTLE ROYALE",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"◆ PASSE DE TEMPORADA",650,498,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
+        text(c,"MENU ROYALE",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"30 participantes offline • 1 jogador + 29 bots IA.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
         panel(c,270,608,580,58,0x70152B3A,0x225B8296,14);
         stat(c,292,642,"30","PARTICIPANTES");stat(c,468,642,"29","BOTS IA");stat(c,665,642,"OFF","MODO OFFLINE");
@@ -513,8 +534,8 @@ public final class HudOverlay extends View {
         eyebrow(c,913,506,"DICA DE OPERAÇÃO");
         text(c,"Explore o mapa, colete recursos",913,540,13,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"e deixe os aliados em patrulha independente.",913,560,11,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"Novos sistemas serão adicionados em",913,599,10,0xFF7FA4B7,Typeface.DEFAULT);
-        text(c,"atualizações incrementais do projeto.",913,616,10,0xFF7FA4B7,Typeface.DEFAULT);
+        text(c,"MISSÕES  •  ROYALE  •  EVENTOS",913,599,10,0xFF7FA4B7,Typeface.DEFAULT_BOLD);
+        text(c,"Operações locais da Temporada 02.",913,616,10,0xFF7FA4B7,Typeface.DEFAULT);
     }
     private void mapArtwork(Canvas c,int map,float x,float y,float w,float h){
         p.setShader(new LinearGradient(x,y,x+w,y+h,
@@ -538,19 +559,31 @@ public final class HudOverlay extends View {
         panel(c,22,112,278,46,0xB9071724,0x337AA0B2,13);
         text(c,"BATTLE ROYALE  •  IA LOCAL",38,141,11,0xFF79E8D0,Typeface.DEFAULT_BOLD);
 
-        panel(c,1064,18,190,166,0xD9071724,0x6679DDEB,17);
-        eyebrow(c,1080,40,"MINIMAPA");
-        p.setColor(0xFF173A43);c.drawCircle(1159,105,59,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(0xFF5DD6CE);c.drawCircle(1159,105,59,p);p.setStyle(Paint.Style.FILL);
-        p.setColor(0xFF2C775F);c.drawCircle(1159,105,43,p);
-        float[] worldPosition=game.getPlayerPosition();
-        float playerMapX=1159+Math.max(-48,Math.min(48,worldPosition[0]))*0.88f;
-        float playerMapY=105+Math.max(-48,Math.min(48,worldPosition[1]))*0.88f;
-        p.setColor(0xFF6ED5E2);c.drawCircle(playerMapX,playerMapY,6,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(Color.WHITE);c.drawCircle(playerMapX,playerMapY,8,p);p.setStyle(Paint.Style.FILL);
-        p.setColor(0xFFFFC66F);c.drawCircle(1159+8*0.88f,105-9*0.88f,4,p);
-        c.drawCircle(1159-10*0.88f,105-6*0.88f,4,p);
-        c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
+        String gameStatus=game.getGameStatus();
+        if(showMinimap) {
+            panel(c,1064,18,190,166,0xD9071724,0x6679DDEB,17);
+            eyebrow(c,1080,40,"MINIMAPA");
+            p.setColor(0xFF173A43);c.drawCircle(1159,105,59,p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(0xFF5DD6CE);c.drawCircle(1159,105,59,p);p.setStyle(Paint.Style.FILL);
+            p.setColor(0xFF2C775F);c.drawCircle(1159,105,43,p);
+            float[] worldPosition=game.getPlayerPosition();
+            float playerMapX=1159+Math.max(-48,Math.min(48,worldPosition[0]))*0.88f;
+            float playerMapY=105+Math.max(-48,Math.min(48,worldPosition[1]))*0.88f;
+            p.setColor(0xFF6ED5E2);c.drawCircle(playerMapX,playerMapY,6,p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(Color.WHITE);c.drawCircle(playerMapX,playerMapY,8,p);p.setStyle(Paint.Style.FILL);
+            p.setColor(0xFFFFC66F);c.drawCircle(1159+8*0.88f,105-9*0.88f,4,p);
+            c.drawCircle(1159-10*0.88f,105-6*0.88f,4,p);
+            c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
+        }
+        if(gameStatus.startsWith("EMBARQUE")||gameStatus.startsWith("AVIÃO")) {
+            panel(c,22,170,330,92,0xD9081928,0x5579DDEB,16);
+            eyebrow(c,40,195,"AERONAVE DE TRANSPORTE");
+            text(c,gameStatus.startsWith("EMBARQUE")?"EMBARQUE E AGUARDE A RAMPA":"CAMINHE PELO CORREDOR ATÉ A RAMPA",
+                40,222,11,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"ANALÓGICO: MOVER  •  LADO DIREITO: CÂMERA",40,244,8,0xFF9FC6D3,Typeface.DEFAULT_BOLD);
+            pill(c,40,247,125,18,gameStatus.startsWith("EMBARQUE")?"PORTA FECHADA":"RAMPA LIBERADA",
+                0x553A6B7C,0xFFB9E8EF);
+        }
 
         drawControl(c,890,310,38,game.isAimToggled()?"MIRA ON":"MIRA",
             0xFF285D79,0xFF8ADCF4,game.isAimToggled());
@@ -561,7 +594,6 @@ public final class HudOverlay extends View {
         drawControl(c,1152,562,47,"SALTAR",0xFF7B3D35,0xFFFFA28F);
         drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
 
-        String gameStatus=game.getGameStatus();
         if(!gameStatus.startsWith("EMBARQUE")&&!gameStatus.startsWith("AVIÃO")) {
             float cx=640,cy=360;
             if(game.isAimToggled()) {
