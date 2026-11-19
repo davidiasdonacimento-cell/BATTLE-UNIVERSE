@@ -37,6 +37,9 @@ public final class HudOverlay extends View {
     private boolean music=true, effects=true, forwarding;
     private float scale=1, offsetX, offsetY;
     private String toast="";
+    private boolean googleConfigured, googleSignedIn;
+    private String googleEmail="", googleMessage="Entre com Google para sincronizar.";
+    private Runnable googleAccountAction;
     private long toastUntil, lastTap;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
@@ -230,8 +233,9 @@ public final class HudOverlay extends View {
         for(int i=0;i<3;i++)pill(c,522+i*96,590,88,38,levels[i],lookSensitivity==i?0xFF176A75:0x553B6172,Color.WHITE);
     }
     private void drawProfilePage(Canvas c) {
-        eyebrow(c,270,175,"CONTA LOCAL"); title(c,"PERFIL DO JOGADOR",270,224);
-        subtitle(c,"Seu progresso e seus diamantes ficam salvos neste aparelho.",270,252);
+        eyebrow(c,270,175,googleSignedIn?"CONTA GOOGLE CONECTADA":"PERFIL E CONTA GOOGLE");
+        title(c,"PERFIL DO JOGADOR",270,224);
+        subtitle(c,"Entre com Google para recuperar seu progresso em outros APKs.",270,252);
         long xp=prefs.getLong("xp",0L),diamonds=prefs.getLong("diamonds",0L);
         int level=(int)Math.min(30L,1L+xp/500L);
         panel(c,270,286,570,196,0xAE193040,0x557AA9BC,18);
@@ -244,13 +248,21 @@ public final class HudOverlay extends View {
         text(c,prefs.getBoolean("code_100k_redeemed",false)
             ?"CÓDIGO 100K JÁ RESGATADO NESTE PERFIL"
             :"CÓDIGO SECRETO 100K DISPONÍVEL",292,458,10,0xFF83DCD5,Typeface.DEFAULT_BOLD);
-        panel(c,270,510,270,75,0xCC176A75,0xFF58DDE6,16);
-        text(c,"RESGATAR CÓDIGO",294,542,15,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"Digite seu código secreto",294,563,10,0xFFD2F6F8,Typeface.DEFAULT);
-        panel(c,558,510,282,75,0xA91A3040,0x335D8495,16);
-        text(c,"EDITAR NICKNAME",582,542,15,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"Alterar nome do perfil local",582,563,10,0xFF9EB6C4,Typeface.DEFAULT);
-        text(c,"Modo offline: limpar os dados do app pode reiniciar o perfil.",272,622,10,0xFF8FAAB8,Typeface.DEFAULT);
+        panel(c,270,486,570,58,googleSignedIn?0xCC176A75:0xA91A3040,
+            googleSignedIn?0xFF58DDE6:0x335D8495,15);
+        text(c,googleSignedIn?"CONTA GOOGLE CONECTADA":
+            (googleConfigured?"ENTRAR COM GOOGLE":"LOGIN GOOGLE A CONFIGURAR"),
+            292,509,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        String accountLine=googleSignedIn&&!googleEmail.isEmpty()?googleEmail:googleMessage;
+        if(accountLine.length()>68)accountLine=accountLine.substring(0,65)+"...";
+        text(c,accountLine,292,530,9,0xFFBBD0D9,Typeface.DEFAULT);
+        panel(c,270,558,270,70,0xCC176A75,0xFF58DDE6,16);
+        text(c,"RESGATAR CÓDIGO",294,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Digite seu código secreto",294,607,10,0xFFD2F6F8,Typeface.DEFAULT);
+        panel(c,558,558,282,70,0xA91A3040,0x335D8495,16);
+        text(c,"EDITAR NICKNAME",582,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Nome do seu perfil",582,607,10,0xFF9EB6C4,Typeface.DEFAULT);
+        text(c,"Com Google, seu save pode ser recuperado após reinstalar o jogo.",272,660,10,0xFF8FAAB8,Typeface.DEFAULT);
     }
     private void drawShopPage(Canvas c) {
         eyebrow(c,270,175,"LOJA VIRTUAL • SEM PAGAMENTO REAL");
@@ -532,8 +544,13 @@ public final class HudOverlay extends View {
         }else if(page==INVENTORY){
             if(hit(x,y,270,408,570,148)){toast("Veja seus cosméticos e itens adquiridos.");return;}
         }else if(page==PROFILE){
-            if(hit(x,y,270,510,270,75)){showRedeemDialog();return;}
-            if(hit(x,y,558,510,282,75)){showNicknameDialog();return;}
+            if(hit(x,y,270,486,570,58)){
+                if(googleAccountAction!=null)googleAccountAction();
+                else toast("Conta Google indisponível.");
+                return;
+            }
+            if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
+            if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
         }else if(page==SHOP){
             for(int i=0;i<3;i++)if(hit(x,y,270+i*192,338,174,230)){purchaseShopItem(i);return;}
         }else if(page==ROYALE){
@@ -544,6 +561,17 @@ public final class HudOverlay extends View {
             if(hit(x,y,715,495,110,52)){effects=!effects;prefs.edit().putBoolean("effects",effects).apply();toast(effects?"Efeitos ativados":"Efeitos desativados");return;}
             if(hit(x,y,515,580,300,55)){lookSensitivity=x<618?0:x<714?1:2;game.setLookSensitivity(lookSensitivity);prefs.edit().putInt("look_sensitivity",lookSensitivity).apply();toast("Sensibilidade: "+new String[]{"baixa","média","alta"}[lookSensitivity]);}
         }
+    }
+    public void setGoogleAccountAction(Runnable action) {
+        googleAccountAction=action;
+    }
+    public void setGoogleAccountStatus(boolean configured, boolean signedIn,
+                                       String email, String message) {
+        googleConfigured=configured;
+        googleSignedIn=signedIn;
+        googleEmail=email==null?"":email;
+        googleMessage=message==null?"":message;
+        invalidate();
     }
     private void toast(String s){toast=s;toastUntil=System.currentTimeMillis()+1800;invalidate();}
     @Override public boolean performClick(){super.performClick();return true;}
