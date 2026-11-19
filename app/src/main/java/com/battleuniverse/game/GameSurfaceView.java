@@ -5,173 +5,71 @@ import android.opengl.GLSurfaceView;
 import android.view.MotionEvent;
 
 public final class GameSurfaceView extends GLSurfaceView {
-    private static final int ACTION_JUMP = 1;
-    private static final int ACTION_INTERACT = 2;
+    private volatile float moveX,moveY,lookDX,lookDY;
+    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1;
+    private int movePointer=-1,lookPointer=-1,buttonPointer=-1;
+    private float moveOriginX,moveOriginY,lastLookX,lastLookY;
 
-    private volatile float moveX;
-    private volatile float moveY;
-    private volatile float lookDX;
-    private volatile float lookDY;
-    private volatile int buttons;
-
-    private int movePointer = -1;
-    private int lookPointer = -1;
-    private int buttonPointer = -1;
-    private float moveOriginX;
-    private float moveOriginY;
-    private float lastLookX;
-    private float lastLookY;
-    private int activeButton;
-
-    public GameSurfaceView(Context context) {
-        super(context);
-        setEGLContextClientVersion(3);
-        setEGLConfigChooser(8, 8, 8, 8, 24, 8);
-        setPreserveEGLContextOnPause(true);
-        setRenderer(new GameRenderer());
+    public GameSurfaceView(Context context){
+        super(context);setEGLContextClientVersion(3);setEGLConfigChooser(8,8,8,8,24,8);
+        setPreserveEGLContextOnPause(true);setRenderer(new GameRenderer());
         setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
     }
+    public void setGameScreen(boolean playing){screenMode=playing?1:0;queueEvent(()->nativeSetScreen(screenMode));}
+    public void setCharacter(int id){characterId=Math.max(0,Math.min(3,id));queueEvent(()->nativeSetCharacter(characterId));}
+    public void setMap(int id){mapId=Math.max(0,Math.min(2,id));queueEvent(()->nativeSetMap(mapId));}
+    public void setMatchMode(int id){matchMode=Math.max(0,Math.min(3,id));queueEvent(()->nativeSetMode(matchMode));}
+    public void setQuality(int value){quality=Math.max(0,Math.min(2,value));queueEvent(()->nativeSetQuality(quality));}
 
-    public String getStatusText() {
-        try {
-            return nativeGetStatus();
-        } catch (RuntimeException | LinkageError error) {
-            return "CARREGANDO CENÁRIO 3D...";
-        }
-    }
-
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        final int action = event.getActionMasked();
-        final int index = event.getActionIndex();
-
-        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-            final int id = event.getPointerId(index);
-            final float x = event.getX(index);
-            final float y = event.getY(index);
-            final float w = Math.max(1, getWidth());
-            final float h = Math.max(1, getHeight());
-
-            final float pad = Math.min(w, h) * 0.09f;
-            final float jumpX = w - pad * 0.85f;
-            final float jumpY = h - pad * 0.92f;
-            final float collectX = w - pad * 2.00f;
-            final float collectY = h - pad * 1.95f;
-            final float jumpRadius = pad * 0.55f;
-            final float collectRadius = pad * 0.50f;
-            final float jumpDx = x - jumpX;
-            final float jumpDy = y - jumpY;
-            final float collectDx = x - collectX;
-            final float collectDy = y - collectY;
-
-            if (buttonPointer == -1
-                    && jumpDx * jumpDx + jumpDy * jumpDy <= jumpRadius * jumpRadius) {
-                buttonPointer = id;
-                activeButton = ACTION_JUMP;
-                buttons |= ACTION_JUMP;
-            } else if (buttonPointer == -1
-                    && collectDx * collectDx + collectDy * collectDy <= collectRadius * collectRadius) {
-                buttonPointer = id;
-                activeButton = ACTION_INTERACT;
-                buttons |= ACTION_INTERACT;
-            } else if (movePointer == -1 && x < w * 0.46f && y > h * 0.28f) {
-                movePointer = id;
-                moveOriginX = x;
-                moveOriginY = y;
-                moveX = 0;
-                moveY = 0;
-            } else if (lookPointer == -1 && x >= w * 0.42f) {
-                lookPointer = id;
-                lastLookX = x;
-                lastLookY = y;
-            }
+    @Override public boolean onTouchEvent(MotionEvent e){
+        int action=e.getActionMasked(),index=e.getActionIndex();
+        if(action==MotionEvent.ACTION_DOWN||action==MotionEvent.ACTION_POINTER_DOWN){
+            int id=e.getPointerId(index);float x=e.getX(index),y=e.getY(index);
+            float w=Math.max(1,getWidth()),h=Math.max(1,getHeight()),pad=Math.min(w,h)*.10f;
+            float jx=w-pad*.85f,jy=h-pad*.92f,cx=w-pad*2f,cy=h-pad*1.95f;
+            float jdx=x-jx,jdy=y-jy,cdx=x-cx,cdy=y-cy;
+            if(buttonPointer==-1&&jdx*jdx+jdy*jdy<=pad*pad*.3025f){buttonPointer=id;buttons|=1;}
+            else if(buttonPointer==-1&&cdx*cdx+cdy*cdy<=pad*pad*.25f){buttonPointer=id;buttons|=2;}
+            else if(movePointer==-1&&x<w*.46f&&y>h*.28f){movePointer=id;moveOriginX=x;moveOriginY=y;moveX=moveY=0;}
+            else if(lookPointer==-1&&x>=w*.42f){lookPointer=id;lastLookX=x;lastLookY=y;}
             return true;
         }
-
-        if (action == MotionEvent.ACTION_MOVE) {
-            final float radius = Math.max(60f, getWidth() * 0.14f);
-            for (int p = 0; p < event.getPointerCount(); p++) {
-                final int id = event.getPointerId(p);
-                final float x = event.getX(p);
-                final float y = event.getY(p);
-
-                if (id == movePointer) {
-                    moveX = clamp((x - moveOriginX) / radius, -1f, 1f);
-                    moveY = clamp((moveOriginY - y) / radius, -1f, 1f);
-                } else if (id == lookPointer) {
-                    lookDX += (x - lastLookX) / Math.max(1f, getWidth());
-                    lookDY += (y - lastLookY) / Math.max(1f, getHeight());
-                    lastLookX = x;
-                    lastLookY = y;
-                }
-            }
-            return true;
+        if(action==MotionEvent.ACTION_MOVE){
+            float radius=Math.max(60f,getWidth()*.14f);
+            for(int i=0;i<e.getPointerCount();i++){
+                int id=e.getPointerId(i);float x=e.getX(i),y=e.getY(i);
+                if(id==movePointer){moveX=clamp((x-moveOriginX)/radius,-1,1);moveY=clamp((moveOriginY-y)/radius,-1,1);}
+                else if(id==lookPointer){lookDX+=(x-lastLookX)/Math.max(1,getWidth());lookDY+=(y-lastLookY)/Math.max(1,getHeight());lastLookX=x;lastLookY=y;}
+            }return true;
         }
-
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP
-                || action == MotionEvent.ACTION_CANCEL) {
-            final int id = action == MotionEvent.ACTION_CANCEL ? -1 : event.getPointerId(index);
-            if (action == MotionEvent.ACTION_CANCEL || id == movePointer) {
-                movePointer = -1;
-                moveX = 0;
-                moveY = 0;
-            }
-            if (action == MotionEvent.ACTION_CANCEL || id == lookPointer) {
-                lookPointer = -1;
-            }
-            if (action == MotionEvent.ACTION_CANCEL || id == buttonPointer) {
-                buttons &= ~activeButton;
-                buttonPointer = -1;
-                activeButton = 0;
-            }
+        if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_POINTER_UP||action==MotionEvent.ACTION_CANCEL){
+            int id=action==MotionEvent.ACTION_CANCEL?-1:e.getPointerId(index);
+            if(action==MotionEvent.ACTION_CANCEL||id==movePointer){movePointer=-1;moveX=moveY=0;}
+            if(action==MotionEvent.ACTION_CANCEL||id==lookPointer)lookPointer=-1;
+            if(action==MotionEvent.ACTION_CANCEL||id==buttonPointer){buttons=0;buttonPointer=-1;}
             return true;
-        }
-        return true;
+        }return true;
     }
-
-    private static float clamp(float value, float min, float max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
+    private static float clamp(float v,float min,float max){return Math.max(min,Math.min(max,v));}
     private static native void nativeInit();
-    private static native void nativeResize(int width, int height);
-    private static native void nativeRender(
-            float deltaSeconds, float moveX, float moveY,
-            float lookDX, float lookDY, int buttons);
-    private static native String nativeGetStatus();
+    private static native void nativeResize(int width,int height);
+    private static native void nativeRender(float dt,float mx,float my,float lx,float ly,int buttons);
+    private static native void nativeSetScreen(int mode);
+    private static native void nativeSetCharacter(int id);
+    private static native void nativeSetMap(int id);
+    private static native void nativeSetMode(int id);
+    private static native void nativeSetQuality(int value);
 
-    private final class GameRenderer implements GLSurfaceView.Renderer {
-        private long previousFrameNanos;
-
-        @Override
-        public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,
-                                     javax.microedition.khronos.egl.EGLConfig config) {
-            nativeInit();
-            previousFrameNanos = System.nanoTime();
+    private final class GameRenderer implements GLSurfaceView.Renderer{
+        private long previous;
+        @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,javax.microedition.khronos.egl.EGLConfig config){
+            nativeInit();nativeSetScreen(screenMode);nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);nativeSetQuality(quality);previous=System.nanoTime();
         }
-
-        @Override
-        public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,
-                                     int width, int height) {
-            nativeResize(width, height);
-        }
-
-        @Override
-        public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl) {
-            long now = System.nanoTime();
-            float dt = Math.min(0.05f, Math.max(0.001f,
-                    (now - previousFrameNanos) / 1_000_000_000f));
-            previousFrameNanos = now;
-
-            float dx = lookDX;
-            float dy = lookDY;
-            lookDX = 0;
-            lookDY = 0;
-            nativeRender(dt, moveX, moveY, dx, dy, buttons);
+        @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,javax.microedition.khronos.egl.EGLConfig config,int width,int height){nativeResize(width,height);}
+        @Override public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl){
+            long now=System.nanoTime();float dt=Math.min(.05f,Math.max(.001f,(now-previous)/1_000_000_000f));previous=now;
+            float dx=lookDX,dy=lookDY;lookDX=lookDY=0;nativeRender(dt,moveX,moveY,dx,dy,buttons);
         }
     }
-
-    static {
-        System.loadLibrary("battleuniverse");
-    }
+    static{System.loadLibrary("battleuniverse");}
 }
