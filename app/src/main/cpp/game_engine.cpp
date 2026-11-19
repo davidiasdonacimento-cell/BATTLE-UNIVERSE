@@ -9,6 +9,7 @@
 #include <mutex>
 #include <sstream>
 #include <iomanip>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -496,6 +497,8 @@ void updateStatus() {
         if(gDropTimer<PLANE_COUNTDOWN_SECONDS) {
             int remaining=static_cast<int>(std::ceil(PLANE_COUNTDOWN_SECONDS-gDropTimer));
             out<<"AVIÃO EM MOVIMENTO  •  SALTO DISPONÍVEL EM "<<remaining<<"s";
+        } else if(gDropTimer<PLANE_COUNTDOWN_SECONDS+2.5f) {
+            out<<"MAPA • AVIÃO EM MOVIMENTO  •  PREPARE-SE";
         } else {
             out<<"AVIÃO EM ROTA  •  30 PARTICIPANTES  •  TOQUE SALTAR";
         }
@@ -579,7 +582,7 @@ void updateBots(float dt) {
             }
             for(int other=0;other<BOT_COUNT;++other) {
                 if(other==i||!gBotActive[static_cast<size_t>(other)])continue;
-                if(isAllyBot(other)==ally)continue;
+                if(gSelectedMode!=0 && isAllyBot(other)==ally)continue;
                 const Vec3 op=gBots[static_cast<size_t>(other)].pos;
                 const float ox=op.x-bot.pos.x,oz=op.z-bot.pos.z;
                 const float d=std::sqrt(ox*ox+oz*oz);
@@ -982,7 +985,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
         gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
         if(gDropTimer>=PLANE_COUNTDOWN_SECONDS)gPlaneExteriorView=true;
-        if((jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS)||gDropTimer>=19.5f) {
+        if((jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS+2.5f)||gDropTimer>=19.5f) {
             gDropState=2;gJumpHeight=22.0f;gJumpVelocity=0.0f;
             gParachuteOpen=false;
             gTargets[0]={{gPlayer.x,1.25f,gPlayer.z-18.0f},3,true};
