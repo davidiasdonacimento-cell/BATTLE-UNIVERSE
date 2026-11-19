@@ -112,6 +112,8 @@ bool isAllyBot(int index) {
     return (gSelectedMode==1&&index==0)||(gSelectedMode==2&&index<3);
 }
 std::array<BotState,BOT_COUNT> gBots{};
+std::array<float,BOT_COUNT> gBotDropHeight{},gBotDropSpeed{};
+std::array<bool,BOT_COUNT> gBotDropCanopy{};
 std::array<Vec3,BOT_COUNT> gBotHomes{{
     {-92,0.55f,-88},{-53,0.55f,-94},{-10,0.55f,-99},{38,0.55f,-92},
     {87,0.55f,-71},{98,0.55f,-18},{88,0.55f,48},{48,0.55f,94},
@@ -540,15 +542,17 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.11f,0.12f,0.11f},shell,yaw);
     drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.11f,0.12f,0.11f},shell,yaw);
 
-    drawCube(localPoint(p,0,1.32f+bob,-0.75f+recoil,yaw),
-        {0.22f,0.16f,0.52f},{0.055f,0.105f,0.15f},yaw);
-    drawCube(localPoint(p,0,1.43f+bob,-0.70f+recoil,yaw),
-        {0.12f,0.055f,0.22f},{0.12f,0.73f,0.86f},yaw);
-    drawCube(localPoint(p,0,1.32f+bob,-1.05f+recoil,yaw),
-        {0.105f,0.105f,0.20f},{0.12f,0.62f,0.78f},yaw);
-    drawSphere(localPoint(p,0,1.32f+bob,-1.18f+recoil,yaw),
-        {firing?0.14f:0.085f,firing?0.14f:0.085f,firing?0.14f:0.085f},
-        firing?Vec3{0.45f,0.98f,1.0f}:Vec3{0.10f,0.80f,0.95f},yaw);
+    if(bot||gWeaponType>=0) {
+        drawCube(localPoint(p,0,1.32f+bob,-0.75f+recoil,yaw),
+            {0.22f,0.16f,0.52f},{0.055f,0.105f,0.15f},yaw);
+        drawCube(localPoint(p,0,1.43f+bob,-0.70f+recoil,yaw),
+            {0.12f,0.055f,0.22f},{0.12f,0.73f,0.86f},yaw);
+        drawCube(localPoint(p,0,1.32f+bob,-1.05f+recoil,yaw),
+            {0.105f,0.105f,0.20f},{0.12f,0.62f,0.78f},yaw);
+        drawSphere(localPoint(p,0,1.32f+bob,-1.18f+recoil,yaw),
+            {firing?0.14f:0.085f,firing?0.14f:0.085f,firing?0.14f:0.085f},
+            firing?Vec3{0.45f,0.98f,1.0f}:Vec3{0.10f,0.80f,0.95f},yaw);
+    }
 }
 void drawCrystal(Vec3 p,float time,int index) {
     float bob=std::sin(time*2.2f+index)*0.16f, spin=time*0.55f+index*0.7f;
@@ -642,11 +646,12 @@ void resetBots() {
     for(int i=12;i<BOT_COUNT;++i) {
         const int slot=i-12;
         const float angle=2.0f*PI*static_cast<float>(slot)/17.0f;
-        const float radius=48.0f+static_cast<float>(slot%4)*11.0f;
+        const float radius=68.0f+static_cast<float>(slot%4)*16.0f;
         gBotHomes[static_cast<size_t>(i)]={std::cos(angle)*radius,0.55f,
             std::sin(angle)*radius};
     }
     const std::array<Vec3,3> allyOffsets{{{-8,0.55f,-7},{8,0.55f,-8},{0,0.55f,9}}};
+    gBotDropHeight.fill(0.0f);gBotDropSpeed.fill(0.0f);gBotDropCanopy.fill(false);
     gBotHealth.fill(BOT_MAX_HEALTH);
     gBotDamageAmount.fill(0);
     gBotDamageTimer.fill(0.0f);
@@ -669,6 +674,15 @@ void updateBots(float dt) {
     int botsPressuringPlayer=0;
     for(int i=0;i<BOT_COUNT;++i) {
         BotState& bot=gBots[static_cast<size_t>(i)];
+        if(gBotDropHeight[static_cast<size_t>(i)]>0.0f) {
+            const float phase=bot.phase+gMatchTime*0.28f;
+            bot.pos.x=std::clamp(gBotHomes[static_cast<size_t>(i)].x+std::sin(phase)*2.8f,-WORLD_LIMIT+3.0f,WORLD_LIMIT-3.0f);
+            bot.pos.z=std::clamp(gBotHomes[static_cast<size_t>(i)].z+std::cos(phase)*2.8f,-WORLD_LIMIT+3.0f,WORLD_LIMIT-3.0f);
+            gBotDropHeight[static_cast<size_t>(i)]=std::max(0.0f,
+                gBotDropHeight[static_cast<size_t>(i)]-gBotDropSpeed[static_cast<size_t>(i)]*dt);
+            if(gBotDropHeight[static_cast<size_t>(i)]<=0.0f)gBotDropCanopy[static_cast<size_t>(i)]=false;
+            continue;
+        }
         bot.fireFlash=std::max(0.0f,bot.fireFlash-dt);
         bot.aiming=false;
         bot.targetIndex=-1;
@@ -1187,7 +1201,14 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             gTargets[0]={{gPlayer.x,1.25f,gPlayer.z-18.0f},3,true};
             gTargets[1]={{gPlayer.x-16.0f,1.25f,gPlayer.z-27.0f},3,true};
             gTargets[2]={{gPlayer.x+17.0f,1.25f,gPlayer.z-28.0f},3,true};
-            resetBots();updateStatus();
+            resetBots();
+            for(int i=0;i<BOT_COUNT;++i) {
+                const size_t n=static_cast<size_t>(i);
+                gBotDropHeight[n]=27.0f+static_cast<float>((i*7)%8)*4.0f;
+                gBotDropSpeed[n]=2.8f+static_cast<float>(i%4)*0.22f;
+                gBotDropCanopy[n]=true;
+            }
+            updateStatus();
             glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
             return;
         }
@@ -1220,6 +1241,15 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     float moveLength=0.0f;
     bool moving=false;
     if(gDropState==2) {
+        for(int i=0;i<BOT_COUNT;++i) {
+            const size_t n=static_cast<size_t>(i);
+            if(gBotDropHeight[n]<=0.0f)continue;
+            const float phase=gBots[n].phase+gMatchTime*0.28f;
+            gBots[n].pos.x=gBotHomes[n].x+std::sin(phase)*2.8f;
+            gBots[n].pos.z=gBotHomes[n].z+std::cos(phase)*2.8f;
+            gBotDropHeight[n]=std::max(0.0f,gBotDropHeight[n]-gBotDropSpeed[n]*dt);
+            if(gBotDropHeight[n]<=0.0f)gBotDropCanopy[n]=false;
+        }
         if(!gParachuteOpen) {
             gJumpVelocity-=9.8f*dt;
             if(gJumpHeight<12.0f) {
@@ -1384,9 +1414,21 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         const float renderDistance=gQuality==0?64.0f:(gQuality==1?88.0f:112.0f);
         if(botDistance2>renderDistance*renderDistance)continue;
         const bool botAiming=bot.aiming||(!isAllyBot(i)&&botDistance2<34.0f*34.0f);
-        drawCharacter(bot.pos,bot.yaw,botColor,true,
+        Vec3 botDrawPos=bot.pos;
+        botDrawPos.y+=gBotDropHeight[static_cast<size_t>(i)];
+        drawCharacter(botDrawPos,bot.yaw,botColor,true,
             gMatchTime+bot.phase,std::min(1.0f,bot.speed/4.6f),
             botAiming,bot.fireFlash>0.0f,false);
+        if(gBotDropCanopy[static_cast<size_t>(i)]&&gBotDropHeight[static_cast<size_t>(i)]>0.0f) {
+            const Vec3 canopy{botDrawPos.x,botDrawPos.y+5.0f,botDrawPos.z};
+            drawSphere(canopy,{2.25f,0.72f,2.25f},{0.86f,0.25f,0.18f});
+            drawSegment({0,0,0},0.0f,
+                {botDrawPos.x-0.28f,botDrawPos.y+1.65f,botDrawPos.z},
+                {canopy.x-1.35f,canopy.y-0.18f,canopy.z},0.022f,{0.90f,0.90f,0.85f});
+            drawSegment({0,0,0},0.0f,
+                {botDrawPos.x+0.28f,botDrawPos.y+1.65f,botDrawPos.z},
+                {canopy.x+1.35f,canopy.y-0.18f,canopy.z},0.022f,{0.90f,0.90f,0.85f});
+        }
         if(bot.fireFlash>0.0f) {
             const Vec3 muzzle=localPoint(bot.pos,0.0f,1.32f,-1.18f,bot.yaw);
             Vec3 impact=gPlayer;
