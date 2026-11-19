@@ -690,12 +690,18 @@ void placeBuildPiece() {
     }
     if(gWood<10) {setStatus("MADEIRA INSUFICIENTE • COLETE RECURSOS");return;}
     const Vec3 forward{-std::sin(gPlayerYaw),0,-std::cos(gPlayerYaw)};
-    Vec3 pos{gPlayer.x+forward.x*4.2f,0.68f,gPlayer.z+forward.z*4.2f};
-    // Prevent a new part from occupying the same placement point as another part.
+    const Vec3 right{std::cos(gPlayerYaw),0,-std::sin(gPlayerYaw)};
+    // Rapid-build places successive pieces in a compact forward pattern instead
+    // of trying to occupy the exact same point (which previously blocked piece 2).
+    const int sequence=gBuildCount%6;
+    const float forwardStep=3.3f+static_cast<float>(sequence/2)*2.65f;
+    const float sideStep=(sequence%2==0?-1.0f:1.0f)*1.65f;
+    Vec3 pos{gPlayer.x+forward.x*forwardStep+right.x*sideStep,0.68f,
+             gPlayer.z+forward.z*forwardStep+right.z*sideStep};
     for(int i=0;i<gBuildCount;++i) {
         float dx=pos.x-gBuildPieces[static_cast<size_t>(i)].pos.x;
         float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;
-        if(dx*dx+dz*dz<5.0f) {setStatus("LOCAL DE CONSTRUÇÃO BLOQUEADO");return;}
+        if(dx*dx+dz*dz<2.0f) {setStatus("LOCAL DE CONSTRUÇÃO BLOQUEADO");return;}
     }
     const int placedType=gBuildType;
     gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,placedType};
@@ -969,7 +975,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
 
     const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
     const bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
-    const bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
+    const bool buildHeld=(buttons&BUTTON_BUILD)!=0;
     const bool pulsePressed=(buttons&BUTTON_PULSE)&&!(gPreviousButtons&BUTTON_PULSE);
     const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
     const bool aimHeld=(buttons&BUTTON_AIM)!=0;
@@ -1102,8 +1108,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             setStatus("RECURSO COLETADO  •  +20 MADEIRA");
         } else setStatus("NENHUM RECURSO PRÓXIMO");
     }
-    if(buildPressed&&gDropState==3&&gBuildCooldown<=0.0f) {
-        placeBuildPiece();gBuildCooldown=0.32f;
+    if(buildHeld&&gDropState==3&&gBuildCooldown<=0.0f) {
+        placeBuildPiece();gBuildCooldown=0.14f;
     }
     if(pulsePressed&&gDropState==3&&gPulseCooldown<=0.0f) {
         firePulse();gPulseCooldown=gWeaponType==2?0.55f:0.24f;
@@ -1124,14 +1130,24 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     }
     gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
     gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
-    const float cameraDistance=aimHeld?5.0f:9.0f;
-    const float cameraHeight=aimHeld?2.35f:(3.8f+gCameraPitch*3.4f);
-    Vec3 eye{gPlayer.x+std::sin(gCameraYaw)*cameraDistance,
-        gPlayer.y+cameraHeight+gJumpHeight*0.35f,
-        gPlayer.z+std::cos(gCameraYaw)*cameraDistance};
-    Vec3 target{gPlayer.x,gPlayer.y+1.0f+gJumpHeight*0.45f,gPlayer.z};
+    const float cameraDistance=aimHeld?3.15f:8.5f;
+    const float cameraHeight=aimHeld?2.05f:(3.7f+gCameraPitch*3.1f);
+    // Over-shoulder aim: keep the character out of the crosshair and look
+    // forward into the play space instead of zooming into the character's back.
+    const float shoulder=aimHeld?0.72f:0.0f;
+    Vec3 eye{
+        gPlayer.x+std::sin(gCameraYaw)*cameraDistance+std::cos(gCameraYaw)*shoulder,
+        gPlayer.y+cameraHeight+gJumpHeight*0.30f,
+        gPlayer.z+std::cos(gCameraYaw)*cameraDistance-std::sin(gCameraYaw)*shoulder
+    };
+    const float lookAhead=aimHeld?22.0f:0.0f;
+    Vec3 target{
+        gPlayer.x-std::sin(gCameraYaw)*lookAhead,
+        gPlayer.y+(aimHeld?1.42f:1.0f)+gJumpHeight*0.40f,
+        gPlayer.z-std::cos(gCameraYaw)*lookAhead
+    };
     Mat4 view=lookAt(eye,target,{0,1,0});
-    gProjection=multiply(perspective(aimHeld?0.62f:0.93f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
+    gProjection=multiply(perspective(aimHeld?0.78f:0.93f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
 
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
     drawWorld(gMatchTime);
