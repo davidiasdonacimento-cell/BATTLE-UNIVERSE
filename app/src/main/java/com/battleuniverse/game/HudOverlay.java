@@ -47,8 +47,8 @@ public final class HudOverlay extends View {
     private static final long[] MISSION_XP={120,180,0};
     private static final long[] MISSION_DIAMONDS={0,0,80};
     private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
-    private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM","FROZEN FRONT","INDUSTRIAL ZONE","GREEN VALLEY","ORBITAL BASE"};
-    private static final String[] MAP_DETAILS={"Praias • florestas • vilas","Arranha-céus • neon • avenidas","Dunas • cânions • ruínas","Geleiras • neve • bases polares","Fábricas • depósitos • chaminés","Campos • rios • florestas","Instalações • plataformas • tecnologia"};
+    private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM","FROZEN FRONT","INDUSTRIAL ZONE","GREEN VALLEY","ORBITAL BASE","ABANDONED SECTOR"};
+    private static final String[] MAP_DETAILS={"Praias • florestas • vilas","Arranha-céus • neon • avenidas","Dunas • cânions • ruínas","Geleiras • neve • bases polares","Fábricas • depósitos • chaminés","Campos • rios • florestas","Instalações • plataformas • tecnologia","Ruínas • depósitos • estruturas antigas"};
     private static final String[] CHARACTER_NAMES={"BLOOB","BLOOB TÁTICO","BLOOB NEON","BLOOB DOURADO"};
     private static final String[] QUALITY_NAMES={"ECONÔMICO","EQUILIBRADO","ALTO"};
     private final GameSurfaceView game;
@@ -242,7 +242,7 @@ public final class HudOverlay extends View {
     private void drawMaps(Canvas c){
         eyebrow(c,270,175,"7 DESTINOS • MAPAS SELECIONÁVEIS");title(c,"ESCOLHA O MAPA",270,224);
         subtitle(c,"Cada arena usa uma identidade visual própria na partida.",270,252);
-        int[] colors={0xFF1B7B72,0xFF554C91,0xFFB77B43,0xFF8CB8CE,0xFF59666C,0xFF43875A,0xFF344B70};
+        int[] colors={0xFF1B7B72,0xFF554C91,0xFFB77B43,0xFF8CB8CE,0xFF59666C,0xFF43875A,0xFF344B70,0xFF62564A};
         for(int i=0;i<MAP_NAMES.length;i++){
             int col=i%4,row=i/4;float x=270+col*145f,y=282+row*178f;
             boolean active=map==i;
@@ -592,7 +592,7 @@ public final class HudOverlay extends View {
     }
     private void mapArtwork(Canvas c,int map,float x,float y,float w,float h){
         int[][] palettes={{0xFF54C2D1,0xFF1B665B},{0xFF7B6BD6,0xFF171F49},{0xFFE4B366,0xFF8B5737},
-            {0xFFB9E5F2,0xFF567F9D},{0xFF89979A,0xFF26343A},{0xFF83C66D,0xFF1B6041},{0xFF5479A9,0xFF111D3A}};
+            {0xFFB9E5F2,0xFF567F9D},{0xFF89979A,0xFF26343A},{0xFF83C66D,0xFF1B6041},{0xFF5479A9,0xFF111D3A},{0xFF82715E,0xFF302B28}};
         int index=Math.max(0,Math.min(palettes.length-1,map));
         p.setShader(new LinearGradient(x,y,x+w,y+h,palettes[index],null,Shader.TileMode.CLAMP));
         r.set(x,y,x+w,y+h);c.drawRoundRect(r,12,12,p);p.setShader(null);
@@ -602,7 +602,8 @@ public final class HudOverlay extends View {
         else if(map==3){p.setColor(0xFFECF8FF);for(int i=0;i<4;i++)c.drawCircle(x+12+i*29,y+22+(i%2)*10,7,p);p.setColor(0xFF6C9DB7);c.drawRect(x+8,y+h*.68f,x+w-8,y+h*.82f,p);}
         else if(map==4){for(int i=0;i<4;i++){float bx=x+13+i*27;p.setColor(0xFF39484D);c.drawRect(bx,y+17,bx+12,y+h-8,p);p.setColor(0xFFDB8A48);c.drawRect(bx+3,y+25,bx+9,y+31,p);}p.setColor(0xFF263238);c.drawRect(x+w*.72f,y+8,x+w*.83f,y+h-5,p);}
         else if(map==5){p.setColor(0xFF1C6947);for(int i=0;i<5;i++)c.drawCircle(x+12+i*23,y+h*.62f,10,p);p.setColor(0xFF8BD58B);c.drawOval(x+10,y+h*.65f,x+w-10,y+h+6,p);}
-        else{p.setColor(0xFF172C55);for(int i=0;i<4;i++){float bx=x+12+i*27;c.drawRoundRect(bx,y+12,bx+13,y+h-8,3,3,p);}p.setColor(0xFF5BE7F2);c.drawCircle(x+w*.5f,y+h*.45f,10,p);}
+        else if(map==6){p.setColor(0xFF172C55);for(int i=0;i<4;i++){float bx=x+12+i*27;c.drawRoundRect(bx,y+12,bx+13,y+h-8,3,3,p);}p.setColor(0xFF5BE7F2);c.drawCircle(x+w*.5f,y+h*.45f,10,p);}
+        else{p.setColor(0xFF443D35);for(int i=0;i<4;i++){float bx=x+8+i*27;c.drawRect(bx,y+25,bx+17,y+h-6,p);}p.setColor(0xFFB69A70);c.drawRect(x+w*.38f,y+12,x+w*.62f,y+h-10,p);}
     }
     private void palmIcon(Canvas c,float x,float y){
         p.setColor(0xFF175944);p.setStrokeWidth(3);c.drawLine(x,y,x+3,y-27,p);
