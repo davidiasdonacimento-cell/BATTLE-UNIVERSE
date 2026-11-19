@@ -406,8 +406,9 @@ public final class HudOverlay extends View {
         c.drawCircle(1159-10*0.88f,105-6*0.88f,4,p);
         c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
 
-        drawControl(c,890,310,38,"MIRA",0xFF285D79,0xFF8ADCF4);
-        drawControl(c,1002,310,43,"DISPARAR",0xFF185D7A,0xFF65E9F4);
+        drawControl(c,890,310,38,game.isAimToggled()?"MIRA ON":"MIRA",
+            0xFF285D79,0xFF8ADCF4,game.isAimToggled());
+        drawControl(c,1002,310,43,"DISPARAR",0xFF185D7A,0xFF65E9F4,game.isFiring());
         drawControl(c,1165,403,43,"CONSTRUIR",0xFF66502A,0xFFFFD27A);
         drawControl(c,960,461,39,"CORRER",0xFF285D49,0xFF83E9B2);
         drawControl(c,1065,465,34,"ARMA",0xFF354F79,0xFF9DC7FF);
@@ -417,10 +418,25 @@ public final class HudOverlay extends View {
         String gameStatus=game.getGameStatus();
         if(!gameStatus.startsWith("EMBARQUE")&&!gameStatus.startsWith("AVIÃO")) {
             float cx=640,cy=360;
-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.0f);p.setColor(0xDDF1FFFF);
-            c.drawCircle(cx,cy,9,p);c.drawLine(cx-21,cy,cx-11,cy,p);c.drawLine(cx+11,cy,cx+21,cy,p);
-            c.drawLine(cx,cy-21,cx,cy-11,p);c.drawLine(cx,cy+11,cx,cy+21,p);
-            p.setStyle(Paint.Style.FILL);p.setColor(0xFFFFD27A);c.drawCircle(cx,cy,2.2f,p);
+            if(game.isAimToggled()) {
+                // Retículo com contorno escuro para continuar visível sobre qualquer cenário.
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5.0f);p.setColor(0xD9001019);
+                c.drawCircle(cx,cy,13,p);
+                p.setStrokeWidth(2.2f);p.setColor(0xFFF4FCFF);
+                c.drawCircle(cx,cy,11,p);
+                c.drawLine(cx-25,cy,cx-16,cy,p);c.drawLine(cx+16,cy,cx+25,cy,p);
+                c.drawLine(cx,cy-25,cx,cy-16,p);c.drawLine(cx,cy+16,cx,cy+25,p);
+                p.setStyle(Paint.Style.FILL);p.setColor(0xFF35E5F0);c.drawCircle(cx,cy,3.0f,p);
+                text(c,"MIRA ATIVA  •  TOQUE PARA SOLTAR",537,397,9,0xFFBDFBFF,Typeface.DEFAULT_BOLD);
+            } else {
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3.0f);p.setColor(0xD9001019);
+                c.drawCircle(cx,cy,10,p);
+                p.setStrokeWidth(1.8f);p.setColor(0xDDF1FFFF);
+                c.drawCircle(cx,cy,9,p);
+                c.drawLine(cx-21,cy,cx-11,cy,p);c.drawLine(cx+11,cy,cx+21,cy,p);
+                c.drawLine(cx,cy-21,cx,cy-11,p);c.drawLine(cx,cy+11,cx,cy+21,p);
+                p.setStyle(Paint.Style.FILL);p.setColor(0xFFFFD27A);c.drawCircle(cx,cy,2.2f,p);
+            }
         }
 
         p.setColor(0x553D7183);c.drawCircle(179,544,66,p);
@@ -430,13 +446,18 @@ public final class HudOverlay extends View {
 
         pill(c,24,625,160,49,"SAIR DA PARTIDA",0xDD173C4A,Color.WHITE);
         panel(c,420,650,440,40,0xBB071522,0x226A8EA0,14);
-        text(c,"JOYSTICK: MOVER   •   ARRASTE À DIREITA: CÂMERA",438,675,9,0xFFDAEAF0,Typeface.DEFAULT_BOLD);
+        text(c,"JOYSTICK: MOVER  •  MIRA: TOQUE FIXA/SOLTA  •  SEGURE DISPARAR",
+            438,675,8,0xFFDAEAF0,Typeface.DEFAULT_BOLD);
         postInvalidateDelayed(120);
     }
     private void drawControl(Canvas c,float x,float y,float radius,String label,int fill,int edge){
-        p.setColor(0x443ED9E8);c.drawCircle(x,y,radius+7,p);
-        p.setColor(fill);c.drawCircle(x,y,radius,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(edge);c.drawCircle(x,y,radius,p);p.setStyle(Paint.Style.FILL);
+        drawControl(c,x,y,radius,label,fill,edge,false);
+    }
+    private void drawControl(Canvas c,float x,float y,float radius,String label,int fill,int edge,boolean active){
+        p.setColor(active?0xAA39DCEB:0x443ED9E8);c.drawCircle(x,y,radius+7,p);
+        p.setColor(active?0xFF087F8D:fill);c.drawCircle(x,y,radius,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(active?3.0f:2.0f);
+        p.setColor(active?0xFFFFFFFF:edge);c.drawCircle(x,y,radius,p);p.setStyle(Paint.Style.FILL);
         p.setTextAlign(Paint.Align.CENTER);p.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));
         p.setTextSize(label.length()>7?8:10);p.setColor(Color.WHITE);c.drawText(label,x,y+4,p);p.setTextAlign(Paint.Align.LEFT);
     }
