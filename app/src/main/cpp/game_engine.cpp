@@ -91,6 +91,7 @@ GLuint gProgram=0, gCubeVbo=0, gSphereVbo=0, gCylinderVbo=0, gConeVbo=0;
 GLsizei gSphereCount=0, gCylinderCount=0, gConeCount=0;
 GLint gMvpLocation=-1, gModelLocation=-1, gColorLocation=-1;
 int gScreenMode=0, gSelectedCharacter=0, gSelectedMap=0, gSelectedMode=0, gQuality=1;
+int gSelectedShirtStyle=0,gSelectedBootStyle=0,gSelectedSetStyle=0;
 Mat4 gProjection=identity();
 int gWidth=1, gHeight=1;
 Vec3 gPlayer{0,0.55f,0};
@@ -492,8 +493,32 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     const float swing=std::sin(phase)*(sprinting?0.46f:0.34f)*gait;
     const float bob=std::sin(phase*2.0f)*0.035f*gait+std::sin(time*1.5f)*0.014f;
     const float recoil=firing?0.105f:0.0f;
-    const Vec3 shell=color;
-    const Vec3 bootColor{0.91f,0.95f,0.98f};
+    Vec3 shell=color;
+    Vec3 pantsColor=color;
+    Vec3 bootColor{0.91f,0.95f,0.98f};
+    if(!bot) {
+        static const std::array<Vec3,5> shirts{{
+            {0.035f,0.66f,0.88f},{0.10f,0.20f,0.28f},{0.56f,0.12f,0.82f},
+            {0.70f,0.82f,0.88f},{0.72f,0.38f,0.12f}
+        }};
+        static const std::array<Vec3,5> trousers{{
+            {0.055f,0.095f,0.13f},{0.16f,0.20f,0.22f},{0.18f,0.12f,0.28f},
+            {0.30f,0.36f,0.40f},{0.30f,0.20f,0.10f}
+        }};
+        static const std::array<Vec3,5> boots{{
+            {0.91f,0.95f,0.98f},{0.12f,0.16f,0.20f},{0.18f,0.78f,0.88f},
+            {0.82f,0.88f,0.92f},{0.88f,0.62f,0.22f}
+        }};
+        int shirt=std::clamp(gSelectedShirtStyle,0,4);
+        int boot=std::clamp(gSelectedBootStyle,0,4);
+        if(gSelectedSetStyle>0) {
+            shirt=std::clamp(gSelectedSetStyle,1,4);
+            boot=std::clamp(gSelectedSetStyle,1,4);
+        }
+        shell=shirts[static_cast<size_t>(shirt)];
+        pantsColor=trousers[static_cast<size_t>(shirt)];
+        bootColor=boots[static_cast<size_t>(boot)];
+    }
     const Vec3 dark{0.055f,0.095f,0.13f};
     const Vec3 white{0.95f,0.98f,1.0f};
     const float eyeShift=std::sin(time*1.7f+(bot?1.0f:0.0f))*0.018f;
@@ -504,10 +529,10 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     Vec3 hipR{0.19f,0.72f+bob,-swing*0.34f};
     Vec3 kneeR{0.20f,0.43f+bob,-swing*0.72f};
     Vec3 footR{0.20f,0.17f+bob,-swing*0.88f};
-    drawSegment(p,yaw,hipL,kneeL,0.125f,shell);
-    drawSegment(p,yaw,kneeL,footL,0.105f,shell);
-    drawSegment(p,yaw,hipR,kneeR,0.125f,shell);
-    drawSegment(p,yaw,kneeR,footR,0.105f,shell);
+    drawSegment(p,yaw,hipL,kneeL,0.125f,pantsColor);
+    drawSegment(p,yaw,kneeL,footL,0.105f,pantsColor);
+    drawSegment(p,yaw,hipR,kneeR,0.125f,pantsColor);
+    drawSegment(p,yaw,kneeR,footR,0.105f,pantsColor);
     drawSphere(localPoint(p,-0.20f,0.12f+bob,-0.16f+swing*0.88f,yaw),
         {0.25f,0.15f,0.36f},bootColor,yaw);
     drawSphere(localPoint(p,0.20f,0.12f+bob,-0.16f-swing*0.88f,yaw),
@@ -1106,6 +1131,12 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint i
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetQuality(JNIEnv*,jclass,jint value) {
     gQuality=std::clamp(static_cast<int>(value),0,2);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetWardrobe(JNIEnv*,jclass,jint shirt,jint boots,jint set) {
+    gSelectedShirtStyle=std::clamp(static_cast<int>(shirt),0,4);
+    gSelectedBootStyle=std::clamp(static_cast<int>(boots),0,4);
+    gSelectedSetStyle=std::clamp(static_cast<int>(set),0,4);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetLookSensitivity(JNIEnv*,jclass,jint value) {
