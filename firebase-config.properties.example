@@ -1,0 +1,4 @@
+# EXAMPLE ONLY — do not put real values in this file.
+# The CI workflow expects the full google-services.json in the
+# GitHub Actions secret FIREBASE_GOOGLE_SERVICES_JSON.
+# Register Android package: com.battleuniverse.game
