@@ -98,7 +98,7 @@ float gJumpHeight=0, gJumpVelocity=0, gMatchTime=0, gZoneRadius=30;
 float gInteractCooldown=0;
 int gCollected=0, gPreviousButtons=0;
 std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
-struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; float fireFlash=0; bool aiming=false; };
+struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; float fireFlash=0; bool aiming=false; int targetIndex=-1; bool targetPlayer=false; };
 std::array<int,BOT_COUNT> gBotHealth{};
 std::array<bool,BOT_COUNT> gBotActive{};
 std::array<float,BOT_COUNT> gBotRespawn{};
@@ -131,6 +131,7 @@ int gDropState=0; // 0 lobby, 1 inside transport plane, 2 parachute descent, 3 g
 Vec3 gPlanePosition{-110,24,-32};
 Vec3 gPulseStartPosition{0,1.5f,0},gPulseHitPosition{0,1.4f,-8};
 bool gParachuteOpen=false;
+bool gPlaneExteriorView=false;
 std::mutex gStatusMutex;
 std::string gHudStatus="CARREGANDO CENÁRIO 3D...";
 
@@ -544,6 +545,8 @@ void updateBots(float dt) {
         BotState& bot=gBots[static_cast<size_t>(i)];
         bot.fireFlash=std::max(0.0f,bot.fireFlash-dt);
         bot.aiming=false;
+        bot.targetIndex=-1;
+        bot.targetPlayer=false;
 
         if(!gBotActive[static_cast<size_t>(i)]) {
             if(gSelectedMode==3) {
@@ -562,24 +565,50 @@ void updateBots(float dt) {
         const float playerDistance=std::sqrt(toPlayerX*toPlayerX+toPlayerZ*toPlayerZ);
         Vec3 target=bot.pos;
         bool engaging=false;
+        bool targetPlayer=false;
+        int targetBot=-1;
+        float targetDistance=std::numeric_limits<float>::max();
 
-        if(ally && gDropState==3) {
+        // Every bot searches for the nearest hostile: opponents fight opponents too.
+        // In solo, all bots are hostile to each other and to the human player.
+        // In team modes, allies protect the player and target only enemy bots.
+        if(gDropState==3 && gSelectedMode!=3) {
+            if(!ally && playerDistance<92.0f) {
+                targetDistance=playerDistance;
+                targetPlayer=true;
+            }
+            for(int other=0;other<BOT_COUNT;++other) {
+                if(other==i||!gBotActive[static_cast<size_t>(other)])continue;
+                if(isAllyBot(other)==ally)continue;
+                const Vec3 op=gBots[static_cast<size_t>(other)].pos;
+                const float ox=op.x-bot.pos.x,oz=op.z-bot.pos.z;
+                const float d=std::sqrt(ox*ox+oz*oz);
+                if(d<targetDistance && d<92.0f) {
+                    targetDistance=d;
+                    targetBot=other;
+                    targetPlayer=false;
+                }
+            }
+            if(targetPlayer||targetBot>=0) {
+                engaging=true;
+                Vec3 enemy=targetPlayer?gPlayer:gBots[static_cast<size_t>(targetBot)].pos;
+                const float radial=std::atan2(bot.pos.z-enemy.z,bot.pos.x-enemy.x);
+                const float strafe=std::sin(gMatchTime*0.52f+bot.phase)*0.48f;
+                const float desiredRadius=targetPlayer?12.0f+static_cast<float>(i%5)*1.3f:
+                    9.0f+static_cast<float>(i%4)*1.2f;
+                const float angle=radial+strafe;
+                target={enemy.x+std::cos(angle)*desiredRadius,0.55f,
+                        enemy.z+std::sin(angle)*desiredRadius};
+            }
+        }
+
+        if(ally && gDropState==3 && !engaging) {
             const float formationAngle=bot.phase+static_cast<float>(i)*0.75f;
             const float followRadius=7.5f+static_cast<float>(i%2)*2.0f;
             target={gPlayer.x+std::cos(formationAngle)*followRadius,0.55f,
                     gPlayer.z+std::sin(formationAngle)*followRadius};
-        } else if(!ally && gSelectedMode!=3 && gDropState==3 && playerDistance<112.0f) {
-            // Combat is the first priority. Bots no longer abandon the player to chase floor pickups.
-            engaging=true;
-            const float radial=playerDistance>0.05f
-                ?std::atan2(bot.pos.z-gPlayer.z,bot.pos.x-gPlayer.x):bot.phase;
-            const float flank=std::sin(gMatchTime*0.34f+bot.phase)*0.34f;
-            const float desiredRadius=13.0f+static_cast<float>(i%7)*1.55f;
-            const float angle=radial+flank;
-            target={gPlayer.x+std::cos(angle)*desiredRadius,0.55f,
-                    gPlayer.z+std::sin(angle)*desiredRadius};
-        } else {
-            // Before the player lands, bots patrol their own sectors instead of camping on pickups.
+        } else if(!engaging) {
+            // Patrol independent map sectors; pickups never become a bot's combat objective.
             const float phase=gMatchTime*(ally?0.24f:0.17f)+bot.phase;
             const Vec3 home=gBotHomes[static_cast<size_t>(i)];
             const float patrolRadius=ally?4.5f:7.0f;
@@ -590,44 +619,56 @@ void updateBots(float dt) {
         float dx=target.x-bot.pos.x,dz=target.z-bot.pos.z;
         float distance=std::sqrt(dx*dx+dz*dz);
         bot.speed=0.0f;
-        if(distance>0.45f) {
+        if(distance>0.55f) {
             const float inv=1.0f/std::max(0.001f,distance);
             const float dirX=dx*inv,dirZ=dz*inv;
             bot.yaw=std::atan2(-dirX,-dirZ);
-            bot.speed=ally?3.0f:(engaging?(playerDistance>24.0f?5.0f:3.0f):2.2f);
+            bot.speed=engaging?(targetDistance>24.0f?5.2f:2.8f):(ally?3.0f:2.2f);
             const float step=std::min(distance,bot.speed*dt);
             bot.pos.x+=dirX*step;bot.pos.z+=dirZ*step;
         }
 
         if(engaging) {
-            const float attackDx=gPlayer.x-bot.pos.x;
-            const float attackDz=gPlayer.z-bot.pos.z;
+            const Vec3 enemy=targetPlayer?gPlayer:gBots[static_cast<size_t>(targetBot)].pos;
+            const float attackDx=enemy.x-bot.pos.x;
+            const float attackDz=enemy.z-bot.pos.z;
             const float attackDistance=std::sqrt(attackDx*attackDx+attackDz*attackDz);
-            // Aim at the player even while the bot strafes around its chosen combat position.
             bot.yaw=std::atan2(-attackDx,-attackDz);
-            bot.aiming=attackDistance<52.0f;
+            bot.aiming=attackDistance<58.0f;
             gBotAttackCooldown[static_cast<size_t>(i)]=
                 std::max(0.0f,gBotAttackCooldown[static_cast<size_t>(i)]-dt);
-            if(attackDistance>4.5f && attackDistance<58.0f
+            if(attackDistance>4.0f && attackDistance<58.0f
                     && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
-                bot.fireFlash=0.55f;
-                gPlayerHealth=std::max(0,gPlayerHealth-2);
-                gBotAttackCooldown[static_cast<size_t>(i)]=1.15f+static_cast<float>(i%5)*0.18f;
-                if(gPlayerHealth<=0) {
-                    gMatchFinished=true;
-                    setStatus("ELIMINADO • FIM DA PARTIDA");
-                } else {
-                    std::ostringstream hit;
-                    hit<<"DISPARO DE BOT • VIDA "<<gPlayerHealth<<"%";
-                    setStatus(hit.str());
+                bot.fireFlash=0.32f;
+                if(targetPlayer) {
+                    gPlayerHealth=std::max(0,gPlayerHealth-1);
+                    if(gPlayerHealth<=0) {
+                        gMatchFinished=true;
+                        setStatus("ELIMINADO • FIM DA PARTIDA");
+                    } else {
+                        std::ostringstream hit;
+                        hit<<"DISPARO DE BOT • VIDA "<<gPlayerHealth<<"%";
+                        setStatus(hit.str());
+                    }
+                } else if(targetBot>=0 && gBotActive[static_cast<size_t>(targetBot)]) {
+                    const size_t victim=static_cast<size_t>(targetBot);
+                    gBotHealth[victim]=std::max(0,gBotHealth[victim]-1);
+                    if(gBotHealth[victim]<=0) {
+                        gBotActive[victim]=false;
+                        gBotRespawn[victim]=gSelectedMode==3?3.0f:0.0f;
+                    }
                 }
+                gBotAttackCooldown[static_cast<size_t>(i)]=0.95f+static_cast<float>(i%5)*0.15f;
             }
+            bot.targetPlayer=targetPlayer;
+            bot.targetIndex=targetBot;
+        } else {
+            gBotAttackCooldown[static_cast<size_t>(i)]=
+                std::max(0.0f,gBotAttackCooldown[static_cast<size_t>(i)]-dt);
         }
 
         bot.pos.x=std::clamp(bot.pos.x,-116.0f,116.0f);
         bot.pos.z=std::clamp(bot.pos.z,-116.0f,116.0f);
-
-        // Light separation prevents the 29 opponents from stacking into one point.
         for(int other=0;other<i;++other) {
             if(!gBotActive[static_cast<size_t>(other)])continue;
             const Vec3 op=gBots[static_cast<size_t>(other)].pos;
@@ -768,40 +809,60 @@ void drawTargets(float time) {
         drawSphere(gPulseHitPosition,{0.33f,0.33f,0.33f},boltColor);
     }
 }
-void drawTransportPlane(Vec3 pos,float time) {
-    // Cabin view: 30 passengers are seated in six rows and five columns.
-    drawCube({pos.x-0.35f,pos.y-0.68f,pos.z},{8.7f,0.22f,6.0f},{0.25f,0.30f,0.35f});
-    drawCube({pos.x-0.35f,pos.y+0.26f,pos.z-2.95f},{8.7f,1.9f,0.20f},{0.43f,0.48f,0.54f});
-    drawCube({pos.x-0.35f,pos.y+0.26f,pos.z+2.95f},{8.7f,1.9f,0.20f},{0.43f,0.48f,0.54f});
+void drawTransportPlaneCabin(Vec3 pos,float time) {
+    // Interior deliberately has open side windows: the player must see the map outside.
+    drawCube({pos.x-0.35f,pos.y-0.68f,pos.z},{8.7f,0.22f,5.7f},{0.25f,0.30f,0.35f});
+    drawCube({pos.x-0.35f,pos.y+0.98f,pos.z-2.95f},{8.7f,0.16f,0.20f},{0.43f,0.48f,0.54f});
+    drawCube({pos.x-0.35f,pos.y+0.98f,pos.z+2.95f},{8.7f,0.16f,0.20f},{0.43f,0.48f,0.54f});
+    drawCube({pos.x-0.35f,pos.y-0.05f,pos.z-2.95f},{8.7f,0.18f,0.20f},{0.43f,0.48f,0.54f});
+    drawCube({pos.x-0.35f,pos.y-0.05f,pos.z+2.95f},{8.7f,0.18f,0.20f},{0.43f,0.48f,0.54f});
+    // Rear bulkhead is behind the camera; the front remains open toward the ramp.
     drawCube({pos.x-4.65f,pos.y+0.05f,pos.z},{0.22f,1.7f,5.8f},{0.34f,0.40f,0.46f});
-    drawCube({pos.x-4.95f,pos.y-1.05f,pos.z},{1.2f,0.16f,5.5f},{0.54f,0.58f,0.60f},0,0.0f,0.18f);
-    drawCone({pos.x+5.55f,pos.y,pos.z},{1.1f,2.0f,1.1f},{0.77f,0.80f,0.83f},0.0f,-PI*0.5f,0.0f);
+    drawCube({pos.x+4.35f,pos.y-0.08f,pos.z},{0.18f,0.16f,5.6f},{0.54f,0.58f,0.60f});
     drawCube({pos.x-0.15f,pos.y-0.15f,pos.z},{0.55f,0.16f,17.5f},{0.52f,0.58f,0.64f});
-    drawCube({pos.x-4.3f,pos.y+0.05f,pos.z},{0.42f,0.13f,7.2f},{0.56f,0.61f,0.66f});
     drawCube({pos.x-4.2f,pos.y+1.0f,pos.z},{2.5f,0.16f,0.22f},{0.38f,0.46f,0.53f});
-    drawCylinder({pos.x-1.0f,pos.y-0.72f,pos.z-5.0f},{0.65f,2.2f,0.65f},{0.28f,0.33f,0.38f},0.0f,-PI*0.5f,0.0f);
-    drawCylinder({pos.x-1.0f,pos.y-0.72f,pos.z+5.0f},{0.65f,2.2f,0.65f},{0.28f,0.33f,0.38f},0.0f,-PI*0.5f,0.0f);
-    for(int i=0;i<5;++i) {
-        float x=pos.x-3.2f+i*1.45f;
-        drawSphere({x,pos.y+0.32f,pos.z-0.30f},{0.33f,0.15f,0.40f},{0.10f,0.63f,0.79f});
-        drawSphere({x,pos.y+0.32f,pos.z+0.30f},{0.33f,0.15f,0.40f},{0.10f,0.63f,0.79f});
+    // Seats along both sides leave a clear aisle and keep the passengers visible.
+    for(int row=0;row<6;++row) {
+        const float x=pos.x-3.25f+static_cast<float>(row)*1.25f;
+        for(int side=-1;side<=1;side+=2) {
+            const float z=pos.z+static_cast<float>(side)*1.95f;
+            drawCube({x,pos.y-0.35f,z},{0.78f,0.18f,0.72f},{0.10f,0.24f,0.32f});
+            drawCube({x-0.25f,pos.y-0.02f,z},{0.14f,0.55f,0.72f},{0.12f,0.36f,0.46f});
+        }
     }
     float pulse=0.12f+0.06f*std::sin(time*7.0f);
-    drawSphere({pos.x-1.0f,pos.y-0.72f,pos.z-6.3f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
-    drawSphere({pos.x-1.0f,pos.y-0.72f,pos.z+6.3f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
+    drawSphere({pos.x-1.0f,pos.y-0.42f,pos.z-2.55f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
+    drawSphere({pos.x-1.0f,pos.y-0.42f,pos.z+2.55f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
     const std::array<Vec3,4> flightOutfits{{
         {0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
         {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}
     }};
     for(int i=0;i<=BOT_COUNT;++i) {
         const int row=i/5,col=i%5;
-        const float xOffset=-3.45f+static_cast<float>(row)*1.28f;
-        const float zOffset=-2.10f+static_cast<float>(col)*1.05f;
+        const float xOffset=-3.35f+static_cast<float>(row)*1.30f;
+        const float zOffset=-1.95f+static_cast<float>(col%2)*3.90f;
         Vec3 passenger{pos.x+xOffset,pos.y-0.62f,pos.z+zOffset};
         const Vec3 outfit=i==0?flightOutfits[static_cast<size_t>(gSelectedCharacter)]:
             flightOutfits[static_cast<size_t>((i-1)%4)];
-        drawCharacter(passenger,-PI*0.5f,outfit,true,time+static_cast<float>(i)*0.23f,0.0f);
+        drawCharacter(passenger,PI*0.5f,outfit,true,time+static_cast<float>(i)*0.23f,0.0f);
     }
+}
+void drawTransportPlaneExterior(Vec3 pos,float time) {
+    // Distinct silhouette for the short outside flight reveal after the cabin countdown.
+    drawCube({pos.x,pos.y,pos.z},{12.0f,2.15f,2.25f},{0.42f,0.49f,0.56f});
+    drawCone({pos.x+6.55f,pos.y,pos.z},{2.1f,2.1f,2.1f},{0.76f,0.81f,0.86f},0.0f,-PI*0.5f,0.0f);
+    drawCube({pos.x-6.5f,pos.y+0.05f,pos.z},{2.1f,1.65f,2.15f},{0.34f,0.41f,0.48f});
+    drawCube({pos.x-0.6f,pos.y-0.15f,pos.z},{3.0f,0.24f,22.0f},{0.53f,0.60f,0.67f});
+    drawCube({pos.x-5.5f,pos.y+0.25f,pos.z},{3.1f,0.20f,7.2f},{0.48f,0.55f,0.62f});
+    drawCube({pos.x-5.4f,pos.y+1.0f,pos.z},{2.0f,2.0f,0.28f},{0.38f,0.46f,0.53f});
+    for(int side=-1;side<=1;side+=2) {
+        const float z=pos.z+static_cast<float>(side)*7.3f;
+        drawCylinder({pos.x-1.1f,pos.y-0.7f,z},{0.72f,2.5f,0.72f},{0.22f,0.29f,0.36f},0.0f,-PI*0.5f,0.0f);
+        drawSphere({pos.x-1.1f,pos.y-0.7f,z},{0.42f,0.42f,0.42f},{0.18f,0.75f,0.90f});
+    }
+    const float blink=0.10f+0.06f*std::sin(time*8.0f);
+    drawSphere({pos.x-5.6f,pos.y+1.4f,pos.z-3.8f},{blink,blink,blink},{0.25f,0.90f,1.0f});
+    drawSphere({pos.x-5.6f,pos.y+1.4f,pos.z+3.8f},{blink,blink,blink},{1.0f,0.25f,0.18f});
 }
 void drawParachute(Vec3 player) {
     if(gDropState!=2||!gParachuteOpen)return;
@@ -827,7 +888,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
         gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
-        gDropState=1;gDropTimer=0;gPlanePosition={-110,24,-32};
+        gDropState=1;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};
         gJumpHeight=0;gJumpVelocity=0;gParachuteOpen=false;gPreviousButtons=0;
         gTargets[0]={{0,1.25f,-17},3,true};
         gTargets[1]={{-18,1.25f,-28},3,true};
@@ -875,7 +936,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
     gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
     gBotAttackCooldown.fill(0.0f);gLookSensitivity=1.0f;
-    gDropState=0;gDropTimer=0;gPlanePosition={-110,24,-32};gParachuteOpen=false;
+    gDropState=0;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gParachuteOpen=false;
     gTargets[0]={{0,1.25f,-10},3,true};
     gTargets[1]={{-10,1.25f,-14},3,true};
     gTargets[2]={{10,1.25f,-14},3,true};
@@ -920,6 +981,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         gPlayer.x=gPlanePosition.x;gPlayer.z=gPlanePosition.z;
         gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
         gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
+        if(gDropTimer>=PLANE_COUNTDOWN_SECONDS)gPlaneExteriorView=true;
         if((jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS)||gDropTimer>=19.5f) {
             gDropState=2;gJumpHeight=22.0f;gJumpVelocity=0.0f;
             gParachuteOpen=false;
@@ -929,15 +991,27 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             resetBots();
             updateStatus();
         }
-        // Elevated interior camera looks down the passenger cabin, not at the plane from outside.
-        Vec3 eye{gPlanePosition.x-4.0f,gPlanePosition.y+0.82f,gPlanePosition.z};
-        Vec3 target{gPlanePosition.x+2.4f,gPlanePosition.y+0.92f,gPlanePosition.z};
-        Mat4 view=lookAt(eye,target,{0,1,0});
-        gProjection=multiply(perspective(1.02f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
+        glClearColor(0.34f,0.66f,0.88f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
-        drawWorld(gMatchTime);drawTransportPlane(gPlanePosition,gMatchTime);
+        if(!gPlaneExteriorView) {
+            // Countdown: unmistakable first-person view from inside the open passenger cabin.
+            Vec3 eye{gPlanePosition.x-3.55f,gPlanePosition.y+0.42f,gPlanePosition.z};
+            Vec3 target{gPlanePosition.x+3.4f,gPlanePosition.y+0.12f,gPlanePosition.z};
+            Mat4 view=lookAt(eye,target,{0,1,0});
+            gProjection=multiply(perspective(1.12f,static_cast<float>(gWidth)/gHeight,0.1f,320.0f),view);
+            drawWorld(gMatchTime);
+            drawTransportPlaneCabin(gPlanePosition,gMatchTime);
+        } else {
+            // When the countdown ends, cut to an exterior reveal of the plane crossing the map.
+            Vec3 eye{gPlanePosition.x-18.0f,gPlanePosition.y+10.0f,gPlanePosition.z+22.0f};
+            Vec3 target{gPlanePosition.x+1.5f,gPlanePosition.y,gPlanePosition.z};
+            Mat4 view=lookAt(eye,target,{0,1,0});
+            gProjection=multiply(perspective(0.92f,static_cast<float>(gWidth)/gHeight,0.1f,420.0f),view);
+            drawWorld(gMatchTime);
+            drawTransportPlaneExterior(gPlanePosition,gMatchTime);
+        }
         static float planeStatusTimer=0;planeStatusTimer+=dt;
-        if(planeStatusTimer>0.7f){planeStatusTimer=0;updateStatus();}
+        if(planeStatusTimer>0.45f){planeStatusTimer=0;updateStatus();}
         glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
         return;
     }
@@ -1080,7 +1154,10 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             botAiming,bot.fireFlash>0.0f,false);
         if(bot.fireFlash>0.0f) {
             const Vec3 muzzle=localPoint(bot.pos,0.0f,1.32f,-1.18f,bot.yaw);
-            const Vec3 impact{gPlayer.x,gPlayer.y+1.25f+gJumpHeight,gPlayer.z};
+            Vec3 impact=gPlayer;
+            if(!bot.targetPlayer&&bot.targetIndex>=0&&bot.targetIndex<BOT_COUNT)
+                impact=gBots[static_cast<size_t>(bot.targetIndex)].pos;
+            impact.y+=1.25f+(bot.targetPlayer?gJumpHeight:0.0f);
             drawSegment({0,0,0},0.0f,muzzle,impact,0.055f,{0.18f,0.88f,1.0f});
         }
         drawCube({bot.pos.x,bot.pos.y+2.72f,bot.pos.z},
