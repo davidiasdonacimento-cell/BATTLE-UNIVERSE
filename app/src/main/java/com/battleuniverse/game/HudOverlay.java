@@ -126,7 +126,7 @@ public final class HudOverlay extends View {
         else if(page==ROYALE)drawRoyalePage(c);
     }
     private void drawHome(Canvas c){
-        eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.1.1  /  OPERAÇÃO BLOOB");
+        eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.2.0  /  OPERAÇÃO BLOOB");
         text(c,"SUA PRÓXIMA",272,224,37,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"JORNADA COMEÇA AQUI.",272,267,37,0xFF55DDE7,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"Monte sua equipe, escolha o destino e entre na batalha.",274,296,14,0xFFB3C8D4,Typeface.DEFAULT);
