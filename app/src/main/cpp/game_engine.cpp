@@ -528,7 +528,7 @@ void resetBots() {
             std::sin(angle)*radius};
     }
     const std::array<Vec3,3> allyOffsets{{{-8,0.55f,-7},{8,0.55f,-8},{0,0.55f,9}}};
-    gBotHealth.fill(3);
+    gBotHealth.fill(6);
     gBotActive.fill(true);
     gBotRespawn.fill(0.0f);
     for(int i=0;i<BOT_COUNT;++i) {
@@ -558,7 +558,7 @@ void updateBots(float dt) {
                 gBotRespawn[static_cast<size_t>(i)]=std::max(0.0f,gBotRespawn[static_cast<size_t>(i)]-dt);
                 if(gBotRespawn[static_cast<size_t>(i)]<=0.0f) {
                     bot.pos=gBotHomes[static_cast<size_t>(i)];
-                    bot.speed=0;gBotHealth[static_cast<size_t>(i)]=3;
+                    bot.speed=0;gBotHealth[static_cast<size_t>(i)]=6;
                     gBotActive[static_cast<size_t>(i)]=true;
                 } else continue;
             } else continue;
@@ -773,6 +773,8 @@ void firePulse() {
         }
     } else if(hitBot>=0) {
         gBotHealth[static_cast<size_t>(hitBot)]=std::max(0,gBotHealth[static_cast<size_t>(hitBot)]-damage);
+        const int healthAfterHit=gBotHealth[static_cast<size_t>(hitBot)];
+        { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/6"; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
             gBotActive[static_cast<size_t>(hitBot)]=false;
@@ -1186,8 +1188,23 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             drawSegment({0,0,0},0.0f,muzzle,impact,0.055f,{0.18f,0.88f,1.0f});
         }
         drawCube({bot.pos.x,bot.pos.y+2.72f,bot.pos.z},
-            {0.70f*static_cast<float>(gBotHealth[static_cast<size_t>(i)])/3.0f,0.07f,0.07f},
+            {0.70f*static_cast<float>(gBotHealth[static_cast<size_t>(i)])/6.0f,0.07f,0.07f},
             isAllyBot(i)?Vec3{0.20f,0.90f,0.55f}:Vec3{0.95f,0.30f,0.20f},bot.yaw);
+    }
+    // ESP de fim de partida: destaca todos os oponentes restantes, mesmo atrás de obstáculos.
+    int remainingOpponents=0;
+    for(int i=0;i<BOT_COUNT;++i) if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)]) ++remainingOpponents;
+    if(gSelectedMode!=3 && remainingOpponents<=5 && remainingOpponents>0) {
+        glDisable(GL_DEPTH_TEST);
+        for(int i=0;i<BOT_COUNT;++i) {
+            if(isAllyBot(i)||!gBotActive[static_cast<size_t>(i)]) continue;
+            const Vec3 pos=gBots[static_cast<size_t>(i)].pos;
+            const Vec3 markerBase{pos.x,pos.y+3.2f,pos.z};
+            const Vec3 markerTop{pos.x,pos.y+8.5f,pos.z};
+            drawSegment({0,0,0},0.0f,markerBase,markerTop,0.12f,{1.0f,0.18f,0.12f});
+            drawSphere(markerTop,{0.75f,0.75f,0.75f},{1.0f,0.22f,0.12f});
+        }
+        glEnable(GL_DEPTH_TEST);
     }
     Vec3 playerDraw=gPlayer;playerDraw.y+=gJumpHeight;
     drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
