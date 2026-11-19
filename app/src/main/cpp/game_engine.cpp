@@ -139,8 +139,8 @@ struct TrainingTarget { Vec3 pos; int energy=3; bool active=true; };
 std::array<TrainingTarget,TARGET_COUNT> gTargets{{
     {{-12,1.25f,-13},3,true}, {{13,1.25f,-12},3,true}, {{2,1.25f,18},3,true}
 }};
-std::array<int,3> gWeaponAmmo{{0,0,0}};
-std::array<bool,3> gWeaponOwned{{false,false,false}};
+std::array<int,4> gWeaponAmmo{{0,0,0,0}};
+std::array<bool,4> gWeaponOwned{{false,false,false,false}};
 int gTrainingScore=0, gWeaponType=-1;
 struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=true; bool ammoOnly=false; };
 std::array<GroundLoot,18> gGroundLoot{};
@@ -651,10 +651,10 @@ void drawCrystal(Vec3 p,float time,int index) {
 }
 void resetGroundLoot() {
     gGroundLoot={{
-        {{-76.0f,0.55f,-72.0f},0,30,true,false},
-        {{79.0f,0.55f,-25.0f},1,24,true,false},
-        {{-34.0f,0.55f,68.0f},2,18,true,false},
-        {{12.0f,0.55f,-78.0f},0,24,true,false},
+        {{-3.0f,0.55f,-2.0f},0,30,true,false},
+        {{3.0f,0.55f,-2.0f},1,24,true,false},
+        {{-3.0f,0.55f,3.0f},2,18,true,false},
+        {{3.0f,0.55f,3.0f},3,240,true,false},
         {{64.0f,0.55f,69.0f},1,24,true,false},
         {{-91.0f,0.55f,79.0f},2,18,true,false},
         {{-72.0f,0.55f,32.0f},0,20,true,false},
@@ -677,7 +677,7 @@ void drawGroundLoot(float time) {
         const float bob=std::sin(time*2.6f+static_cast<float>(i))*0.12f;
         const Vec3 color=loot.ammoOnly?Vec3{0.92f,0.68f,0.20f}:
             (loot.weaponType==0?Vec3{0.12f,0.86f,0.94f}:
-             (loot.weaponType==1?Vec3{0.28f,0.58f,1.0f}:Vec3{0.94f,0.48f,0.20f}));
+             (loot.weaponType==1?Vec3{0.28f,0.58f,1.0f}:(loot.weaponType==2?Vec3{0.94f,0.48f,0.20f}:Vec3{0.20f,0.92f,0.56f})));
         drawCube({loot.pos.x,loot.pos.y+0.34f+bob,loot.pos.z},{0.82f,0.52f,0.62f},color);
         drawCube({loot.pos.x,loot.pos.y+0.63f+bob,loot.pos.z},{0.54f,0.12f,0.66f},{0.12f,0.17f,0.22f});
         if(!loot.ammoOnly) {
@@ -697,8 +697,8 @@ void drawSafeZone() {
     }
 }
 const char* weaponName() {
-    static const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA"};
-    if(gWeaponType<0||gWeaponType>2)return "SEM ARMA";
+    static const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI"};
+    if(gWeaponType<0||gWeaponType>3)return "SEM ARMA";
     return names[gWeaponType];
 }
 void updateStatus() {
@@ -717,7 +717,7 @@ void updateStatus() {
            <<"  •  MIRA E CÂMERA LIVRES  •  "<<weaponName();
     } else if(gSelectedMode==3) {
         out<<"TREINAMENTO  •  "<<weaponName()<<"  CARGA "
-           <<(gWeaponType<0?0:gWeaponAmmo[static_cast<size_t>(gWeaponType)])
+           <<(gWeaponType==3?"INFINITA":(gWeaponType<0?"0":std::to_string(gWeaponAmmo[static_cast<size_t>(gWeaponType)])))
            <<"  •  MADEIRA "<<gWood<<"  •  PONTOS "<<gTrainingScore;
     } else {
         int remaining=0;
@@ -958,12 +958,13 @@ void drawBuildPieces() {
     }
 }
 void firePulse() {
-    if(gWeaponType<0||gWeaponType>2||!gWeaponOwned[static_cast<size_t>(gWeaponType)]) {
+    if(gWeaponType<0||gWeaponType>3||!gWeaponOwned[static_cast<size_t>(gWeaponType)]) {
         setStatus("SEM ARMA • PROCURE UM EQUIPAMENTO NO CHÃO");return;
     }
     int& ammo=gWeaponAmmo[static_cast<size_t>(gWeaponType)];
-    if(ammo<=0){setStatus("SEM MUNIÇÃO • PEGUE CAIXAS DE CARGA");return;}
-    --ammo;
+    const bool infiniteTrainingAmmo=(gSelectedMode==3);
+    if(!infiniteTrainingAmmo&&ammo<=0){setStatus("SEM MUNIÇÃO • PEGUE CAIXAS DE CARGA");return;}
+    if(!infiniteTrainingAmmo)--ammo;
     gPulseFlash=0.18f;
     gPlayerYaw=gCameraYaw;
     gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gCameraYaw);
@@ -1178,7 +1179,17 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
         gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
         resetGroundLoot();
-        gDropState=1;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;
+        if(gSelectedMode==3) {
+            gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);
+            gDropState=3;gDropTimer=0;gPlaneExteriorView=false;gParachuteOpen=false;
+            gWeaponOwned.fill(true);gWeaponAmmo.fill(999);gWeaponType=3;
+            gGroundLoot[0]={{-3.0f,0.55f,-2.0f},0,240,true,false};
+            gGroundLoot[1]={{3.0f,0.55f,-2.0f},1,240,true,false};
+            gGroundLoot[2]={{-3.0f,0.55f,3.0f},2,240,true,false};
+            gGroundLoot[3]={{3.0f,0.55f,3.0f},3,240,true,false};
+        } else {
+            gDropState=1;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;
+        }
         gJumpHeight=0;gJumpVelocity=0;gParachuteOpen=false;gPreviousButtons=0;
         gTargets[0]={{0,1.25f,-17},3,true};
         gTargets[1]={{-18,1.25f,-28},3,true};
@@ -1405,8 +1416,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(aimHeld&&gDropState>=2) gPlayerYaw=gCameraYaw;
     if(swapPressed&&gDropState==3) {
         int next=-1;
-        for(int step=1;step<=3;++step) {
-            const int candidate=(gWeaponType+step+3)%3;
+        for(int step=1;step<=4;++step) {
+            const int candidate=(gWeaponType+step+4)%4;
             if(gWeaponOwned[static_cast<size_t>(candidate)]){next=candidate;break;}
         }
         if(next>=0){gWeaponType=next;setStatus(std::string("EQUIPADO: ")+weaponName());}
@@ -1432,7 +1443,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         if(lootIndex>=0) {
             GroundLoot& loot=gGroundLoot[static_cast<size_t>(lootIndex)];
-            const size_t type=static_cast<size_t>(std::clamp(loot.weaponType,0,2));
+            const size_t type=static_cast<size_t>(std::clamp(loot.weaponType,0,3));
             gWeaponAmmo[type]=std::min(240,gWeaponAmmo[type]+loot.ammo);
             if(!loot.ammoOnly) {
                 gWeaponOwned[type]=true;gWeaponType=static_cast<int>(type);
@@ -1452,7 +1463,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     }
     // Segurar DISPARAR mantém o disparo automático; um toque rápido dispara uma vez.
     if(pulseHeld&&gDropState==3&&gPulseCooldown<=0.0f) {
-        firePulse();gPulseCooldown=gWeaponType==2?0.55f:0.24f;
+        firePulse();gPulseCooldown=(gWeaponType==3?0.10f:(gWeaponType==2?0.55f:0.24f));
     }
 
     if(gDropState==3) {
