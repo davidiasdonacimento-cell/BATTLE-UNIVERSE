@@ -169,7 +169,7 @@ public final class HudOverlay extends View {
         for(int i=0;i<3;i++){
             float x=270+i*190;boolean active=map==i;
             panel(c,x,292,174,258,active?0xDB1B5B69:0xB0193040,active?0xFF48D7E1:0x335D8495,18);
-            panel(c,x+12,305,150,112,colors[i],0x668FFFFFF,12);
+            panel(c,x+12,305,150,112,colors[i],0x66FFFFFF,12);
             mapArtwork(c,i,x+12,305,150,112);
             text(c,MAP_NAMES[i],x+15,451,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
             text(c,detail[i],x+15,477,10,0xFFABC0CC,Typeface.DEFAULT);
