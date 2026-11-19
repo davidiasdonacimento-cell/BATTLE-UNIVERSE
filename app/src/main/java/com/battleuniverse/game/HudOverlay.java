@@ -112,7 +112,7 @@ public final class HudOverlay extends View {
         panel(c,558,328,292,112,0xC9183040,0x557AA9BC,18);
         eyebrow(c,290,357,"MODO DE JOGO");
         text(c,MODE_NAMES[mode],290,390,21,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,mode==0?"12 adversários IA • sobrevivência":mode==1?"Você + 1 aliado • 10 adversários":mode==2?"Você + 3 aliados • 9 adversários":"Explore e pratique livremente",290,417,11,0xFF9DB6C5,Typeface.DEFAULT);
+        text(c,mode==0?"12 adversários IA • sobrevivência":mode==1?"Você + 1 aliado • 11 adversários":mode==2?"Você + 3 aliados • 9 adversários":"Explore e pratique livremente",290,417,11,0xFF9DB6C5,Typeface.DEFAULT);
         chevron(c,515,385);
         eyebrow(c,578,357,"MAPA SELECIONADO");
         text(c,MAP_NAMES[map],578,390,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -150,8 +150,8 @@ public final class HudOverlay extends View {
     private void drawModes(Canvas c){
         eyebrow(c,270,175,"SELECIONE A EXPERIÊNCIA");title(c,"MODOS DE JOGO",270,224);
         subtitle(c,"A equipe e os adversários são controlados por IA nesta versão.",270,252);
-        String[] desc={"Você contra 12 adversários IA","Você + 1 aliado • 10 adversários","Você + 3 aliados • 9 adversários","Sem pressão • alvos e exploração"};
-        String[] counts={"13 NA PARTIDA","12 NA PARTIDA","13 NA PARTIDA","LIVRE"};
+        String[] desc={"Você contra 12 adversários IA","Você + 1 aliado • 11 adversários","Você + 3 aliados • 9 adversários","Sem pressão • alvos e exploração"};
+        String[] counts={"13 NA PARTIDA","13 NA PARTIDA","13 NA PARTIDA","LIVRE"};
         for(int i=0;i<4;i++){
             float x=270+(i%2)*292,y=290+(i/2)*150;boolean active=mode==i;
             panel(c,x,y,270,126,active?0xD51B5B69:0xAA193040,active?0xFF48D7E1:0x335D8495,17);

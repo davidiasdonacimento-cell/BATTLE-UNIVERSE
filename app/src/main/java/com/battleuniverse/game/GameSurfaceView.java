@@ -180,10 +180,11 @@ public final class GameSurfaceView extends GLSurfaceView {
         private long previous;
         @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,
                 javax.microedition.khronos.egl.EGLConfig config) {
-            nativeInit();nativeSetScreen(screenMode);nativeSetCharacter(characterId);
-            nativeSetMap(mapId);nativeSetMode(matchMode);nativeSetQuality(quality);
+            nativeInit();
+            nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
+            nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity);
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
-            nativeSetLookSensitivity(lookSensitivity);
+            nativeSetScreen(screenMode);
             previous=System.nanoTime();
         }
         @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,

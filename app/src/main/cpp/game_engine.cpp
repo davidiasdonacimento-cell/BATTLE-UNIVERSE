@@ -750,12 +750,14 @@ void drawTransportPlane(Vec3 pos,float time) {
         {0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},
         {0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}
     }};
-    for(int i=0;i<BOT_COUNT;++i) {
-        const float x=pos.x-3.35f+static_cast<float>(i%3)*2.85f;
-        const float z=pos.z-1.78f+static_cast<float>(i/3)*0.88f;
-        Vec3 passenger{x,pos.y-0.62f,z};
+    for(int i=0;i<=BOT_COUNT;++i) {
+        const int row=i/5,col=i%5;
+        const float xOffset=row==2?-1.75f+static_cast<float>(col)*1.75f:
+            -3.5f+static_cast<float>(col)*1.75f;
+        const float zOffset=-1.28f+static_cast<float>(row)*1.28f;
+        Vec3 passenger{pos.x+xOffset,pos.y-0.62f,pos.z+zOffset};
         const Vec3 outfit=i==0?flightOutfits[static_cast<size_t>(gSelectedCharacter)]:
-            flightOutfits[static_cast<size_t>(i%4)];
+            flightOutfits[static_cast<size_t>((i-1)%4)];
         drawCharacter(passenger,-PI*0.5f,outfit,true,time+static_cast<float>(i)*0.23f,0.0f);
     }
 }
@@ -957,7 +959,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         if(gJumpHeight<0){gJumpHeight=0;gJumpVelocity=0;}
     }
 
-    if(aimHeld&&gDropState>=2&&!moving) gPlayerYaw=gCameraYaw;
+    if(aimHeld&&gDropState>=2) gPlayerYaw=gCameraYaw;
     if(swapPressed&&gDropState==3) {
         gWeaponType=(gWeaponType+1)%3;
         const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA"};
