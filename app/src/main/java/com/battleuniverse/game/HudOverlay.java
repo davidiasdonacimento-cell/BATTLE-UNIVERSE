@@ -242,12 +242,50 @@ public final class HudOverlay extends View {
         for(int i=0;i<5;i++){double a=-Math.PI*.85+i*Math.PI*.42;c.drawLine(x+3,y-26,x+3+(float)Math.cos(a)*15,y-26+(float)Math.sin(a)*11,p);}
     }
     private void drawGame(Canvas c){
-        panel(c,22,20,250,64,0xB6071724,0x557AA0B2,16);
-        text(c,"BATTLE UNIVERSE",42,48,18,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"TREINAMENTO  •  "+MAP_NAMES[map],42,67,10,0xFF6FE0E6,Typeface.DEFAULT_BOLD);
+        panel(c,22,18,370,82,0xD9081928,0x6679DDEB,17);
+        text(c,"BATTLE UNIVERSE",42,48,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"OPERAÇÃO ILHA  •  "+MAP_NAMES[map],42,70,10,0xFF6FE0E6,Typeface.DEFAULT_BOLD);
+        text(c,game.getGameStatus(),42,88,9,0xFFD5E7ED,Typeface.DEFAULT_BOLD);
+
+        panel(c,22,112,280,66,0xB9071724,0x337AA0B2,14);
+        text(c,"VITALIDADE",40,137,9,0xFFB9D0DA,Typeface.DEFAULT_BOLD);
+        p.setColor(0xFF253B48);r.set(40,146,272,157);c.drawRoundRect(r,5,5,p);
+        p.setColor(0xFF47D9B3);r.set(40,146,272,157);c.drawRoundRect(r,5,5,p);
+        text(c,"100",244,139,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+
+        // Minimap visual; the game world remains rendered by OpenGL underneath.
+        panel(c,1064,18,190,166,0xD9071724,0x6679DDEB,17);
+        eyebrow(c,1080,40,"MINIMAPA");
+        p.setColor(0xFF173A43);c.drawCircle(1159,105,59,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(0xFF5DD6CE);c.drawCircle(1159,105,59,p);p.setStyle(Paint.Style.FILL);
+        p.setColor(0xFF2C775F);c.drawCircle(1159,105,43,p);
+        p.setColor(0xFF6ED5E2);c.drawCircle(1159,105,5,p);
+        p.setColor(0xFFFFC66F);c.drawCircle(1131,82,4,p);c.drawCircle(1190,127,4,p);c.drawCircle(1178,72,4,p);
+
+        // Touch zones match GameSurfaceView.controlAt().
+        drawControl(c,998,310,43,"PULSO",0xFF185D7A,0xFF65E9F4);
+        drawControl(c,1165,403,43,"CONSTRUIR",0xFF66502A,0xFFFFD27A);
+        drawControl(c,960,461,39,"CORRER",0xFF285D49,0xFF83E9B2);
+        drawControl(c,1152,562,47,"PULAR",0xFF7B3D35,0xFFFFA28F);
+        drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
+
+        // Joystick esquerdo.
+        p.setColor(0x553D7183);c.drawCircle(179,569,66,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA8CE8EF);c.drawCircle(179,569,66,p);
+        p.setStyle(Paint.Style.FILL);p.setColor(0xAA8FCBD2);c.drawCircle(179,569,28,p);
+        p.setColor(0xFFECFFFF);c.drawCircle(179,569,7,p);
+
         pill(c,24,625,160,49,"VOLTAR AO LOBBY",0xDD173C4A,Color.WHITE);
         panel(c,420,650,440,40,0xBB071522,0x226A8EA0,14);
-        text(c,"ESQUERDA: MOVER  •  DIREITA: OLHAR  •  TOQUE: PULAR / COLETAR",438,675,10,0xFFDAEAF0,Typeface.DEFAULT_BOLD);
+        text(c,"ESQUERDA: MOVIMENTO  •  DIREITA: CÂMERA",445,675,10,0xFFDAEAF0,Typeface.DEFAULT_BOLD);
+        postInvalidateDelayed(250);
+    }
+    private void drawControl(Canvas c,float x,float y,float radius,String label,int fill,int edge){
+        p.setColor(0x443ED9E8);c.drawCircle(x,y,radius+7,p);
+        p.setColor(fill);c.drawCircle(x,y,radius,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(edge);c.drawCircle(x,y,radius,p);p.setStyle(Paint.Style.FILL);
+        p.setTextAlign(Paint.Align.CENTER);p.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));
+        p.setTextSize(label.length()>7?8:10);p.setColor(Color.WHITE);c.drawText(label,x,y+4,p);p.setTextAlign(Paint.Align.LEFT);
     }
     private void drawToast(Canvas c,float w,float h){
         float x=(w-370)/2f;p.setColor(0xEC102A38);c.drawRoundRect(x,h-86,x+370,h-34,16,16,p);

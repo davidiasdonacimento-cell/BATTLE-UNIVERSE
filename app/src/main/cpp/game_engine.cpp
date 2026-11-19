@@ -17,6 +17,11 @@ constexpr int BOT_COUNT = 4;
 constexpr int CRYSTAL_COUNT = 5;
 constexpr int BUTTON_JUMP = 1;
 constexpr int BUTTON_INTERACT = 2;
+constexpr int BUTTON_BUILD = 4;
+constexpr int BUTTON_RUN = 8;
+constexpr int BUTTON_PULSE = 16;
+constexpr int BUILD_LIMIT = 12;
+constexpr int TARGET_COUNT = 3;
 
 struct Vec3 { float x, y, z; };
 struct Mat4 { float m[16]{}; };
@@ -55,6 +60,10 @@ Mat4 rotationZ(float a) {
     Mat4 r=identity(); const float c=std::cos(a),s=std::sin(a);
     r.m[0]=c; r.m[1]=s; r.m[4]=-s; r.m[5]=c; return r;
 }
+Mat4 rotationX(float a) {
+    Mat4 r=identity(); const float c=std::cos(a),s=std::sin(a);
+    r.m[5]=c; r.m[6]=s; r.m[9]=-s; r.m[10]=c; return r;
+}
 Mat4 perspective(float fov,float aspect,float nearP,float farP) {
     Mat4 r{}; const float f=1.0f/std::tan(fov*0.5f);
     r.m[0]=f/std::max(0.1f,aspect); r.m[5]=f;
@@ -85,6 +94,19 @@ float gJumpHeight=0, gJumpVelocity=0, gMatchTime=0, gZoneRadius=30;
 float gInteractCooldown=0;
 int gCollected=0, gPreviousButtons=0;
 std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
+struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; };
+std::array<BotState,BOT_COUNT> gBots{};
+struct BuildPiece { Vec3 pos; float yaw=0; int type=0; };
+std::array<BuildPiece,BUILD_LIMIT> gBuildPieces{};
+int gBuildCount=0, gBuildType=0, gWood=120;
+float gBuildCooldown=0;
+struct TrainingTarget { Vec3 pos; int energy=3; bool active=true; };
+std::array<TrainingTarget,TARGET_COUNT> gTargets{{
+    {{-12,1.25f,-13},3,true}, {{13,1.25f,-12},3,true}, {{2,1.25f,18},3,true}
+}};
+int gPulseAmmo=24, gTrainingScore=0;
+float gPulseCooldown=0, gPulseFlash=0;
+Vec3 gPulseHitPosition{0,1.4f,-5};
 std::mutex gStatusMutex;
 std::string gHudStatus="CARREGANDO CENÁRIO 3D...";
 
@@ -223,10 +245,10 @@ bool initializeGraphics() {
     gConeVbo=gConeMesh.vbo; gConeCount=gConeMesh.count;
     return gCubeVbo!=0 && gSphereVbo!=0 && gCylinderVbo!=0 && gConeVbo!=0;
 }
-void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
+void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
     if(!gProgram||!vbo||count<=0)return;
     Mat4 model=multiply(translation(p.x,p.y,p.z),
-        multiply(rotationY(yaw),multiply(rotationZ(tilt),scaling(size.x,size.y,size.z))));
+        multiply(rotationY(yaw),multiply(rotationZ(tilt),multiply(rotationX(tiltX),scaling(size.x,size.y,size.z)))));
     Mat4 mvp=multiply(gProjection,model);
     glUniformMatrix4fv(gMvpLocation,1,GL_FALSE,mvp.m);
     glUniformMatrix4fv(gModelLocation,1,GL_FALSE,model.m);
@@ -237,17 +259,17 @@ void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,f
     glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),reinterpret_cast<void*>(3*sizeof(float)));
     glDrawArrays(GL_TRIANGLES,0,count);
 }
-void drawCube(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
-    drawMesh(gCubeVbo,36,p,size,color,yaw,tilt);
+void drawCube(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
+    drawMesh(gCubeVbo,36,p,size,color,yaw,tilt,tiltX);
 }
-void drawSphere(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
-    drawMesh(gSphereVbo,gSphereCount,p,size,color,yaw,tilt);
+void drawSphere(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
+    drawMesh(gSphereVbo,gSphereCount,p,size,color,yaw,tilt,tiltX);
 }
-void drawCylinder(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
-    drawMesh(gCylinderVbo,gCylinderCount,p,size,color,yaw,tilt);
+void drawCylinder(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
+    drawMesh(gCylinderVbo,gCylinderCount,p,size,color,yaw,tilt,tiltX);
 }
-void drawCone(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0) {
-    drawMesh(gConeVbo,gConeCount,p,size,color,yaw,tilt);
+void drawCone(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
+    drawMesh(gConeVbo,gConeCount,p,size,color,yaw,tilt,tiltX);
 }
 void drawPalm(float x,float z,float scale) {
     drawCylinder({x,1.45f*scale,z},{0.24f*scale,2.65f*scale,0.24f*scale},{0.35f,0.20f,0.10f},0,-0.035f);
@@ -298,24 +320,54 @@ void drawWorld(float time) {
     drawCube({19,0.82f,-5},{2.5f,0.95f,3.1f},{0.36f,0.41f,0.34f},-0.3f);
     drawCube({-3,0.78f,23},{3.0f,0.8f,2.2f},{0.14f,0.37f,0.19f});
 }
-void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time) {
-    float bob=bot?std::sin(time*2.7f+p.x)*0.045f:std::sin(time*1.5f)*0.025f;
-    Vec3 skin{0.78f,0.59f,0.43f}, pants{0.10f,0.16f,0.23f}, boots{0.045f,0.065f,0.075f};
-    drawCylinder({p.x,p.y+1.12f+bob,p.z},{0.58f,0.82f,0.34f},color,yaw);
-    drawSphere({p.x,p.y+1.47f+bob,p.z},{0.62f,0.30f,0.38f},color,yaw);
-    drawSphere({p.x,p.y+1.91f+bob,p.z},{0.34f,0.40f,0.32f},skin,yaw);
-    drawSphere({p.x,p.y+2.08f+bob,p.z},{0.35f,0.19f,0.33f},{0.08f,0.10f,0.12f},yaw);
-    drawSphere({p.x-0.13f,p.y+1.94f+bob,p.z-0.285f},{0.045f,0.035f,0.025f},{0.025f,0.035f,0.045f},yaw);
-    drawSphere({p.x+0.13f,p.y+1.94f+bob,p.z-0.285f},{0.045f,0.035f,0.025f},{0.025f,0.035f,0.045f},yaw);
-    drawCylinder({p.x-0.19f,p.y+0.48f+bob,p.z},{0.22f,0.75f,0.23f},pants,yaw,-0.025f);
-    drawCylinder({p.x+0.19f,p.y+0.48f+bob,p.z},{0.22f,0.75f,0.23f},pants,yaw,0.025f);
-    drawSphere({p.x-0.19f,p.y+0.13f+bob,p.z-0.055f},{0.25f,0.16f,0.38f},boots,yaw);
-    drawSphere({p.x+0.19f,p.y+0.13f+bob,p.z-0.055f},{0.25f,0.16f,0.38f},boots,yaw);
-    drawCylinder({p.x-0.43f,p.y+1.14f+bob,p.z},{0.19f,0.73f,0.19f},color,yaw,-0.20f);
-    drawCylinder({p.x+0.43f,p.y+1.14f+bob,p.z},{0.19f,0.73f,0.19f},color,yaw,0.20f);
-    drawSphere({p.x-0.50f,p.y+0.77f+bob,p.z},{0.13f,0.14f,0.14f},skin,yaw);
-    drawSphere({p.x+0.50f,p.y+0.77f+bob,p.z},{0.13f,0.14f,0.14f},skin,yaw);
-    drawSphere({p.x,p.y+1.48f+bob,p.z+0.20f},{0.24f,0.36f,0.12f},{0.10f,0.18f,0.22f},yaw);
+Vec3 localPoint(Vec3 base,float lx,float ly,float lz,float yaw) {
+    float c=std::cos(yaw), sn=std::sin(yaw);
+    return {base.x+c*lx+sn*lz,base.y+ly,base.z-sn*lx+c*lz};
+}
+void drawSegment(Vec3 base,float yaw,Vec3 a,Vec3 b,float radius,Vec3 color) {
+    float dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+    float len=std::sqrt(dx*dx+dy*dy+dz*dz);
+    if(len<0.001f)return;
+    Vec3 mid{(a.x+b.x)*0.5f,(a.y+b.y)*0.5f,(a.z+b.z)*0.5f};
+    float tiltZ=std::atan2(-dx,std::max(0.001f,dy));
+    float tiltX=std::atan2(dz,std::max(0.001f,std::sqrt(dx*dx+dy*dy)));
+    drawSphere(localPoint(base,mid.x,mid.y,mid.z,yaw),
+        {radius*2.0f,len+radius*0.8f,radius*2.0f},color,yaw,tiltZ,tiltX);
+}
+void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movement=0.0f) {
+    const float gait=std::clamp(movement,0.0f,1.0f);
+    const float phase=time*8.2f+(bot?0.7f:0.0f);
+    const float swing=std::sin(phase)*0.36f*gait;
+    const float bob=std::sin(phase*2.0f)*0.025f*gait+std::sin(time*1.5f)*0.014f;
+    const Vec3 skin{0.68f,0.47f,0.34f},pants{0.075f,0.11f,0.16f},boots{0.025f,0.035f,0.045f};
+    drawSphere(localPoint(p,0,1.16f+bob,0,yaw),{0.66f,0.93f,0.39f},color,yaw);
+    drawSphere(localPoint(p,0,1.31f+bob,-0.035f,yaw),{0.63f,0.62f,0.43f},
+        {std::min(1.0f,color.x*1.12f),std::min(1.0f,color.y*1.12f),std::min(1.0f,color.z*1.12f)},yaw);
+    drawSphere(localPoint(p,0,1.19f+bob,-0.245f,yaw),{0.49f,0.72f,0.115f},{0.055f,0.105f,0.14f},yaw);
+    drawSphere(localPoint(p,0,1.48f+bob,-0.30f,yaw),{0.37f,0.12f,0.055f},{0.10f,0.65f,0.72f},yaw);
+    drawSphere(localPoint(p,0,1.42f+bob,0.245f,yaw),{0.45f,0.58f,0.25f},{0.07f,0.13f,0.17f},yaw);
+    drawSphere(localPoint(p,-0.43f,1.43f+bob,0,yaw),{0.23f,0.26f,0.25f},{0.13f,0.18f,0.21f},yaw);
+    drawSphere(localPoint(p,0.43f,1.43f+bob,0,yaw),{0.23f,0.26f,0.25f},{0.13f,0.18f,0.21f},yaw);
+    drawCylinder(localPoint(p,0,1.70f+bob,0,yaw),{0.17f,0.18f,0.17f},skin,yaw);
+    drawSphere(localPoint(p,0,1.96f+bob,0,yaw),{0.34f,0.43f,0.32f},skin,yaw);
+    drawSphere(localPoint(p,0,2.15f+bob,0.005f,yaw),{0.365f,0.205f,0.35f},{0.045f,0.065f,0.085f},yaw);
+    drawSphere(localPoint(p,0,2.035f+bob,-0.29f,yaw),{0.245f,0.065f,0.045f},{0.055f,0.075f,0.09f},yaw);
+    drawSphere(localPoint(p,-0.115f,1.99f+bob,-0.305f,yaw),{0.035f,0.035f,0.022f},{0.025f,0.035f,0.04f},yaw);
+    drawSphere(localPoint(p,0.115f,1.99f+bob,-0.305f,yaw),{0.035f,0.035f,0.022f},{0.025f,0.035f,0.04f},yaw);
+    Vec3 hipL{-0.19f,0.82f+bob,swing*0.36f},kneeL{-0.20f,0.47f+bob,swing*0.72f},footL{-0.20f,0.16f+bob,swing*0.86f};
+    Vec3 hipR{0.19f,0.82f+bob,-swing*0.36f},kneeR{0.20f,0.47f+bob,-swing*0.72f},footR{0.20f,0.16f+bob,-swing*0.86f};
+    drawSegment(p,yaw,hipL,kneeL,0.135f,pants);drawSegment(p,yaw,kneeL,footL,0.105f,pants);
+    drawSegment(p,yaw,hipR,kneeR,0.135f,pants);drawSegment(p,yaw,kneeR,footR,0.105f,pants);
+    drawSphere(localPoint(p,-0.20f,0.105f+bob,-0.16f+swing*0.86f,yaw),{0.24f,0.13f,0.37f},boots,yaw);
+    drawSphere(localPoint(p,0.20f,0.105f+bob,-0.16f-swing*0.86f,yaw),{0.24f,0.13f,0.37f},boots,yaw);
+    Vec3 shoulderL{-0.43f,1.53f+bob,0},elbowL{-0.52f,1.13f+bob,-swing*0.55f},handL{-0.48f,0.84f+bob,-swing*0.72f};
+    Vec3 shoulderR{0.43f,1.53f+bob,0},elbowR{0.52f,1.13f+bob,swing*0.55f},handR{0.48f,0.84f+bob,swing*0.72f};
+    drawSegment(p,yaw,shoulderL,elbowL,0.105f,color);drawSegment(p,yaw,elbowL,handL,0.085f,skin);
+    drawSegment(p,yaw,shoulderR,elbowR,0.105f,color);drawSegment(p,yaw,elbowR,handR,0.085f,skin);
+    drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.115f,0.13f,0.115f},skin,yaw);
+    drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.115f,0.13f,0.115f},skin,yaw);
+    drawCylinder(localPoint(p,0.49f,0.91f+bob,swing*0.72f-0.10f,yaw),{0.095f,0.34f,0.095f},{0.12f,0.72f,0.86f},yaw,0.0f,0.18f);
+    drawSphere(localPoint(p,0.49f,1.08f+bob,swing*0.72f-0.10f,yaw),{0.12f,0.12f,0.12f},{0.45f,0.95f,1.0f},yaw);
 }
 void drawCrystal(Vec3 p,float time,int index) {
     float bob=std::sin(time*2.2f+index)*0.16f, spin=time*0.55f+index*0.7f;
@@ -333,17 +385,149 @@ void drawSafeZone() {
 }
 void updateStatus() {
     std::ostringstream out;
-    out<<"CRISTAIS "<<gCollected<<"/"<<CRYSTAL_COUNT<<"  |  BOTS "<<BOT_COUNT
-       <<"  |  ZONA "<<std::fixed<<std::setprecision(0)<<gZoneRadius<<"m";
-    if (gCollected==CRYSTAL_COUNT) out<<"  |  OBJETIVO CONCLUÍDO!";
+    out<<"PULSO "<<gPulseAmmo<<"  |  MADEIRA "<<gWood<<"  |  CONSTRUÇÕES "<<gBuildCount
+       <<"/"<<BUILD_LIMIT<<"  |  ALVOS "<<gTrainingScore<<"  |  CRISTAIS "<<gCollected<<"/"<<CRYSTAL_COUNT;
     setStatus(out.str());
+}
+void resetBots() {
+    const std::array<Vec3,BOT_COUNT> starts{{
+        {-14,0.55f,-4},{14,0.55f,-5},{-13,0.55f,14},{13,0.55f,13}
+    }};
+    for(int i=0;i<BOT_COUNT;++i)
+        gBots[static_cast<size_t>(i)]={starts[static_cast<size_t>(i)],0,0,static_cast<float>(i)*1.3f};
+}
+void updateBots(float dt) {
+    for(int i=0;i<BOT_COUNT;++i) {
+        BotState& bot=gBots[static_cast<size_t>(i)];
+        Vec3 target=bot.pos;
+        bool ally=(gSelectedMode==1&&i==0)||(gSelectedMode==2&&i<3);
+        if(ally) {
+            float side=(i%2==0?-1.0f:1.0f)*(1.7f+0.5f*(i/2));
+            target=localPoint(gPlayer,side,0,2.3f+0.45f*i,gPlayerYaw);
+        } else {
+            int nearest=-1;float best=1.0e9f;
+            for(int j=0;j<CRYSTAL_COUNT;++j) {
+                if(gCrystalTaken[static_cast<size_t>(j)])continue;
+                Vec3 c=gCrystals[static_cast<size_t>(j)];
+                float dx=c.x-bot.pos.x,dz=c.z-bot.pos.z,d=dx*dx+dz*dz;
+                if(d<best){best=d;nearest=j;}
+            }
+            if(nearest>=0)target=gCrystals[static_cast<size_t>(nearest)];
+            else {
+                float phase=gMatchTime*0.25f+bot.phase;
+                target={std::cos(phase)*17.0f,0.55f,std::sin(phase)*17.0f};
+            }
+        }
+        float dx=target.x-bot.pos.x,dz=target.z-bot.pos.z;
+        float distance=std::sqrt(dx*dx+dz*dz);
+        bot.speed=0;
+        if(distance>0.85f) {
+            float inv=1.0f/std::max(0.001f,distance);
+            dx*=inv;dz*=inv;
+            bot.yaw=std::atan2(dx,-dz);
+            bot.speed=ally?3.5f:2.15f;
+            float step=std::min(distance-0.45f,bot.speed*dt);
+            bot.pos.x+=dx*step;bot.pos.z+=dz*step;
+        }
+        bot.pos.x=std::clamp(bot.pos.x,-25.0f,25.0f);
+        bot.pos.z=std::clamp(bot.pos.z,-25.0f,25.0f);
+        if(!ally) {
+            for(int j=0;j<CRYSTAL_COUNT;++j) {
+                if(gCrystalTaken[static_cast<size_t>(j)])continue;
+                Vec3 c=gCrystals[static_cast<size_t>(j)];
+                float ox=bot.pos.x-c.x,oz=bot.pos.z-c.z;
+                if(ox*ox+oz*oz<1.45f*1.45f) {
+                    gCrystalTaken[static_cast<size_t>(j)]=true;
+                    ++gCollected;gWood=std::min(200,gWood+5);
+                    break;
+                }
+            }
+        }
+        for(int other=0;other<i;++other) {
+            Vec3 op=gBots[static_cast<size_t>(other)].pos;
+            float sx=bot.pos.x-op.x,sz=bot.pos.z-op.z;
+            float d2=sx*sx+sz*sz;
+            if(d2<1.15f*1.15f&&d2>0.001f) {
+                float inv=0.18f/std::sqrt(d2);
+                bot.pos.x+=sx*inv;bot.pos.z+=sz*inv;
+            }
+        }
+    }
+}
+void placeBuildPiece() {
+    if(gBuildCount>=BUILD_LIMIT||gWood<10) {
+        setStatus(gWood<10?"RECURSOS INSUFICIENTES":"LIMITE DE CONSTRUÇÕES ATINGIDO");
+        return;
+    }
+    Vec3 forward{std::sin(gPlayerYaw),0,-std::cos(gPlayerYaw)};
+    Vec3 pos{gPlayer.x+forward.x*3.0f,0.68f,gPlayer.z+forward.z*3.0f};
+    gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,gBuildType};
+    ++gBuildCount;gWood-=10;gBuildType=(gBuildType+1)%3;
+    updateStatus();
+}
+void drawBuildPieces() {
+    for(int i=0;i<gBuildCount;++i) {
+        const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
+        if(b.type==0) {
+            drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},{0.50f,0.34f,0.20f},b.yaw);
+            drawCube({b.pos.x-0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.70f,0.51f,0.30f},b.yaw);
+            drawCube({b.pos.x+0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.70f,0.51f,0.30f},b.yaw);
+        } else if(b.type==1) {
+            drawCube({b.pos.x,0.78f,b.pos.z},{3.0f,0.22f,3.0f},{0.52f,0.37f,0.23f},b.yaw);
+        } else {
+            drawCube({b.pos.x,0.95f,b.pos.z},{3.0f,0.20f,3.0f},{0.58f,0.41f,0.24f},b.yaw,0.0f,0.22f);
+        }
+    }
+}
+void firePulse() {
+    if(gPulseAmmo<=0){setStatus("PULSO SEM CARGA");return;}
+    --gPulseAmmo;gPulseFlash=0.16f;
+    gPulseHitPosition={gPlayer.x+std::sin(gPlayerYaw)*7.0f,1.5f,gPlayer.z-std::cos(gPlayerYaw)*7.0f};
+    const float fx=std::sin(gPlayerYaw),fz=-std::cos(gPlayerYaw);
+    int hit=-1;float best=18.0f;
+    for(int i=0;i<TARGET_COUNT;++i) {
+        TrainingTarget& target=gTargets[static_cast<size_t>(i)];
+        if(!target.active)continue;
+        float dx=target.pos.x-gPlayer.x,dz=target.pos.z-gPlayer.z;
+        float along=dx*fx+dz*fz,side=std::fabs(dx*fz-dz*fx);
+        if(along>0.8f&&along<18.0f&&side<1.25f&&along<best){best=along;hit=i;}
+    }
+    if(hit>=0) {
+        TrainingTarget& target=gTargets[static_cast<size_t>(hit)];
+        --target.energy;gPulseHitPosition=target.pos;
+        if(target.energy<=0){target.active=false;gTrainingScore+=100;gWood=std::min(200,gWood+5);}
+    }
+    updateStatus();
+}
+void drawTargets(float time) {
+    for(int i=0;i<TARGET_COUNT;++i) {
+        const TrainingTarget& target=gTargets[static_cast<size_t>(i)];
+        if(!target.active)continue;
+        float bob=std::sin(time*2.0f+i)*0.12f;
+        drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.60f,0.60f,0.60f},{0.12f,0.69f,0.86f});
+        drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.72f,0.10f,0.72f},{0.80f,0.94f,1.0f});
+        drawSphere({target.pos.x,target.pos.y+bob,target.pos.z},{0.24f,0.24f,0.24f},{0.55f,0.98f,1.0f});
+        for(int ring=0;ring<target.energy;++ring)
+            drawCube({target.pos.x-0.42f+ring*0.42f,target.pos.y+0.70f,target.pos.z},
+                {0.28f,0.07f,0.08f},{0.24f,0.95f,0.92f});
+    }
+    if(gPulseFlash>0.0f)
+        drawSphere(gPulseHitPosition,{0.33f,0.33f,0.33f},{0.25f,0.96f,1.0f});
 }
 } // namespace
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint mode) {
     gScreenMode=std::clamp(static_cast<int>(mode),0,1);
-    if(gScreenMode==1){gPlayer={0,0.55f,0};gMatchTime=0;gZoneRadius=30;gCollected=0;gCrystalTaken.fill(false);}
+    if(gScreenMode==1){
+        gPlayer={0,0.55f,0};gMatchTime=0;gZoneRadius=30;gCollected=0;
+        gCrystalTaken.fill(false);gBuildCount=0;gWood=120;gBuildType=0;
+        gPulseAmmo=24;gTrainingScore=0;
+        gTargets[0]={{0,1.25f,-10},3,true};
+        gTargets[1]={{-10,1.25f,-14},3,true};
+        gTargets[2]={{10,1.25f,-14},3,true};
+        resetBots();updateStatus();
+    }
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,jint id) {
@@ -363,10 +547,16 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetQuality(JNIEnv*,jclass,jin
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
-    gPlayer={0,0.55f,0}; gPlayerYaw=0; gCameraYaw=0; gCameraPitch=0.36f;
-    gScreenMode=0; gSelectedCharacter=0; gSelectedMap=0; gSelectedMode=0; gQuality=1;
-    gJumpHeight=0; gJumpVelocity=0; gMatchTime=0; gZoneRadius=30;
-    gCollected=0; gPreviousButtons=0; gInteractCooldown=0; gCrystalTaken.fill(false);
+    gPlayer={0,0.55f,0};gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
+    gScreenMode=0;gSelectedCharacter=0;gSelectedMap=0;gSelectedMode=0;gQuality=1;
+    gJumpHeight=0;gJumpVelocity=0;gMatchTime=0;gZoneRadius=30;
+    gCollected=0;gPreviousButtons=0;gInteractCooldown=0;gCrystalTaken.fill(false);
+    gBuildCount=0;gBuildType=0;gWood=120;gBuildCooldown=0;
+    gPulseAmmo=24;gTrainingScore=0;gPulseCooldown=0;gPulseFlash=0;
+    gTargets[0]={{0,1.25f,-10},3,true};
+    gTargets[1]={{-10,1.25f,-14},3,true};
+    gTargets[2]={{10,1.25f,-14},3,true};
+    resetBots();
     glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); glDisable(GL_CULL_FACE);
     glClearColor(0.39f,0.69f,0.85f,1.0f);
     if (!initializeGraphics()) { setStatus("ERRO AO INICIAR OPENGL ES 3.0"); return; }
@@ -380,92 +570,121 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeResize(JNIEnv*,jclass,jint wi
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     jfloat deltaSeconds,jfloat moveX,jfloat moveY,jfloat lookDX,jfloat lookDY,jint buttons) {
-    if (!gProgram||!gCubeVbo) { glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); return; }
+    if(!gProgram||!gCubeVbo){glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);return;}
     const float dt=std::clamp(static_cast<float>(deltaSeconds),0.001f,0.05f);
     gMatchTime+=dt;
+    if(gPulseCooldown>0)gPulseCooldown=std::max(0.0f,gPulseCooldown-dt);
+    if(gBuildCooldown>0)gBuildCooldown=std::max(0.0f,gBuildCooldown-dt);
+    if(gPulseFlash>0)gPulseFlash=std::max(0.0f,gPulseFlash-dt);
+
     if(gScreenMode==0) {
         Vec3 eye{std::sin(gMatchTime*0.035f)*3.0f,7.0f,25.0f};
         Vec3 target{3.1f,1.25f,0.0f};
         Mat4 view=lookAt(eye,target,{0,1,0});
         gProjection=multiply(perspective(0.88f,static_cast<float>(gWidth)/gHeight,0.1f,220.0f),view);
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-        glUseProgram(gProgram);
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
         drawWorld(gMatchTime);
         const std::array<Vec3,4> formation{{{2.8f,0.55f,1.0f},{4.4f,0.55f,-0.5f},{6.1f,0.55f,-0.7f},{7.7f,0.55f,0.9f}}};
         const std::array<Vec3,4> outfits{{{0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},{0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}}};
-        for(int i=0;i<4;++i) drawCharacter(formation[static_cast<size_t>(i)],PI, i==0?outfits[static_cast<size_t>(gSelectedCharacter)]:outfits[static_cast<size_t>(i)],true,gMatchTime+static_cast<float>(i));
-        glDisableVertexAttribArray(0); glDisableVertexAttribArray(1); glBindBuffer(GL_ARRAY_BUFFER,0);
+        for(int i=0;i<4;++i)
+            drawCharacter(formation[static_cast<size_t>(i)],PI,
+                i==0?outfits[static_cast<size_t>(gSelectedCharacter)]:outfits[static_cast<size_t>(i)],
+                true,gMatchTime+static_cast<float>(i),0.0f);
+        glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
         return;
     }
+
     gZoneRadius=std::max(14.0f,30.0f-gMatchTime*0.010f);
     gCameraYaw-=static_cast<float>(lookDX)*4.8f;
     gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f,0.12f,0.85f);
-    const float forward=-static_cast<float>(moveY), strafe=static_cast<float>(moveX);
+    // moveY is positive when the player drags the joystick upward.
+    const float forward=static_cast<float>(moveY),strafe=static_cast<float>(moveX);
     float dx=std::cos(gCameraYaw)*strafe+std::sin(gCameraYaw)*forward;
     float dz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
     float moveLength=std::sqrt(dx*dx+dz*dz);
-    if (moveLength>0.08f) {
-        dx/=std::max(1.0f,moveLength); dz/=std::max(1.0f,moveLength);
-        gPlayer.x+=dx*6.2f*dt; gPlayer.z+=dz*6.2f*dt; gPlayerYaw=std::atan2(dx,-dz);
+    bool moving=moveLength>0.08f;
+    if(moving) {
+        dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
+        const float speed=(buttons&BUTTON_RUN)?8.0f:5.2f;
+        float nx=std::clamp(gPlayer.x+dx*speed*dt,-25.0f,25.0f);
+        float nz=std::clamp(gPlayer.z+dz*speed*dt,-25.0f,25.0f);
+        // Placed walls are solid; floors and ramps remain traversable.
+        bool blocked=false;
+        for(int i=0;i<gBuildCount;++i) {
+            const BuildPiece& piece=gBuildPieces[static_cast<size_t>(i)];
+            if(piece.type!=0)continue;
+            float rx=nx-piece.pos.x,rz=nz-piece.pos.z;
+            float c=std::cos(piece.yaw),sn=std::sin(piece.yaw);
+            float localX=c*rx-sn*rz,localZ=sn*rx+c*rz;
+            if(std::fabs(localX)<1.75f&&std::fabs(localZ)<0.72f){blocked=true;break;}
+        }
+        if(!blocked){gPlayer.x=nx;gPlayer.z=nz;}
+        gPlayerYaw=std::atan2(dx,-dz);
     }
-    gPlayer.x=std::clamp(gPlayer.x,-25.0f,25.0f);
-    gPlayer.z=std::clamp(gPlayer.z,-25.0f,25.0f);
 
     bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
     bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
+    bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
+    bool pulsePressed=(buttons&BUTTON_PULSE)&&!(gPreviousButtons&BUTTON_PULSE);
     gPreviousButtons=buttons;
-    if (jumpPressed&&gJumpHeight<=0.001f) gJumpVelocity=6.2f;
-    gJumpHeight+=gJumpVelocity*dt; gJumpVelocity-=16.0f*dt;
-    if (gJumpHeight<0) { gJumpHeight=0; gJumpVelocity=0; }
+    if(jumpPressed&&gJumpHeight<=0.001f)gJumpVelocity=6.2f;
+    gJumpHeight+=gJumpVelocity*dt;gJumpVelocity-=16.0f*dt;
+    if(gJumpHeight<0){gJumpHeight=0;gJumpVelocity=0;}
 
     gInteractCooldown=std::max(0.0f,gInteractCooldown-dt);
-    if (interactPressed&&gInteractCooldown<=0) {
-        int nearest=-1; float bestDistance=3.8f;
-        for (int i=0;i<CRYSTAL_COUNT;++i) {
-            if (gCrystalTaken[static_cast<size_t>(i)]) continue;
+    if(interactPressed&&gInteractCooldown<=0.0f) {
+        int nearest=-1;float bestDistance=3.8f;
+        for(int i=0;i<CRYSTAL_COUNT;++i) {
+            if(gCrystalTaken[static_cast<size_t>(i)])continue;
             float ox=gPlayer.x-gCrystals[static_cast<size_t>(i)].x;
             float oz=gPlayer.z-gCrystals[static_cast<size_t>(i)].z;
             float d=std::sqrt(ox*ox+oz*oz);
-            if (d<bestDistance) { bestDistance=d; nearest=i; }
+            if(d<bestDistance){bestDistance=d;nearest=i;}
         }
-        if (nearest>=0) {
-            gCrystalTaken[static_cast<size_t>(nearest)]=true; ++gCollected;
-            gInteractCooldown=0.35f; updateStatus();
+        if(nearest>=0) {
+            gCrystalTaken[static_cast<size_t>(nearest)]=true;++gCollected;
+            gWood=std::min(200,gWood+15);gInteractCooldown=0.35f;
+            updateStatus();
         }
     }
+    if(buildPressed&&gBuildCooldown<=0.0f) {
+        placeBuildPiece();gBuildCooldown=0.32f;
+    }
+    if(pulsePressed&&gPulseCooldown<=0.0f) {
+        firePulse();gPulseCooldown=0.22f;
+    }
 
-    const float eyeDistance=9.0f, eyeHeight=3.8f+gCameraPitch*3.4f;
-    Vec3 eye{gPlayer.x+std::sin(gCameraYaw)*eyeDistance,
-             gPlayer.y+eyeHeight+gJumpHeight*0.35f,
-             gPlayer.z+std::cos(gCameraYaw)*eyeDistance};
+    updateBots(dt);
+    Vec3 eye{gPlayer.x+std::sin(gCameraYaw)*9.0f,
+        gPlayer.y+3.8f+gCameraPitch*3.4f+gJumpHeight*0.35f,
+        gPlayer.z+std::cos(gCameraYaw)*9.0f};
     Vec3 target{gPlayer.x,gPlayer.y+1.0f+gJumpHeight*0.45f,gPlayer.z};
     Mat4 view=lookAt(eye,target,{0,1,0});
     gProjection=multiply(perspective(0.93f,static_cast<float>(gWidth)/gHeight,0.1f,180.0f),view);
 
-    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-    glUseProgram(gProgram);
+    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
     drawWorld(gMatchTime);
-    for (int i=0;i<CRYSTAL_COUNT;++i)
-        if (!gCrystalTaken[static_cast<size_t>(i)]) drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
+    for(int i=0;i<CRYSTAL_COUNT;++i)
+        if(!gCrystalTaken[static_cast<size_t>(i)])
+            drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
+    drawTargets(gMatchTime);
+    drawBuildPieces();
 
-    for (int i=0;i<BOT_COUNT;++i) {
-        float phase=gMatchTime*0.32f+i*1.5707963f;
-        Vec3 bot{std::cos(phase)*(11.0f+(i%2)*3.0f),0.55f,
-                 std::sin(phase)*(11.0f+(i%2)*3.0f)};
-        drawCharacter(bot,-phase,{0.88f,0.38f,0.19f},true,gMatchTime);
-        drawCube({bot.x,2.68f,bot.z},{0.68f,0.08f,0.08f},{0.20f,0.90f,0.98f},-phase);
+    const std::array<Vec3,4> outfits{{{0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},
+        {0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}}};
+    for(int i=0;i<BOT_COUNT;++i) {
+        const BotState& bot=gBots[static_cast<size_t>(i)];
+        drawCharacter(bot.pos,bot.yaw,{0.82f,0.38f,0.22f},true,
+            gMatchTime+bot.phase,std::min(1.0f,bot.speed/3.5f));
     }
+    Vec3 playerDraw=gPlayer;playerDraw.y+=gJumpHeight;
+    drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
+        false,gMatchTime,moving?std::min(1.0f,moveLength):0.0f);
 
-    drawSafeZone();
-    Vec3 playerDraw=gPlayer; playerDraw.y+=gJumpHeight;
-    const std::array<Vec3,4> outfits{{{0.12f,0.48f,0.80f},{0.72f,0.24f,0.18f},{0.18f,0.57f,0.42f},{0.55f,0.34f,0.76f}}};
-    drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],false,gMatchTime);
-    drawSphere({gPlayer.x,gPlayer.y+2.20f+gJumpHeight,gPlayer.z},{0.46f,0.08f,0.46f},{0.11f,0.88f,0.98f},gPlayerYaw);
-
-    glDisableVertexAttribArray(0); glDisableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    static float statusTimer=0; statusTimer+=dt;
-    if (statusTimer>=0.8f) { statusTimer=0; updateStatus(); }
+    static float statusTimer=0;
+    statusTimer+=dt;
+    if(statusTimer>=0.65f){statusTimer=0;updateStatus();}
+    glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
 }
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetStatus(JNIEnv* env,jclass) {
