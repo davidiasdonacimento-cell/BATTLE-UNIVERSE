@@ -24,6 +24,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Restore Firebase configuration (optional)
+        env:
+          FIREBASE_GOOGLE_SERVICES_JSON: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$FIREBASE_GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$FIREBASE_GOOGLE_SERVICES_JSON" > app/google-services.json
+            python -m json.tool app/google-services.json > /dev/null
+            echo "Firebase configuration loaded for this build."
+          else
+            echo "Firebase not configured: this APK remains playable offline."
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
