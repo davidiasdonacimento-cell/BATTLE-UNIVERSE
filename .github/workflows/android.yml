@@ -36,6 +36,26 @@ jobs:
             echo "Firebase not configured: this APK remains playable offline."
           fi
 
+      - name: Configure stable APK signing (optional)
+        env:
+          BATTLE_UNIVERSE_KEYSTORE_BASE64: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_BASE64 }}
+          BATTLE_UNIVERSE_KEYSTORE_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_PASSWORD }}
+          BATTLE_UNIVERSE_KEY_ALIAS: ${{ secrets.BATTLE_UNIVERSE_KEY_ALIAS }}
+          BATTLE_UNIVERSE_KEY_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$BATTLE_UNIVERSE_KEYSTORE_BASE64" ]; then
+            printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/battle-universe.jks"
+            {
+              echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/battle-universe.jks"
+              echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
+              echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
+              echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+            echo "Stable APK signing key loaded."
+          else
+            echo "No stable signing key: GitHub's temporary debug key will be used."
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
