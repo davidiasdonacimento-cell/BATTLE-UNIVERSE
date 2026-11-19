@@ -281,7 +281,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
 
     private Map<String, Object> collectProfile() {
-        Map<String, Object> all = prefs.getAll();
+        Map<String, ?> all = prefs.getAll();
         Map<String, Object> profile = new HashMap<>();
         profile.put("schemaVersion", 1);
         for (String key : PROFILE_KEYS) {
