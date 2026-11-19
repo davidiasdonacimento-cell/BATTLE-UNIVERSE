@@ -8,7 +8,7 @@ import java.util.Arrays;
 public final class GameSurfaceView extends GLSurfaceView {
     private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64;
     private volatile float moveX,moveY,lookDX,lookDY;
-    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1;
+    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1,lookSensitivity=1;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile boolean contentPackReady=false;
     private int movePointer=-1,lookPointer=-1;
@@ -47,8 +47,8 @@ public final class GameSurfaceView extends GLSurfaceView {
         queueEvent(()->nativeSetQuality(quality));
     }
     public void setLookSensitivity(int value) {
-        int level=Math.max(0,Math.min(2,value));
-        queueEvent(()->nativeSetLookSensitivity(level));
+        lookSensitivity=Math.max(0,Math.min(2,value));
+        queueEvent(()->nativeSetLookSensitivity(lookSensitivity));
     }
     public void setContentPackData(int buildLimit,int resourceCount) {
         contentBuildLimit=Math.max(4,Math.min(24,buildLimit));
@@ -183,7 +183,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             nativeInit();nativeSetScreen(screenMode);nativeSetCharacter(characterId);
             nativeSetMap(mapId);nativeSetMode(matchMode);nativeSetQuality(quality);
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
-            nativeSetLookSensitivity(1);
+            nativeSetLookSensitivity(lookSensitivity);
             previous=System.nanoTime();
         }
         @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,
