@@ -626,7 +626,7 @@ public final class HudOverlay extends View {
             c.drawCircle(1159-10*0.88f,105-6*0.88f,4,p);
             c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
         }
-        if(gameStatus.contains("PARAQUEDAS")) {
+        if(gameStatus.contains("PARAQUEDAS")||gameStatus.contains("QUEDA LIVRE")) {
             panel(c,22,170,330,76,0xD9081928,0x5579DDEB,16);
             eyebrow(c,40,195,"POUSO EM ANDAMENTO");
             text(c,"CÂMERA ACOMPANHANDO O OPERADOR",40,222,10,0xFF9FC6D3,Typeface.DEFAULT_BOLD);
