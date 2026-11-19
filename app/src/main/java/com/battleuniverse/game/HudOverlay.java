@@ -626,7 +626,11 @@ public final class HudOverlay extends View {
             c.drawCircle(1159-10*0.88f,105-6*0.88f,4,p);
             c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
         }
-        if(gameStatus.startsWith("EMBARQUE")||gameStatus.startsWith("AVIÃO")) {
+        if(gameStatus.contains("PARAQUEDAS")) {
+            panel(c,22,170,330,76,0xD9081928,0x5579DDEB,16);
+            eyebrow(c,40,195,"POUSO EM ANDAMENTO");
+            text(c,"CÂMERA ACOMPANHANDO O OPERADOR",40,222,10,0xFF9FC6D3,Typeface.DEFAULT_BOLD);
+        } else if(gameStatus.startsWith("EMBARQUE")||gameStatus.startsWith("AVIÃO")) {
             panel(c,22,170,330,110,0xD9081928,0x5579DDEB,16);
             eyebrow(c,40,195,"AERONAVE DE TRANSPORTE");
             boolean rampReady=gameStatus.contains("RAMPA PRONTA");
@@ -678,10 +682,17 @@ public final class HudOverlay extends View {
             }
         }
 
+        // Analógico dinâmico: a base aparece no toque e o botão acompanha o dedo.
+        float joyX=179f+(game.isMovingTouchActive()?game.getMoveTouchX()*54f:0f);
+        float joyY=544f-(game.isMovingTouchActive()?game.getMoveTouchY()*54f:0f);
         p.setColor(0x553D7183);c.drawCircle(179,544,66,p);
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA8CE8EF);c.drawCircle(179,544,66,p);
-        p.setStyle(Paint.Style.FILL);p.setColor(0xAA8FCBD2);c.drawCircle(179,544,28,p);
-        p.setColor(0xFFECFFFF);c.drawCircle(179,544,7,p);
+        p.setStyle(Paint.Style.FILL);p.setColor(0xAA8FCBD2);c.drawCircle(joyX,joyY,28,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.2f);p.setColor(0xFFE9FFFF);c.drawCircle(joyX,joyY,28,p);
+        p.setStyle(Paint.Style.FILL);p.setColor(0xFFECFFFF);c.drawCircle(joyX,joyY,7,p);
+        if(game.isMovingTouchActive()) {
+            p.setColor(0xAA7CEAF2);c.drawLine(179,544,joyX,joyY,p);
+        }
 
         pill(c,24,625,160,49,"SAIR DA PARTIDA",0xDD173C4A,Color.WHITE);
         panel(c,420,650,440,40,0xBB071522,0x226A8EA0,14);
