@@ -134,6 +134,7 @@ float gZoneDamageTimer=0,gLookSensitivity=1.0f;
 constexpr float PLANE_COUNTDOWN_SECONDS=7.0f;
 int gDropState=0; // 0 lobby, 1 inside transport plane, 2 parachute descent, 3 ground
 Vec3 gPlanePosition{-110,24,-32};
+float gPlaneWalkX=1.0f,gPlaneWalkZ=0.0f;
 Vec3 gPulseStartPosition{0,1.5f,0},gPulseHitPosition{0,1.4f,-8};
 bool gParachuteOpen=false;
 bool gPlaneExteriorView=false;
@@ -527,11 +528,11 @@ void updateStatus() {
     if(gDropState==1) {
         if(gDropTimer<PLANE_COUNTDOWN_SECONDS) {
             int remaining=static_cast<int>(std::ceil(PLANE_COUNTDOWN_SECONDS-gDropTimer));
-            out<<"AVIÃO EM MOVIMENTO  •  SALTO DISPONÍVEL EM "<<remaining<<"s";
+            out<<"EMBARQUE NA AERONAVE  •  RAMPA FECHADA  •  "<<remaining<<"s";
         } else if(gDropTimer<PLANE_COUNTDOWN_SECONDS+2.5f) {
-            out<<"MAPA • AVIÃO EM MOVIMENTO  •  PREPARE-SE";
+            out<<"AVIÃO EM ROTA  •  RAMPA ABERTA  •  ANDE ATÉ A SAÍDA";
         } else {
-            out<<"AVIÃO EM ROTA  •  30 PARTICIPANTES  •  TOQUE SALTAR";
+            out<<"AVIÃO EM ROTA  •  CORREDOR LIVRE  •  EXPLORE A CABINE";
         }
     } else if(gDropState==2) {
         out<<(gParachuteOpen?"PARAQUEDAS ABERTO":"QUEDA LIVRE")
@@ -861,59 +862,94 @@ void drawTargets(float time) {
     }
 }
 void drawTransportPlaneCabin(Vec3 pos,float time) {
-    // Interior deliberately has open side windows: the player must see the map outside.
-    drawCube({pos.x-0.35f,pos.y-0.68f,pos.z},{8.7f,0.22f,5.7f},{0.25f,0.30f,0.35f});
-    drawCube({pos.x-0.35f,pos.y+0.98f,pos.z-2.95f},{8.7f,0.16f,0.20f},{0.43f,0.48f,0.54f});
-    drawCube({pos.x-0.35f,pos.y+0.98f,pos.z+2.95f},{8.7f,0.16f,0.20f},{0.43f,0.48f,0.54f});
-    drawCube({pos.x-0.35f,pos.y-0.05f,pos.z-2.95f},{8.7f,0.18f,0.20f},{0.43f,0.48f,0.54f});
-    drawCube({pos.x-0.35f,pos.y-0.05f,pos.z+2.95f},{8.7f,0.18f,0.20f},{0.43f,0.48f,0.54f});
-    // Rear bulkhead is behind the camera; the front remains open toward the ramp.
-    drawCube({pos.x-4.65f,pos.y+0.05f,pos.z},{0.22f,1.7f,5.8f},{0.34f,0.40f,0.46f});
-    drawCube({pos.x+4.35f,pos.y-0.08f,pos.z},{0.18f,0.16f,5.6f},{0.54f,0.58f,0.60f});
-    drawCube({pos.x-0.15f,pos.y-0.15f,pos.z},{0.55f,0.16f,17.5f},{0.52f,0.58f,0.64f});
-    drawCube({pos.x-4.2f,pos.y+1.0f,pos.z},{2.5f,0.16f,0.22f},{0.38f,0.46f,0.53f});
-    // Seats along both sides leave a clear aisle and keep the passengers visible.
-    for(int row=0;row<6;++row) {
-        const float x=pos.x-3.25f+static_cast<float>(row)*1.25f;
-        for(int side=-1;side<=1;side+=2) {
-            const float z=pos.z+static_cast<float>(side)*1.95f;
-            drawCube({x,pos.y-0.35f,z},{0.78f,0.18f,0.72f},{0.10f,0.24f,0.32f});
-            drawCube({x-0.25f,pos.y-0.02f,z},{0.14f,0.55f,0.72f},{0.12f,0.36f,0.46f});
+    const Vec3 frame{0.39f,0.47f,0.54f};
+    drawCube({pos.x,pos.y-0.68f,pos.z},{32.0f,0.22f,12.0f},{0.23f,0.29f,0.35f});
+    drawCube({pos.x,pos.y+2.43f,pos.z},{32.0f,0.20f,12.0f},{0.28f,0.35f,0.42f});
+    // Structural ribs, lower wall panels and open side windows.
+    for(int side=-1;side<=1;side+=2) {
+        const float z=pos.z+static_cast<float>(side)*6.0f;
+        drawCube({pos.x,pos.y-0.20f,z},{32.0f,0.78f,0.28f},frame);
+        drawCube({pos.x,pos.y+2.03f,z},{32.0f,0.30f,0.30f},frame);
+        for(int rib=0;rib<=8;++rib) {
+            float x=pos.x-15.0f+static_cast<float>(rib)*3.75f;
+            drawCube({x,pos.y+0.91f,z},{0.28f,2.35f,0.32f},frame);
+            drawCube({x,pos.y+2.30f,pos.z},{0.22f,0.24f,12.0f},frame);
+        }
+        for(int window=0;window<7;++window) {
+            float x=pos.x-13.1f+static_cast<float>(window)*3.75f;
+            drawCube({x,pos.y+1.12f,z-static_cast<float>(side)*0.18f},
+                {2.55f,1.18f,0.045f},{0.13f,0.43f,0.57f});
         }
     }
-    float pulse=0.12f+0.06f*std::sin(time*7.0f);
-    drawSphere({pos.x-1.0f,pos.y-0.42f,pos.z-2.55f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
-    drawSphere({pos.x-1.0f,pos.y-0.42f,pos.z+2.55f},{pulse,pulse,pulse},{0.30f,0.78f,1.0f});
-    const std::array<Vec3,4> flightOutfits{{
+    // Rear cargo ramp opens after the flight countdown.
+    drawCube({pos.x+15.85f,pos.y+0.55f,pos.z},{0.30f,2.45f,12.0f},{0.31f,0.38f,0.45f});
+    if(gDropTimer>=PLANE_COUNTDOWN_SECONDS) {
+        drawCube({pos.x-17.5f,pos.y-0.46f,pos.z},{4.6f,0.18f,8.0f},{0.39f,0.46f,0.53f},0.0f,0.12f);
+        for(int side=-1;side<=1;side+=2)
+            drawCube({pos.x-17.5f,pos.y+0.18f,pos.z+static_cast<float>(side)*3.85f},
+                {4.6f,0.48f,0.14f},{0.52f,0.61f,0.68f},0.0f,0.12f);
+        for(int stripe=0;stripe<6;++stripe)
+            drawCube({pos.x-17.5f+stripe*0.72f,pos.y-0.34f,pos.z},
+                {0.12f,0.04f,7.5f},{0.93f,0.66f,0.20f});
+    } else {
+        drawCube({pos.x-16.0f,pos.y+0.76f,pos.z},{0.24f,2.0f,11.8f},{0.30f,0.37f,0.44f});
+    }
+    // Walkway and tie-down rails.
+    drawCube({pos.x,pos.y-0.49f,pos.z},{30.0f,0.05f,1.35f},{0.48f,0.55f,0.60f});
+    for(int rail=0;rail<2;++rail)
+        drawCube({pos.x,pos.y-0.43f,pos.z+(rail==0?-5.0f:5.0f)},
+            {30.0f,0.12f,0.14f},{0.62f,0.67f,0.70f});
+    float pulse=0.13f+0.06f*std::sin(time*7.0f);
+    for(int light=0;light<8;++light) {
+        float x=pos.x-13.0f+static_cast<float>(light)*3.7f;
+        drawCube({x,pos.y+2.28f,pos.z},{0.70f,0.06f,0.55f},{0.54f,0.79f,0.84f});
+        drawSphere({x,pos.y+2.13f,pos.z},{pulse,pulse,pulse},{0.30f,0.85f,1.0f});
+    }
+    // Fifteen rows of two seats keep the center aisle clear.
+    const std::array<Vec3,4> outfits{{
         {0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
         {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}
     }};
-    for(int i=0;i<=BOT_COUNT;++i) {
-        const int row=i/5,col=i%5;
-        const float xOffset=-3.35f+static_cast<float>(row)*1.30f;
-        const float zOffset=-1.95f+static_cast<float>(col%2)*3.90f;
-        Vec3 passenger{pos.x+xOffset,pos.y-0.62f,pos.z+zOffset};
-        const Vec3 outfit=i==0?flightOutfits[static_cast<size_t>(gSelectedCharacter)]:
-            flightOutfits[static_cast<size_t>((i-1)%4)];
-        drawCharacter(passenger,PI*0.5f,outfit,true,time+static_cast<float>(i)*0.23f,0.0f);
+    for(int row=0;row<15;++row) {
+        const float x=pos.x-13.1f+static_cast<float>(row)*1.86f;
+        for(int side=-1;side<=1;side+=2) {
+            const float z=pos.z+static_cast<float>(side)*3.8f;
+            drawCube({x,pos.y-0.36f,z},{0.92f,0.18f,1.05f},{0.08f,0.22f,0.31f});
+            drawCube({x-0.38f,pos.y-0.02f,z},{0.14f,0.68f,1.05f},{0.12f,0.38f,0.49f});
+        }
     }
+    // Twenty-nine AI passengers occupy distinct seats; no more overlapping columns.
+    for(int i=0;i<BOT_COUNT;++i) {
+        int row=i/2, side=(i%2==0?-1:1);
+        float xOffset=-13.1f+static_cast<float>(row)*1.86f;
+        float zOffset=static_cast<float>(side)*3.8f;
+        Vec3 passenger{pos.x+xOffset,pos.y-0.54f,pos.z+zOffset};
+        drawCharacter(passenger,PI*0.5f,outfits[static_cast<size_t>(i%4)],true,
+            time+static_cast<float>(i)*0.19f,0.0f,false,false,false);
+    }
+    // Instrument console and front cockpit partition.
+    drawCube({pos.x+14.8f,pos.y+0.95f,pos.z},{0.55f,1.8f,8.0f},{0.17f,0.24f,0.31f});
+    for(int side=-1;side<=1;side+=2)
+        drawCube({pos.x+14.5f,pos.y+1.12f,pos.z+static_cast<float>(side)*2.2f},
+            {0.22f,0.55f,1.3f},{0.12f,0.68f,0.79f});
 }
 void drawTransportPlaneExterior(Vec3 pos,float time) {
-    // Distinct silhouette for the short outside flight reveal after the cabin countdown.
-    drawCube({pos.x,pos.y,pos.z},{12.0f,2.15f,2.25f},{0.42f,0.49f,0.56f});
-    drawCone({pos.x+6.55f,pos.y,pos.z},{2.1f,2.1f,2.1f},{0.76f,0.81f,0.86f},0.0f,-PI*0.5f,0.0f);
-    drawCube({pos.x-6.5f,pos.y+0.05f,pos.z},{2.1f,1.65f,2.15f},{0.34f,0.41f,0.48f});
-    drawCube({pos.x-0.6f,pos.y-0.15f,pos.z},{3.0f,0.24f,22.0f},{0.53f,0.60f,0.67f});
-    drawCube({pos.x-5.5f,pos.y+0.25f,pos.z},{3.1f,0.20f,7.2f},{0.48f,0.55f,0.62f});
-    drawCube({pos.x-5.4f,pos.y+1.0f,pos.z},{2.0f,2.0f,0.28f},{0.38f,0.46f,0.53f});
+    drawCube({pos.x,pos.y,pos.z},{34.0f,3.2f,4.0f},{0.42f,0.49f,0.56f});
+    drawCone({pos.x+18.2f,pos.y,pos.z},{4.2f,3.0f,3.4f},{0.76f,0.81f,0.86f},0.0f,-PI*0.5f);
+    drawCube({pos.x-17.0f,pos.y+0.1f,pos.z},{2.4f,2.7f,3.8f},{0.34f,0.41f,0.48f});
+    drawCube({pos.x-0.8f,pos.y+0.05f,pos.z},{5.0f,0.28f,34.0f},{0.53f,0.60f,0.67f});
+    drawCube({pos.x-13.0f,pos.y+0.45f,pos.z},{5.0f,0.22f,12.0f},{0.48f,0.55f,0.62f});
+    drawCube({pos.x-15.4f,pos.y+1.55f,pos.z},{2.8f,2.6f,0.35f},{0.38f,0.46f,0.53f});
     for(int side=-1;side<=1;side+=2) {
-        const float z=pos.z+static_cast<float>(side)*7.3f;
-        drawCylinder({pos.x-1.1f,pos.y-0.7f,z},{0.72f,2.5f,0.72f},{0.22f,0.29f,0.36f},0.0f,-PI*0.5f,0.0f);
-        drawSphere({pos.x-1.1f,pos.y-0.7f,z},{0.42f,0.42f,0.42f},{0.18f,0.75f,0.90f});
+        const float z=pos.z+static_cast<float>(side)*10.5f;
+        drawCylinder({pos.x+1.5f,pos.y-0.92f,z},{1.2f,3.2f,1.2f},{0.22f,0.29f,0.36f},0.0f,-PI*0.5f);
+        drawSphere({pos.x+1.5f,pos.y-0.92f,z},{0.62f,0.62f,0.62f},{0.18f,0.75f,0.90f});
+        drawCylinder({pos.x-6.5f,pos.y-0.92f,pos.z+static_cast<float>(side)*10.5f},
+            {1.2f,3.2f,1.2f},{0.22f,0.29f,0.36f},0.0f,-PI*0.5f);
     }
-    const float blink=0.10f+0.06f*std::sin(time*8.0f);
-    drawSphere({pos.x-5.6f,pos.y+1.4f,pos.z-3.8f},{blink,blink,blink},{0.25f,0.90f,1.0f});
-    drawSphere({pos.x-5.6f,pos.y+1.4f,pos.z+3.8f},{blink,blink,blink},{1.0f,0.25f,0.18f});
+    const float blink=0.12f+0.06f*std::sin(time*8.0f);
+    drawSphere({pos.x-16.0f,pos.y+1.55f,pos.z-3.8f},{blink,blink,blink},{0.25f,0.90f,1.0f});
+    drawSphere({pos.x-16.0f,pos.y+1.55f,pos.z+3.8f},{blink,blink,blink},{1.0f,0.25f,0.18f});
 }
 void drawParachute(Vec3 player) {
     if(gDropState!=2||!gParachuteOpen)return;
@@ -939,7 +975,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
         gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
-        gDropState=1;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};
+        gDropState=1;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;
         gJumpHeight=0;gJumpVelocity=0;gParachuteOpen=false;gPreviousButtons=0;
         gTargets[0]={{0,1.25f,-17},3,true};
         gTargets[1]={{-18,1.25f,-28},3,true};
@@ -987,7 +1023,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gPulseAmmo=40;gTrainingScore=0;gWeaponType=0;gPulseCooldown=0;gPulseFlash=0;
     gPlayerHealth=100;gEliminations=0;gMatchFinished=false;gZoneDamageTimer=0;
     gBotAttackCooldown.fill(0.0f);gLookSensitivity=1.0f;
-    gDropState=0;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gParachuteOpen=false;
+    gDropState=0;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;gParachuteOpen=false;
     gTargets[0]={{0,1.25f,-10},3,true};
     gTargets[1]={{-10,1.25f,-14},3,true};
     gTargets[2]={{10,1.25f,-14},3,true};
@@ -1024,46 +1060,66 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const bool aimHeld=(buttons&BUTTON_AIM)!=0;
     gPreviousButtons=buttons;
 
-    // Battle-royale insertion: the match begins aboard the aircraft.
+    // Grande aeronave: movimento livre durante a rota, câmera acompanhando o operador.
     if(gDropState==1) {
         gDropTimer+=dt;
-        // The aircraft moves from the first frame; the 7-second timer only gates the jump.
-        gPlanePosition.x=std::min(112.0f,-110.0f+11.2f*gDropTimer);
-        gPlanePosition.y=24.0f+std::sin(gMatchTime*0.72f)*0.22f;
-        gPlayer.x=gPlanePosition.x;gPlayer.z=gPlanePosition.z;
+        gPlanePosition.x=std::min(112.0f,-110.0f+6.8f*gDropTimer);
+        gPlanePosition.y=24.0f+std::sin(gMatchTime*0.72f)*0.16f;
+        const float forward=static_cast<float>(moveY),strafe=static_cast<float>(moveX);
+        float planeDx=std::cos(gCameraYaw)*strafe-std::sin(gCameraYaw)*forward;
+        float planeDz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
+        float movement=std::sqrt(planeDx*planeDx+planeDz*planeDz);
+        if(movement>0.08f) {
+            planeDx/=std::max(1.0f,movement);planeDz/=std::max(1.0f,movement);
+            gPlaneWalkX=std::clamp(gPlaneWalkX+planeDx*5.0f*dt,-14.6f,14.6f);
+            gPlaneWalkZ=std::clamp(gPlaneWalkZ+planeDz*5.0f*dt,-4.55f,4.55f);
+            gPlayerYaw=std::atan2(-planeDx,-planeDz);
+        }
+        gPlayer.x=gPlanePosition.x+gPlaneWalkX;
+        gPlayer.z=gPlanePosition.z+gPlaneWalkZ;
+        gPlayer.y=0.55f;
         gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
         gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
         if(gDropTimer>=PLANE_COUNTDOWN_SECONDS)gPlaneExteriorView=true;
-        if((jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS+2.5f)||gDropTimer>=19.5f) {
-            gDropState=2;gJumpHeight=22.0f;gJumpVelocity=0.0f;
-            gParachuteOpen=false;
+        const bool atRamp=gPlaneWalkX<=-11.0f && std::fabs(gPlaneWalkZ)<=4.2f;
+        const bool playerJump=jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS&&atRamp;
+        const bool forcedJump=gDropTimer>=34.0f;
+        if(jumpPressed&&gDropTimer>=PLANE_COUNTDOWN_SECONDS&&!atRamp)
+            setStatus("RAMPA NA TRASEIRA • ANDE ATÉ A SAÍDA PARA SALTAR");
+        if(playerJump||forcedJump) {
+            if(forcedJump&&!atRamp) {
+                gPlaneWalkX=-12.0f;gPlaneWalkZ=0.0f;
+                gPlayer.x=gPlanePosition.x+gPlaneWalkX;gPlayer.z=gPlanePosition.z;
+            }
+            gDropState=2;gJumpHeight=22.0f;gJumpVelocity=0.0f;gParachuteOpen=false;
             gTargets[0]={{gPlayer.x,1.25f,gPlayer.z-18.0f},3,true};
             gTargets[1]={{gPlayer.x-16.0f,1.25f,gPlayer.z-27.0f},3,true};
             gTargets[2]={{gPlayer.x+17.0f,1.25f,gPlayer.z-28.0f},3,true};
-            resetBots();
-            updateStatus();
+            resetBots();updateStatus();
+            glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
+            return;
         }
         glClearColor(0.34f,0.66f,0.88f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
-        if(!gPlaneExteriorView) {
-            // Countdown: unmistakable first-person view from inside the open passenger cabin.
-            Vec3 eye{gPlanePosition.x-3.55f,gPlanePosition.y+0.42f,gPlanePosition.z};
-            Vec3 target{gPlanePosition.x+3.4f,gPlanePosition.y+0.12f,gPlanePosition.z};
-            Mat4 view=lookAt(eye,target,{0,1,0});
-            gProjection=multiply(perspective(1.12f,static_cast<float>(gWidth)/gHeight,0.1f,320.0f),view);
-            drawWorld(gMatchTime);
-            drawTransportPlaneCabin(gPlanePosition,gMatchTime);
-        } else {
-            // When the countdown ends, cut to an exterior reveal of the plane crossing the map.
-            Vec3 eye{gPlanePosition.x-18.0f,gPlanePosition.y+10.0f,gPlanePosition.z+22.0f};
-            Vec3 target{gPlanePosition.x+1.5f,gPlanePosition.y,gPlanePosition.z};
-            Mat4 view=lookAt(eye,target,{0,1,0});
-            gProjection=multiply(perspective(0.92f,static_cast<float>(gWidth)/gHeight,0.1f,420.0f),view);
-            drawWorld(gMatchTime);
-            drawTransportPlaneExterior(gPlanePosition,gMatchTime);
-        }
-        static float planeStatusTimer=0;planeStatusTimer+=dt;
-        if(planeStatusTimer>0.45f){planeStatusTimer=0;updateStatus();}
+        Vec3 cabinPlayer{gPlayer.x,gPlanePosition.y-0.54f,gPlayer.z};
+        Vec3 eye{cabinPlayer.x+std::sin(gCameraYaw)*5.2f,
+                 cabinPlayer.y+2.55f+gCameraPitch*0.65f,
+                 cabinPlayer.z+std::cos(gCameraYaw)*5.2f};
+        Vec3 target{cabinPlayer.x-std::sin(gCameraYaw)*4.8f,
+                    cabinPlayer.y+1.25f,
+                    cabinPlayer.z-std::cos(gCameraYaw)*4.8f};
+        Mat4 view=lookAt(eye,target,{0,1,0});
+        gProjection=multiply(perspective(1.05f,static_cast<float>(gWidth)/gHeight,0.1f,360.0f),view);
+        drawWorld(gMatchTime);
+        drawTransportPlaneCabin(gPlanePosition,gMatchTime);
+        const std::array<Vec3,4> cabinOutfits{{
+            {0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
+            {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}
+        }};
+        drawCharacter(cabinPlayer,gPlayerYaw,cabinOutfits[static_cast<size_t>(gSelectedCharacter)],
+            false,gMatchTime,movement>0.08f?std::min(1.0f,movement):0.0f,false,false,false);
+        static float planeStatusTimer=0.0f;planeStatusTimer+=dt;
+        if(planeStatusTimer>0.25f){planeStatusTimer=0.0f;updateStatus();}
         glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
         return;
     }
