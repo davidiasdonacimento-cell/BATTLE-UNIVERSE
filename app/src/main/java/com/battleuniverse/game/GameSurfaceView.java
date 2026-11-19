@@ -72,6 +72,13 @@ public final class GameSurfaceView extends GLSurfaceView {
     public int getCollectedResources() {
         try { return nativeGetCollected(); } catch(UnsatisfiedLinkError error) { return 0; }
     }
+    public int[] getMatchStats() {
+        try { int[] stats=nativeGetMatchStats(); return stats==null?new int[]{0,0,0,0,100}:stats; }
+        catch(UnsatisfiedLinkError error) { return new int[]{0,0,0,0,100}; }
+    }
+    public void setSpectatorMode(boolean enabled) {
+        queueEvent(()->nativeSetSpectator(enabled));
+    }
     public void setContentPackData(int buildLimit,int resourceCount) {
         contentBuildLimit=Math.max(4,Math.min(24,buildLimit));
         contentResourceCount=Math.max(1,Math.min(12,resourceCount));
@@ -216,6 +223,8 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native float[] nativeGetPlayerPosition();
     private static native int nativeGetEliminations();
     private static native int nativeGetCollected();
+    private static native int[] nativeGetMatchStats();
+    private static native void nativeSetSpectator(boolean enabled);
 
     private final class GameRenderer implements GLSurfaceView.Renderer {
         private long previous;
