@@ -9,3 +9,8 @@ local.properties
 .cxx/
 *.apk
 *.aab
+
+# Firebase app configuration (inject through GitHub Actions secret)
+app/google-services.json
+*.jks
+*.keystore
