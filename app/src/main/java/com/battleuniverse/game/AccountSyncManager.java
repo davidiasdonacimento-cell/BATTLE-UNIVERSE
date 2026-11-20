@@ -18,6 +18,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
@@ -50,7 +51,13 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "nickname", "xp", "diamonds", "daily_reward_day", "code_100k_redeemed",
         "mode", "map", "character", "quality", "music", "effects",
         "look_sensitivity", "shop_frame_neon", "shop_emblem_bloob",
-        "shop_title_champion"
+        "shop_title_champion", "selected_shirt", "selected_boots", "selected_set",
+        "invert_camera_y", "show_minimap", "haptics", "online_mode",
+        "local_friend_1", "event_season_claimed", "mail_welcome_claimed",
+        "achievement_500", "achievement_1500", "achievement_3000",
+        "wear_shirt_tactical", "wear_shirt_neon", "wear_shirt_frost", "wear_shirt_desert",
+        "wear_boots_combat", "wear_boots_neon", "wear_boots_frost", "wear_boots_gold",
+        "wear_set_aurora", "wear_set_champion", "wear_set_orbit", "wear_set_desert"
     };
 
     private final Activity activity;
