@@ -727,6 +727,10 @@ void updateStatus() {
         out<<"DERRUBADO • AGUARDANDO REVIVER • "<<static_cast<int>(gDownedTimer)<<"s";
         setStatus(out.str());return;
     }
+    if(gBuildPreview) {
+        out<<"PRÉVIA DE GELO • TOQUE CONSTRUIR NOVAMENTE PARA CONFIRMAR";
+        setStatus(out.str());return;
+    }
     if(gDropState==1) {
         if(gDropTimer<PLANE_COUNTDOWN_SECONDS) {
             int remaining=static_cast<int>(std::ceil(PLANE_COUNTDOWN_SECONDS-gDropTimer));
@@ -825,7 +829,7 @@ void updateBots(float dt) {
         // Os bots procuram primeiro outros bots hostis para manter batalhas pelo mapa.
         // O jogador só entra na seleção a curta distância e no máximo dois bots o pressionam
         // ao mesmo tempo. Em equipes, os aliados nunca escolhem o próprio jogador como alvo.
-        if(gDropState==3 && gSelectedMode!=3) {
+        if(gDropState==3 && gSelectedMode!=3 && !(ally&&gPlayerDowned)) {
             for(int other=0;other<BOT_COUNT;++other) {
                 if(other==i||!gBotActive[static_cast<size_t>(other)])continue;
                 if(gSelectedMode!=0 && isAllyBot(other)==ally)continue;
