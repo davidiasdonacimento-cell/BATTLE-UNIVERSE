@@ -847,6 +847,12 @@ void updateBots(float dt) {
         if(gBotDowned[static_cast<size_t>(i)]) {
             float nearest=std::numeric_limits<float>::max();
             Vec3 rescuePoint=bot.pos;
+            // Um aliado derrubado também rasteja na direção do jogador vivo.
+            if(isAllyBot(i)&&!gPlayerDowned) {
+                const float px=gPlayer.x-bot.pos.x,pz=gPlayer.z-bot.pos.z;
+                nearest=std::sqrt(px*px+pz*pz);
+                rescuePoint=gPlayer;
+            }
             for(int mate=0;mate<BOT_COUNT;++mate) {
                 if(mate==i||!gBotActive[static_cast<size_t>(mate)]||gBotDowned[static_cast<size_t>(mate)]
                         ||!sameBotTeam(i,mate)) continue;
@@ -973,8 +979,11 @@ void updateBots(float dt) {
                     const size_t victim=static_cast<size_t>(targetBot);
                     gBotHealth[victim]=std::max(0,gBotHealth[victim]-1);
                     if(gBotHealth[victim]<=0) {
-                        if(sameBotTeam(i,targetBot)&&(gSelectedMode==1||gSelectedMode==2)) {
-                            gBotDowned[victim]=true;gBotDownedTimer[victim]=25.0f;gBotReviveProgress[victim]=0.0f;
+                        // Aliados do jogador sempre entram em estado derrubado,
+                        // mesmo quando o atacante pertence a outro esquadrão.
+                        if((isAllyBot(targetBot)||sameBotTeam(i,targetBot))
+                                &&(gSelectedMode==1||gSelectedMode==2)) {
+                            gBotDowned[victim]=true;gBotDownedTimer[victim]=90.0f;gBotReviveProgress[victim]=0.0f;
                             gBotHealth[victim]=0;
                         } else { gBotActive[victim]=false;++gAiEliminations;
                             gBotRespawn[victim]=gSelectedMode==3?3.0f:0.0f; }
@@ -1623,7 +1632,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             else gBotReviveProgress[static_cast<size_t>(down)]=0.0f;
             if(gBotReviveProgress[static_cast<size_t>(down)]>=4.0f){gBotDowned[static_cast<size_t>(down)]=false;gBotHealth[static_cast<size_t>(down)]=BOT_MAX_HEALTH/2;gBotActive[static_cast<size_t>(down)]=true;gBotDownedTimer[static_cast<size_t>(down)]=0;gBotReviveProgress[static_cast<size_t>(down)]=0;setStatus("IA ALIADA REVIVIDA PELO ESQUADRÃO");}
             else if(gBotDownedTimer[static_cast<size_t>(down)]<=0){
-                bool squadMateAlive=false;
+                // O próprio jogador vivo conta como socorrista do aliado do seu time.
+                bool squadMateAlive=isAllyBot(down)&&!gPlayerDowned;
                 for(int mate=0;mate<BOT_COUNT;++mate) if(mate!=down&&sameBotTeam(down,mate)
                         &&gBotActive[static_cast<size_t>(mate)]&&!gBotDowned[static_cast<size_t>(mate)]) squadMateAlive=true;
                 if(!squadMateAlive) {
