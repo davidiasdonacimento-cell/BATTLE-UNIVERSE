@@ -712,11 +712,12 @@ public final class HudOverlay extends View {
         drawControl(c,890,310,38,game.isAimToggled()?"MIRA ON":"MIRA",
             0xFF285D79,0xFF8ADCF4,game.isAimToggled());
         drawControl(c,1002,310,43,"DISPARAR",0xFF185D7A,0xFF65E9F4,game.isFiring());
-        drawControl(c,1165,403,43,"CONSTRUIR",0xFF66502A,0xFFFFD27A);
+        drawControl(c,1165,403,43,gameStatus.contains("PRÉVIA DE GELO")?"CONFIRMAR":"GELO",0xFF176C83,0xFF8CEBFF,gameStatus.contains("PRÉVIA DE GELO"));
         drawControl(c,960,461,39,"CORRER",0xFF285D49,0xFF83E9B2);
         drawControl(c,1065,465,34,"ARMA",0xFF354F79,0xFF9DC7FF);
         drawControl(c,1152,562,47,"SALTAR",0xFF7B3D35,0xFFFFA28F);
         drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
+        drawControl(c,850,562,39,"AGACHAR",0xFF315B50,0xFF8DE7C1);
 
         if(!gameStatus.startsWith("EMBARQUE")&&!gameStatus.startsWith("AVIÃO")) {
             float cx=640,cy=360;
@@ -757,8 +758,16 @@ public final class HudOverlay extends View {
 
         pill(c,24,625,160,49,"SAIR DA PARTIDA",0xDD173C4A,Color.WHITE);
         panel(c,420,650,440,40,0xBB071522,0x226A8EA0,14);
-        text(c,"JOYSTICK: MOVER  •  MIRA: TOQUE FIXA/SOLTA  •  SEGURE DISPARAR",
+        text(c,"JOYSTICK: MOVER  •  AGACHAR: SEGURE  •  GELO: TOQUE PARA VER / CONFIRMAR",
             438,675,8,0xFFDAEAF0,Typeface.DEFAULT_BOLD);
+        if(gameStatus.contains("DERRUBADO")) {
+            panel(c,430,92,420,66,0xE90B2633,0xFF67DDEB,16);
+            eyebrow(c,455,116,"VOCÊ ESTÁ DERRUBADO");
+            text(c,gameStatus,455,140,10,0xFFFFD58A,Typeface.DEFAULT_BOLD);
+        }
+        if(gameStatus.contains("PRÉVIA DE GELO")) {
+            pill(c,470,188,340,30,"PRÉVIA TRANSLÚCIDA • TOQUE GELO PARA CONFIRMAR",0xDD0D5266,0xFFBDF8FF);
+        }
         if(resultSpectating) drawSpectatorBanner(c);
         else if(isMatchOver()) {
             boolean victory=game.getGameStatus().contains("VITÓRIA");
