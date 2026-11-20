@@ -1590,7 +1590,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         if(!interactHeld){gPlayerReviveTarget=-1;gPlayerReviveProgress=0.0f;}
         if(interactHeld&&!gPlayerDowned&&(gSelectedMode==1||gSelectedMode==2)) {
             if(gPlayerReviveTarget<0||gPlayerReviveTarget>=BOT_COUNT||!gBotDowned[static_cast<size_t>(gPlayerReviveTarget)]) {
-                gPlayerReviveTarget=-1;float nearest=3.6f;
+                gPlayerReviveTarget=-1;float nearest=5.0f;
                 for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotDowned[static_cast<size_t>(i)]){
                     float dx=gBots[static_cast<size_t>(i)].pos.x-gPlayer.x,dz=gBots[static_cast<size_t>(i)].pos.z-gPlayer.z;
                     float d=std::sqrt(dx*dx+dz*dz);if(d<nearest){nearest=d;gPlayerReviveTarget=i;}}
