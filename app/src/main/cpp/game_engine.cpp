@@ -848,7 +848,11 @@ void updateBots(float dt) {
                 if(d<nearest){nearest=d;rescuePoint=p;}
             }
             bot.speed=0.0f;
-            if(nearest>2.4f&&nearest<70.0f) {
+            if(nearest>=70.0f) {
+                const float drift=std::sin(gMatchTime*0.8f+bot.phase)*0.35f;
+                moveWithCollision(bot.pos,bot.pos.x+drift*dt,bot.pos.z+0.18f*dt,0.45f);
+            }
+            if(nearest>2.4f&&nearest<140.0f) {
                 const float dx=rescuePoint.x-bot.pos.x,dz=rescuePoint.z-bot.pos.z;
                 const float inv=1.0f/std::max(0.001f,nearest);
                 bot.yaw=std::atan2(-dx,-dz);
@@ -1003,14 +1007,14 @@ void updateDownedState(float dt) {
     if(!gPlayerDowned)return;
     gDownedTimer=std::max(0.0f,gDownedTimer-dt);float nearest=999.0f;
     for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotActive[static_cast<size_t>(i)]){float dx=gBots[static_cast<size_t>(i)].pos.x-gPlayer.x,dz=gBots[static_cast<size_t>(i)].pos.z-gPlayer.z;nearest=std::min(nearest,std::sqrt(dx*dx+dz*dz));}
-    if(nearest<=3.2f){gReviveProgress+=dt;std::ostringstream st;st<<"DERRUBADO • ALIADO REVIVENDO "<<static_cast<int>(std::min(100.0f,gReviveProgress*25.0f))<<"%";setStatus(st.str());
+    if(nearest<=5.0f){gReviveProgress+=dt;std::ostringstream st;st<<"DERRUBADO • ALIADO REVIVENDO "<<static_cast<int>(std::min(100.0f,gReviveProgress*25.0f))<<"%";setStatus(st.str());
         if(gReviveProgress>=4.0f){gPlayerDowned=false;gPlayerHealth=45;gDownedTimer=0;gReviveProgress=0;setStatus("REVIVIDO PELO ESQUADRÃO • VIDA 45%");}}
-    else {gReviveProgress=0;if(gDownedTimer<=0){gPlayerDowned=false;gMatchFinished=true;setStatus("ELIMINADO • NENHUM ALIADO CONSEGUIU REVIVER");}else setStatus("DERRUBADO • AGUARDANDO ALIADO • "+std::to_string(static_cast<int>(gDownedTimer))+"s");}
+    else {gReviveProgress=0;if(gDownedTimer<=0){gDownedTimer=15.0f;setStatus("DERRUBADO • ESQUADRÃO AINDA PODE SOCORRER");}else setStatus("DERRUBADO • AGUARDANDO ALIADO • "+std::to_string(static_cast<int>(gDownedTimer))+"s");}
 }
 void applyPlayerDamage(int amount,const char* reason) {
     if(gPlayerDowned||gMatchFinished)return;gPlayerHealth=std::max(0,gPlayerHealth-amount);gDamageTaken+=amount;
     if(gPlayerHealth<=0){bool ally=false;if(gSelectedMode==1||gSelectedMode==2)for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])ally=true;
-        if(ally){gPlayerDowned=true;gDownedTimer=25;gReviveProgress=0;setStatus("DERRUBADO • SEU ESQUADRÃO PODE REVIVER VOCÊ");}else{gMatchFinished=true;setStatus(reason);}}
+        if(ally){gPlayerDowned=true;gDownedTimer=90;gReviveProgress=0;setStatus("DERRUBADO • RASTEJE ATÉ SEU ESQUADRÃO • AGUARDANDO REVIVER");}else{gMatchFinished=true;setStatus(reason);}}
     else setStatus("DANO RECEBIDO • VIDA "+std::to_string(gPlayerHealth)+"%");
 }
 void placeBuildPiece() {
@@ -1118,7 +1122,7 @@ void firePulse() {
         { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/"<<BOT_MAX_HEALTH; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
-            if(isAllyBot(hitBot)&&(gSelectedMode==1||gSelectedMode==2)) {
+            if((gSelectedMode==1||gSelectedMode==2)&&!gBotDowned[static_cast<size_t>(hitBot)]) {
                 gBotDowned[static_cast<size_t>(hitBot)]=true;gBotDownedTimer[static_cast<size_t>(hitBot)]=25.0f;
                 gBotReviveProgress[static_cast<size_t>(hitBot)]=0.0f;
                 setStatus("ALIADO DERRUBADO • APROXIME-SE E TOQUE USAR PARA REVIVER");
@@ -1513,9 +1517,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         dz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
         moveLength=std::sqrt(dx*dx+dz*dz);
         moving=moveLength>0.08f;
-        if(moving&&!gPlayerDowned) {
+        if(moving) {
             dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
-            const float speed=gCrouched?2.35f:((buttons&BUTTON_RUN)?8.0f:5.2f);
+            const float speed=gPlayerDowned?0.85f:(gCrouched?2.35f:((buttons&BUTTON_RUN)?8.0f:5.2f));
             const float nx=std::clamp(gPlayer.x+dx*speed*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
             const float nz=std::clamp(gPlayer.z+dz*speed*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
             moveWithCollision(gPlayer,nx,nz,0.42f);
@@ -1610,7 +1614,18 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             if(nearest<=3.6f){gBotReviveProgress[static_cast<size_t>(down)]+=dt;}
             else gBotReviveProgress[static_cast<size_t>(down)]=0.0f;
             if(gBotReviveProgress[static_cast<size_t>(down)]>=4.0f){gBotDowned[static_cast<size_t>(down)]=false;gBotHealth[static_cast<size_t>(down)]=BOT_MAX_HEALTH/2;gBotActive[static_cast<size_t>(down)]=true;gBotDownedTimer[static_cast<size_t>(down)]=0;gBotReviveProgress[static_cast<size_t>(down)]=0;setStatus("IA ALIADA REVIVIDA PELO ESQUADRÃO");}
-            else if(gBotDownedTimer[static_cast<size_t>(down)]<=0){gBotDowned[static_cast<size_t>(down)]=false;gBotActive[static_cast<size_t>(down)]=false;++gAiEliminations;}
+            else if(gBotDownedTimer[static_cast<size_t>(down)]<=0){
+                bool squadMateAlive=false;
+                for(int mate=0;mate<BOT_COUNT;++mate) if(mate!=down&&sameBotTeam(down,mate)
+                        &&gBotActive[static_cast<size_t>(mate)]&&!gBotDowned[static_cast<size_t>(mate)]) squadMateAlive=true;
+                if(!squadMateAlive) {
+                    gBotDowned[static_cast<size_t>(down)]=false;
+                    gBotActive[static_cast<size_t>(down)]=false;
+                    ++gAiEliminations;
+                } else {
+                    gBotDownedTimer[static_cast<size_t>(down)]=10.0f;
+                }
+            }
         }
         if(gSelectedMode!=3&&!gMatchFinished&&!gPlayerDowned) {
             gZoneDamageTimer=std::max(0.0f,gZoneDamageTimer-dt);
