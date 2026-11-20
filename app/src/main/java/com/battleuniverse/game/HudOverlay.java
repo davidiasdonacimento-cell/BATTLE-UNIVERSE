@@ -23,9 +23,10 @@ import java.security.SecureRandom;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12;
+        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
-        "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS"};
+        "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
+        "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
     private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
         "CAMISA TÁTICA","CAMISA NEON","CAMISA FROST","CAMISA DESERTO",
         "BOTAS COMBATE","BOTAS NEON","BOTAS FROST","BOTAS DOURADAS",
@@ -159,11 +160,11 @@ public final class HudOverlay extends View {
         panel(c,18,104,214,562,0xD90A1B2B,0x446CA4B7,18);
         text(c,"CENTRAL",38,130,9,0xFF79DCE7,Typeface.create("sans-serif-black",Typeface.BOLD));
         for(int i=0;i<NAV.length;i++) {
-            float y=143+i*45.5f;boolean active=page==i;boolean royale=i==ROYALE;
-            panel(c,27,y,196,40,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
+            float y=143+i*33.2f;boolean active=page==i;boolean royale=i==ROYALE;
+            panel(c,27,y,196,29,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
                     active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),10);
-            drawNavIcon(c,i,48,y+20,active||royale);
-            text(c,NAV[i],67,y+25,royale?9:8.5f,active||royale?Color.WHITE:0xFFB8CBD7,
+            drawNavIcon(c,i,48,y+14.5f,active||royale);
+            text(c,NAV[i],67,y+19.5f,royale?8.2f:7.7f,active||royale?Color.WHITE:0xFFB8CBD7,
                 Typeface.create(active||royale?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
         }
         text(c,"BATTLE ROYALE",38,655,8,0xFF7895A6,Typeface.DEFAULT_BOLD);
@@ -187,6 +188,10 @@ public final class HudOverlay extends View {
         else if(page==ROYALE_SPIN)drawRoyaleSpinPage(c);
         else if(page==MISSIONS)drawMissionsPage(c);
         else if(page==WARDROBE)drawWardrobePage(c);
+        else if(page==EVENTS)drawEventsPage(c);
+        else if(page==FRIENDS)drawFriendsPage(c);
+        else if(page==MAIL)drawMailPage(c);
+        else if(page==ACHIEVEMENTS)drawAchievementsPage(c);
         else if(page==WARDROBE)drawWardrobePage(c);
     }
     private void drawHome(Canvas c){
@@ -689,6 +694,110 @@ public final class HudOverlay extends View {
         toast(SHOP_NAMES[index]+" adquirido!");
     }
 
+    private void drawEventsPage(Canvas c) {
+        eyebrow(c,270,175,"EVENTOS DA TEMPORADA • RECOMPENSAS LOCAIS");
+        title(c,"CENTRAL DE EVENTOS",270,224);
+        subtitle(c,"Participe dos desafios ativos e acompanhe as recompensas disponíveis.",270,252);
+        boolean claimed=prefs.getBoolean("event_season_claimed",false);
+        panel(c,270,286,570,146,claimed?0xA91A4650:0xAE193040,claimed?0xFF4BD4C9:0x557AA9BC,18);
+        pill(c,292,306,112,24,"TEMPORADA 03",0x553A6B7C,0xFFB9E8EF);
+        text(c,"DESAFIO DE BOAS-VINDAS",292,365,20,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Entre no lobby e resgate o pacote de participação.",292,392,11,0xFFB3C8D4,Typeface.DEFAULT);
+        pill(c,675,350,140,42,claimed?"RESGATADO":"RESGATAR",claimed?0xFF176A75:0xFF345D79,Color.WHITE);
+        panel(c,270,452,570,120,0x771A3040,0x335D8495,15);
+        text(c,"PRÓXIMOS EVENTOS",292,483,12,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+        text(c,"Eventos competitivos e torneios online serão ativados quando o servidor multiplayer estiver disponível.",292,514,10,0xFFB3C8D4,Typeface.DEFAULT);
+        pill(c,292,535,205,24,"ONLINE • AGUARDANDO SERVIDOR",0x553B6172,0xFFBBD0D9);
+    }
+
+    private void drawFriendsPage(Canvas c) {
+        eyebrow(c,270,175,"GRUPO E CONTATOS");
+        title(c,"AMIGOS E EQUIPE",270,224);
+        subtitle(c,"Gerencie nomes salvos neste aparelho. Convites online dependem do servidor.",270,252);
+        String friend=prefs.getString("local_friend_1","");
+        panel(c,270,286,570,102,0xAE193040,0x557AA9BC,16);
+        circle(c,318,337,25,0xFF1F7584,0xFF65DCE7);
+        text(c,friend.isEmpty()?"?":friend.substring(0,1).toUpperCase(Locale.ROOT),311,344,18,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,friend.isEmpty()?"NENHUM CONTATO SALVO":friend,362,330,15,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,friend.isEmpty()?"Adicione um nome para organizar sua equipe local.":"Contato salvo localmente • não conectado",362,354,10,0xFF9FB8C6,Typeface.DEFAULT);
+        pill(c,670,319,145,36,friend.isEmpty()?"ADICIONAR":"EDITAR NOME",0xFF176A75,Color.WHITE);
+        panel(c,270,408,570,128,0x771A3040,0x335D8495,15);
+        text(c,"SISTEMA DE GRUPOS ONLINE",292,440,12,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+        text(c,"Salas, convites, presença e formação de esquadrão ainda não estão ativos.",292,470,10,0xFFB3C8D4,Typeface.DEFAULT);
+        pill(c,292,490,210,25,"MULTIPLAYER • NÃO CONECTADO",0x553B6172,0xFFBBD0D9);
+    }
+
+    private void drawMailPage(Canvas c) {
+        eyebrow(c,270,175,"CAIXA DE ENTRADA DO JOGO");
+        title(c,"CORREIO",270,224);
+        subtitle(c,"Avisos e recompensas locais do BATTLE UNIVERSE.",270,252);
+        boolean claimed=prefs.getBoolean("mail_welcome_claimed",false);
+        panel(c,270,286,570,112,claimed?0xA91A4650:0xAE193040,claimed?0xFF4BD4C9:0x557AA9BC,16);
+        circle(c,310,326,18,0xFF1F7584,0xFF65DCE7);
+        text(c,"✉",301,333,17,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"BOAS-VINDAS AO BATTLE UNIVERSE",350,322,13,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Presente de entrada: 50 diamantes virtuais.",350,347,10,0xFFB3C8D4,Typeface.DEFAULT);
+        pill(c,675,318,140,36,claimed?"COLETADO":"COLETAR",claimed?0xFF176A75:0xFF345D79,Color.WHITE);
+        panel(c,270,418,570,102,0x771A3040,0x335D8495,15);
+        text(c,"AVISO DO SERVIDOR",292,450,12,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+        text(c,"Notificações de partidas, manutenção e presentes online aparecerão após a conexão do servidor.",292,480,10,0xFFB3C8D4,Typeface.DEFAULT);
+    }
+
+    private void drawAchievementsPage(Canvas c) {
+        eyebrow(c,270,175,"PROGRESSO DA CONTA");
+        title(c,"CONQUISTAS",270,224);
+        subtitle(c,"Marcos de experiência com recompensas resgatáveis uma única vez.",270,252);
+        long xp=prefs.getLong("xp",0L);
+        int[] goals={500,1500,3000};long[] rewards={50,100,200};
+        String[] names={"PRIMEIROS PASSOS","OPERADOR DEDICADO","LENDÁRIO"};
+        String[] keys={"achievement_500","achievement_1500","achievement_3000"};
+        for(int i=0;i<3;i++) {
+            float x=270+i*192f;boolean ready=xp>=goals[i],claimed=prefs.getBoolean(keys[i],false);
+            panel(c,x,292,174,190,claimed?0xA91A4650:0xAE193040,claimed?0xFF4BD4C9:ready?0xFF51C9C4:0x335D8495,16);
+            pill(c,x+13,308,78,22,"MARCO XP",0x553A6B7C,0xFFB9E8EF);
+            text(c,names[i],x+13,362,9,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,goals[i]+" XP",x+13,392,12,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+            text(c,"RECOMPENSA  "+rewards[i]+" ◆",x+13,421,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            pill(c,x+13,440,148,26,claimed?"RESGATADA":ready?"RESGATAR":"BLOQUEADA",claimed?0xFF176A75:ready?0xFF345D79:0x553B6172,Color.WHITE);
+        }
+        panel(c,270,506,570,76,0x771A3040,0x335D8495,15);
+        text(c,"EXPERIÊNCIA TOTAL: "+xp+" XP",292,537,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Jogue partidas e complete missões para desbloquear novos marcos.",292,560,9,0xFF9CB4C1,Typeface.DEFAULT);
+    }
+
+    private void showLocalFriendDialog() {
+        EditText input=new EditText(getContext());input.setSingleLine(true);
+        input.setHint("Nome do contato");input.setText(prefs.getString("local_friend_1",""));
+        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        new AlertDialog.Builder(getContext()).setTitle("Contato local").setView(input)
+            .setNegativeButton("CANCELAR",null).setPositiveButton("SALVAR",(dialog,which)->{
+                String value=input.getText().toString().trim();if(value.length()>18)value=value.substring(0,18);
+                prefs.edit().putString("local_friend_1",value).apply();
+                toast(value.isEmpty()?"Contato removido.":"Contato salvo neste aparelho.");
+            }).show();
+    }
+
+    private void claimEventReward() {
+        if(prefs.getBoolean("event_season_claimed",false)){toast("Recompensa do evento já coletada.");return;}
+        prefs.edit().putLong("xp",prefs.getLong("xp",0L)+150L).putLong("diamonds",prefs.getLong("diamonds",0L)+75L)
+            .putBoolean("event_season_claimed",true).apply();
+        toast("Evento concluído: +150 XP e +75 diamantes virtuais.");
+    }
+    private void claimMailReward() {
+        if(prefs.getBoolean("mail_welcome_claimed",false)){toast("Presente já coletado.");return;}
+        prefs.edit().putLong("diamonds",prefs.getLong("diamonds",0L)+50L).putBoolean("mail_welcome_claimed",true).apply();
+        toast("Presente de boas-vindas: +50 diamantes virtuais.");
+    }
+    private void claimAchievement(int index) {
+        int[] goals={500,1500,3000};long[] rewards={50,100,200};
+        String[] keys={"achievement_500","achievement_1500","achievement_3000"};
+        if(index<0||index>=goals.length)return;
+        if(prefs.getBoolean(keys[index],false)){toast("Conquista já resgatada.");return;}
+        if(prefs.getLong("xp",0L)<goals[index]){toast("Ainda faltam pontos de experiência.");return;}
+        prefs.edit().putLong("diamonds",prefs.getLong("diamonds",0L)+rewards[index]).putBoolean(keys[index],true).apply();
+        toast("Conquista resgatada: +"+rewards[index]+" diamantes.");
+    }
+
     private void drawTeam(Canvas c){
         panel(c,888,124,362,218,0x9B0B1D2C,0x337AA0B2,19);
         eyebrow(c,913,153,"SUA EQUIPE");
@@ -997,8 +1106,8 @@ public final class HudOverlay extends View {
         if(hapticsEnabled)performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
         for(int i=0;i<NAV.length;i++){
-            float ny=143+i*45.5f;
-            if(hit(x,y,27,ny,196,40)){page=i;return;}
+            float ny=143+i*33.2f;
+            if(hit(x,y,27,ny,196,29)){page=i;return;}
         }
         if(page==HOME){
             if(hit(x,y,270,442,164,24)){
@@ -1097,6 +1206,17 @@ public final class HudOverlay extends View {
             for(int i=0;i<MISSION_NAMES.length;i++){
                 float mx=270+i*192f;
                 if(hit(x,y,mx,292,174,254)){claimMission(i);return;}
+            }
+        }else if(page==EVENTS){
+            if(hit(x,y,675,350,140,42)){claimEventReward();return;}
+        }else if(page==FRIENDS){
+            if(hit(x,y,670,319,145,36)){showLocalFriendDialog();return;}
+        }else if(page==MAIL){
+            if(hit(x,y,675,318,140,36)){claimMailReward();return;}
+        }else if(page==ACHIEVEMENTS){
+            for(int i=0;i<3;i++){
+                float ax=270+i*192f;
+                if(hit(x,y,ax,292,174,190)){claimAchievement(i);return;}
             }
         }else if(page==SETTINGS){
             if(hit(x,y,515,292,300,60)){
