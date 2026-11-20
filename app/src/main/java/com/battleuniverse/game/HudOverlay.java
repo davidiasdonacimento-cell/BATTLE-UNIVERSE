@@ -27,6 +27,7 @@ public final class HudOverlay extends View {
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
+    private static final int[] NAV_PAGES={HOME,CHARACTERS,MODES_PAGE,MAPS_PAGE,INVENTORY,SETTINGS,PROFILE,SHOP,ROYALE,MISSIONS,WARDROBE,EVENTS,FRIENDS,MAIL,ACHIEVEMENTS};
     private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
         "CAMISA TÁTICA","CAMISA NEON","CAMISA FROST","CAMISA DESERTO",
         "BOTAS COMBATE","BOTAS NEON","BOTAS FROST","BOTAS DOURADAS",
@@ -160,7 +161,7 @@ public final class HudOverlay extends View {
         panel(c,18,104,214,562,0xD90A1B2B,0x446CA4B7,18);
         text(c,"CENTRAL",38,130,9,0xFF79DCE7,Typeface.create("sans-serif-black",Typeface.BOLD));
         for(int i=0;i<NAV.length;i++) {
-            float y=143+i*33.2f;boolean active=page==i;boolean royale=i==ROYALE;
+            float y=143+i*33.2f;boolean active=page==NAV_PAGES[i];boolean royale=NAV_PAGES[i]==ROYALE;
             panel(c,27,y,196,29,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
                     active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),10);
             drawNavIcon(c,i,48,y+14.5f,active||royale);
@@ -1107,7 +1108,7 @@ public final class HudOverlay extends View {
         if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
         for(int i=0;i<NAV.length;i++){
             float ny=143+i*33.2f;
-            if(hit(x,y,27,ny,196,29)){page=i;return;}
+            if(hit(x,y,27,ny,196,29)){page=NAV_PAGES[i];return;}
         }
         if(page==HOME){
             if(hit(x,y,270,442,164,24)){
