@@ -43,6 +43,15 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Novas telas de eventos e correio oferecem resgate local de recompensas únicas; conquistas liberam recompensas conforme XP; amigos permite salvar um nome de contato apenas no aparelho. Essas ações não sincronizam entre usuários e não são funcionalidades online.
 - A navegação foi compactada para caber no layout paisagem 1280x720; é necessário validar visualmente no Redmi 12.
 
+## Conta BATTLE UNIVERSE com nome e senha — implementação publicada
+- Perfil possui fluxo de criar conta e entrar usando nome de usuário (3–18 caracteres: a-z, 0-9 e _) e senha (8–72 caracteres); não exige login Google.
+- Firebase Authentication é usado como backend de identidade com um identificador interno derivado do nome de usuário; a senha não é gravada em SharedPreferences nem enviada ao Firestore.
+- Firebase UID identifica o documento privado em Firestore: players/{uid}. O arquivo firestore.rules restringe leitura e gravação ao próprio UID autenticado.
+- O salvamento em nuvem inclui nickname, XP, diamantes virtuais, modo/mapa/personagem, configurações, roupas/equipamentos, eventos, correio e conquistas selecionadas.
+- A sessão Firebase é restaurada pelo SDK; o progresso local continua como cache offline.
+- Limitação importante: o identificador interno não é um e-mail real. Não existe recuperação de senha por e-mail neste fluxo. O jogador precisa guardar a senha. O Firebase/Firestore precisa estar configurado no projeto e as regras firestore.rules precisam estar publicadas no console Firebase.
+- A conta só recupera dados de APKs que usem o mesmo projeto Firebase, o mesmo applicationId e o mesmo esquema de dados. Build compilado não comprova sincronização real; testar criação, login, gravação, logout e restauração em instalação separada.
+ 
 ## Pendências explícitas
 - Criar/importar modelos humanos de alta qualidade (GLB), rig profissional e biblioteca de animações; validar skins modulares reais.
 - Fazer teste visual e funcional no Redmi 12; confirmar orientação, escala, FPS, deformações e controles.
