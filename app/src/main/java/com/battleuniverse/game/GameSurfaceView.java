@@ -6,7 +6,7 @@ import android.view.MotionEvent;
 import java.util.Arrays;
 
 public final class GameSurfaceView extends GLSurfaceView {
-    private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64;
+    private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64, CROUCH=128;
     private volatile float moveX,moveY,lookDX,lookDY;
     private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1,lookSensitivity=1;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
@@ -15,8 +15,8 @@ public final class GameSurfaceView extends GLSurfaceView {
     private volatile boolean invertCameraY=false;
     private boolean aimToggled=false;
     private int movePointer=-1,lookPointer=-1;
-    private final int[] buttonPointers={-1,-1,-1,-1,-1,-1,-1};
-    private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,FIRE,SWAP,AIM};
+    private final int[] buttonPointers={-1,-1,-1,-1,-1,-1,-1,-1};
+    private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,FIRE,SWAP,AIM,CROUCH};
     private float moveOriginX,moveOriginY,lastLookX,lastLookY;
 
     public GameSurfaceView(Context context) {
@@ -119,7 +119,8 @@ public final class GameSurfaceView extends GLSurfaceView {
             {960f,461f,RUN,47f},
             {1065f,465f,SWAP,42f},
             {1152f,562f,JUMP,52f},
-            {960f,605f,INTERACT,47f}
+            {960f,605f,INTERACT,47f},
+            {850f,562f,CROUCH,43f}
         };
         for(float[] c:controls) {
             float dx=x-c[0],dy=y-c[1],r=c[3];
