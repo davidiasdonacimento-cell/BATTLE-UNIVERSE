@@ -45,6 +45,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
 
     private static final String COLLECTION = "players";
+    private static final String USERNAME_DOMAIN = "@accounts.battleuniverse.app";
     private static final String[] PROFILE_KEYS = {
         "nickname", "xp", "diamonds", "daily_reward_day", "code_100k_redeemed",
         "mode", "map", "character", "quality", "music", "effects",
@@ -66,7 +67,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private boolean applyingCloud;
     private boolean prefsListenerRegistered;
     private boolean closed;
-    private String statusMessage = "Entre com Google para guardar o progresso na nuvem.";
+    private String statusMessage = "Crie uma conta BATTLE UNIVERSE para guardar seu progresso.";
 
     public AccountSyncManager(Activity activity, SharedPreferences prefs, Listener listener) {
         this.activity = activity;
@@ -77,22 +78,17 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
 
     private void initializeFirebase() {
         try {
-            // The Firebase Gradle plugin creates this resource from app/google-services.json.
-            int webClientResource = activity.getResources().getIdentifier(
-                "default_web_client_id", "string", activity.getPackageName());
-
-            if (FirebaseApp.getApps(activity).isEmpty() || webClientResource == 0) {
+            // Firebase is the account/cloud backend; Google sign-in is not required.
+            if (FirebaseApp.getApps(activity).isEmpty()) {
                 configured = false;
-                publish(false, "", "Configuração Google/Firebase pendente.");
+                publish(false, "", "Servidor de contas não configurado neste APK.");
                 return;
             }
-
             FirebaseApp app = FirebaseApp.getInstance();
             auth = FirebaseAuth.getInstance(app);
             firestore = FirebaseFirestore.getInstance(app);
-            credentialManager = CredentialManager.create(activity);
             configured = true;
-            publish(false, "", "Toque para vincular sua conta Google.");
+            publish(false, "", "Crie uma conta ou entre com nome e senha.");
         } catch (Exception e) {
             configured = false;
             publish(false, "", "Não foi possível iniciar o serviço de conta.");
@@ -112,10 +108,59 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         if (!configured || closed) return;
         FirebaseUser user = auth.getCurrentUser();
         if (user == null) {
-            publish(true, "", "Entre com Google para sincronizar em outros APKs.");
+            publish(true, "", "Crie uma conta ou entre com nome e senha para sincronizar.");
             return;
         }
         loadCloudProfile(user);
+    }
+
+    public void authenticateUsername(String rawUsername, String password, boolean createAccount) {
+        if (!configured || auth == null || firestore == null) {
+            publish(false, "", "Servidor de contas não configurado neste APK.");
+            return;
+        }
+        String username = rawUsername == null ? "" : rawUsername.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!username.matches("[a-z0-9_]{3,18}")) {
+            publish(true, "", "Use 3 a 18 letras, números ou _.");
+            return;
+        }
+        if (password == null || password.length() < 8 || password.length() > 72) {
+            publish(true, "", "A senha precisa ter de 8 a 72 caracteres.");
+            return;
+        }
+        String internalEmail = username + USERNAME_DOMAIN;
+        publish(true, username, createAccount ? "Criando sua conta..." : "Entrando na conta...");
+        if (createAccount) {
+            auth.createUserWithEmailAndPassword(internalEmail, password)
+                .addOnCompleteListener(activity, task -> finishUsernameAuth(task, username));
+        } else {
+            auth.signInWithEmailAndPassword(internalEmail, password)
+                .addOnCompleteListener(activity, task -> finishUsernameAuth(task, username));
+        }
+    }
+
+    private void finishUsernameAuth(com.google.android.gms.tasks.Task<AuthResult> task, String username) {
+        if (closed) return;
+        if (!task.isSuccessful()) {
+            publish(true, "", "Não foi possível entrar/criar. Confira o nome, a senha e a conexão.");
+            return;
+        }
+        prefs.edit().putString("account_username", username).apply();
+        FirebaseUser user = auth.getCurrentUser();
+        if (user != null) loadCloudProfile(user);
+    }
+
+    public void signOut() {
+        if (auth != null) auth.signOut();
+        if (prefsListenerRegistered) {
+            prefs.unregisterOnSharedPreferenceChangeListener(this);
+            prefsListenerRegistered = false;
+        }
+        publish(configured, "", "Você saiu da conta. O progresso local continua neste aparelho.");
+    }
+
+    public String getUsername() {
+        return prefs.getString("account_username", "");
     }
 
     public void signInWithGoogle() {
@@ -197,7 +242,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
 
     private void loadCloudProfile(FirebaseUser user) {
         if (closed || user == null) return;
-        publish(true, user.getEmail(), "Buscando seu progresso salvo na nuvem...");
+        publish(true, getUsername(), "Buscando seu progresso salvo na nuvem...");
 
         profileDocument(user).get()
             .addOnSuccessListener(activity, snapshot -> {
@@ -206,11 +251,11 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 if (snapshot.exists()) {
                     applyCloudProfile(snapshot);
                     registerPrefsListener();
-                    publish(true, user.getEmail(), "Progresso recuperado da nuvem.");
+                    publish(true, getUsername(), "Progresso recuperado da nuvem.");
                 } else {
                     // First Google login: preserve and upload the current local profile.
                     registerPrefsListener();
-                    publish(true, user.getEmail(), "Criando seu primeiro salvamento na nuvem...");
+                    publish(true, getUsername(), "Criando seu primeiro salvamento na nuvem...");
                     saveProfile();
                 }
             })
@@ -299,16 +344,16 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         if (user == null) return;
 
         Map<String, Object> profile = collectProfile();
-        profile.put("email", user.getEmail() == null ? "" : user.getEmail());
+        profile.put("username", getUsername());
         profile.put("displayName", user.getDisplayName() == null ? "" : user.getDisplayName());
         profile.put("updatedAt", FieldValue.serverTimestamp());
 
         profileDocument(user).set(profile, SetOptions.merge())
             .addOnSuccessListener(activity, unused -> {
-                if (!closed) publish(true, user.getEmail(), "Sincronizado com Google.");
+                if (!closed) publish(true, getUsername(), "Conta BATTLE UNIVERSE sincronizada.");
             })
             .addOnFailureListener(activity, error -> {
-                if (!closed) publish(true, user.getEmail(),
+                if (!closed) publish(true, getUsername(),
                     "Não foi possível enviar o progresso. Ele continua salvo localmente.");
             });
     }
