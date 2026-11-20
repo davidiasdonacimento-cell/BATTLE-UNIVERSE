@@ -25,7 +25,7 @@ import java.security.SecureRandom;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16;
+        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
@@ -200,6 +200,7 @@ public final class HudOverlay extends View {
         else if(page==FRIENDS)drawFriendsPage(c);
         else if(page==MAIL)drawMailPage(c);
         else if(page==ACHIEVEMENTS)drawAchievementsPage(c);
+        else if(page==PREMATCH)drawPreMatch(c);
     }
     private void drawHome(Canvas c){
         eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.4.0  /  SEASON 03");
@@ -264,6 +265,44 @@ public final class HudOverlay extends View {
             text(c,desc[i],x+18,y+96,11,0xFFAAC1CE,Typeface.DEFAULT);
             if(active)circle(c,x+242,y+25,7,0xFF5CE4DA,0xFFB6FFF5);
         }
+    }
+    private void drawPreMatch(Canvas c){
+        eyebrow(c,270,175,"PREPARAÇÃO LOCAL • BATTLE ROYALE");
+        title(c,"SALA PRÉ-PARTIDA",270,224);
+        subtitle(c,"Confira o operador, o mapa e a composição antes de iniciar.",270,252);
+        panel(c,270,270,570,350,0xB8193040,0x557AA9BC,18);
+        eyebrow(c,292,300,"PARTICIPANTES DA PARTIDA OFFLINE");
+        panel(c,292,316,526,48,0xAA123D4A,0x6654DCE5,12);
+        text(c,"01  VOCÊ  •  "+CHARACTER_NAMES[character],308,346,13,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"29 VAGAS DE BOT IA  •  CARREGADAS AO INICIAR",292,390,11,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+        for(int i=0;i<29;i++){
+            int col=i%6,row=i/6;
+            float x=292+col*88f,y=405+row*35f;
+            panel(c,x,y,80,28,0x66304455,0x334F7B8D,7);
+            text(c,"BOT IA "+String.format(Locale.US,"%02d",i+1),x+7,y+18,8.2f,0xFFB9CBD5,Typeface.DEFAULT_BOLD);
+        }
+        panel(c,292,596,526,1,0x557AA9BC,0x00000000,0);
+        text(c,"MAPA: "+MAP_NAMES[map]+"   •   MODO: "+MODE_NAMES[mode],292,581,10,0xFF72DCE6,Typeface.DEFAULT_BOLD);
+        panel(c,862,270,350,350,0xB8193040,0x557AA9BC,18);
+        eyebrow(c,886,302,"OPERADOR E EQUIPAMENTO");
+        circle(c,1037,390,62,0xFF1C5968,0xFF57D8E5);
+        text(c,new String[]{"C","M","D","L"}[character],1019,405,42,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,CHARACTER_NAMES[character],886,490,20,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Camisa, botas e conjunto equipados",886,516,10,0xFF9DB6C5,Typeface.DEFAULT);
+        text(c,"Partida offline • bots identificados como IA",886,546,10,0xFFFFCF83,Typeface.DEFAULT_BOLD);
+        pill(c,886,572,144,25,"30 PARTICIPANTES",0x553A6B7C,0xFFB9E8EF);
+        pill(c,1038,572,150,25,"SERVIDOR: LOCAL",0x553A6B7C,0xFFB9E8EF);
+        pill(c,270,636,170,34,"VOLTAR AO LOBBY",0x553B6172,0xFFBBD0D9);
+        gradientButton(c,862,636,350,34,"INICIAR PARTIDA","CARREGAR AVIÃO E MAPA",0xFFFFB45E,0xFFE97543);
+    }
+    private void beginOfflineMatch(){
+        ensureDailyMissionWindow();
+        prefs.edit().putBoolean("match_recorded_for_missions",false)
+            .putBoolean("match_reward_recorded",false).apply();
+        resultSpectating=false;game.setSpectatorMode(false);
+        game.setCharacter(character);game.setMap(map);game.setMatchMode(mode);
+        game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
+        game.setGameScreen(true);page=GAME;
     }
     private void drawMaps(Canvas c){
         eyebrow(c,270,175,"8 DESTINOS • MAPAS SELECIONÁVEIS");title(c,"ESCOLHA O MAPA",270,224);
@@ -1144,15 +1183,12 @@ public final class HudOverlay extends View {
                     toast("ONLINE INDISPONÍVEL: SERVIDOR MULTIPLAYER AINDA NÃO CONFIGURADO. SELECIONE OFFLINE.");
                     return;
                 }
-                ensureDailyMissionWindow();
-                prefs.edit().putBoolean("match_recorded_for_missions",false)
-                    .putBoolean("match_reward_recorded",false).apply();
-                resultSpectating=false;game.setSpectatorMode(false);
-                game.setCharacter(character);game.setMap(map);game.setMatchMode(mode);
-                game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
-                game.setGameScreen(true);page=GAME;return;
+                page=PREMATCH;return;
             }
             if(hit(x,y,628,472,222,78)){page=ROYALE;return;}
+        }else if(page==PREMATCH){
+            if(hit(x,y,270,636,170,34)){page=HOME;return;}
+            if(hit(x,y,862,636,350,34)){beginOfflineMatch();return;}
         }else if(page==CHARACTERS){
             for(int i=0;i<4;i++)if(hit(x,y,270+i*146,295,132,210)){
                 character=i;game.setCharacter(i);prefs.edit().putInt("character",i).apply();
