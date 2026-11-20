@@ -786,6 +786,7 @@ void resetBots() {
         gBotAttackCooldown[static_cast<size_t>(i)]=0.45f+static_cast<float>(i%5)*0.16f;
     }
 }
+void applyPlayerDamage(int amount,const char* reason);
 void updateBots(float dt) {
     if(gMatchFinished) return;
     // Limita a pressão simultânea no jogador: o restante da IA prioriza combates entre bots.
@@ -1327,7 +1328,6 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
     gCrouched=(buttons&BUTTON_CROUCH)!=0&&!gPlayerDowned;
     const bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
-    const bool buildHeld=(buttons&BUTTON_BUILD)!=0;
     const bool pulseHeld=(buttons&BUTTON_PULSE)!=0;
     const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
     const bool aimHeld=(buttons&BUTTON_AIM)!=0;
