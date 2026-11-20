@@ -1,59 +1,58 @@
 # BATTLE UNIVERSE — estado e decisões confirmadas
 
-Este é o documento de continuidade do projeto. Não criar versões artificiais por etapa. Recursos só são considerados prontos quando houver prova no código, build e teste.
+Documento de continuidade obrigatório. Antes de qualquer alteração, revisar este arquivo, o histórico de requisitos e a implementação real. Não criar versões artificiais por etapa.
 
-## Decisões do jogador
-- Android nativo em Java + C++ / OpenGL ES 3.0; sem Unity, Godot ou WebView.
-- Lobby de jogo mobile Battle Royale, não aparência de site.
-- Personagem humanoide 3D no lobby, skins equipáveis e cenário.
-- Menu com JOGAR, PERSONAGENS, LOJA, ROYALE, INVENTÁRIO, MISSÕES, EVENTOS, PERFIL e AJUSTES.
-- Escolha ONLINE ou OFFLINE.
-- 30 participantes totais contando o jogador; modos solo, dupla e esquadrão.
-- ONLINE planejado: esperar 30 segundos por humanos e completar vagas restantes com bots.
-- OFFLINE: 1 jogador + 29 bots IA.
-- IA em dificuldade NORMAL.
-- Fogo amigo DESATIVADO.
-- Fluxo: espera/contagem, interior de aeronave com movimento, mapa tático, salto, queda livre, paraquedas, batalha e resultado.
-- Royale com diamantes virtuais, prêmios aleatórios e probabilidades visíveis; loja com cosméticos.
-- Não inflar pacote com arquivos vazios/repetidos; assets precisam ser utilizáveis.
+## Requisitos permanentes
+- Android nativo Java + C++ / OpenGL ES 3.0; sem Unity, Godot ou WebView.
+- Lobby de battle royale mobile, não aparência de site.
+- Personagens masculinos e femininos com aparência humana, modelos 3D completos, rig, animações e skins equipáveis.
+- Lobby com personagem central, cenário 3D, câmera dinâmica, menus laterais e botão JOGAR.
+- Telas pré-partida: personagens, cofre/inventário, loja, Royale, passe, missões, eventos, perfil, amigos/equipe, configurações, modos, coleção/equipamentos, correio, conquistas/classificação, notícias, calendário e resgate de códigos.
+- Loja com preços e compras funcionais; Royale com diamantes virtuais, probabilidades exibidas e somando 100%, histórico e prêmios no inventário.
+- Escolha ONLINE/OFFLINE; 30 participantes; offline jogador + 29 bots; online aguarda 30 segundos por humanos e completa com bots quando servidor real estiver pronto.
+- Fluxo da partida: sala de espera, contagem, aeronave caminhável, mapa tático, salto, queda livre, paraquedas, combate, resultado e recompensas.
+- Modos solo, dupla, esquadrão e treinamento; bots NORMAL; fogo amigo desligado.
+- Armas, equipamentos, loot, construção, zona segura, reviver aliados, missões, estatísticas, progressão, clima e ciclo dia/noite.
+- Pacote adicional com conteúdo real, download dentro do jogo, validação e carregamento; nunca inflar com dados vazios ou duplicados.
+- Monetização futura apenas transparente e opcional, respeitando as regras das lojas. Não prometer renda.
 
-## Arquitetura real
+## Arquitetura confirmada
 - MainActivity cria GameSurfaceView e HudOverlay em FrameLayout.
-- GameSurfaceView transmite controles e chamadas JNI.
-- game_engine.cpp desenha mundo/personagens em OpenGL ES 3.0.
-- HudOverlay desenha telas/HUD Android por cima da engine.
-- Firebase neste repositório é para autenticação e salvamento de perfil; não é servidor multiplayer em tempo real.
+- GameSurfaceView encaminha controles e JNI.
+- game_engine.cpp renderiza mundo/personagens em OpenGL ES 3.0.
+- HudOverlay desenha telas Android sobre a engine.
+- Firebase está ligado a autenticação/perfil; não é servidor multiplayer em tempo real.
 
-## Existia antes destas alterações
-- 29 bots locais: total de 30 com o jogador.
+## Estado anterior comprovado
+- 29 bots locais, 30 participantes no modo offline.
 - Modos Battle Royale, dupla, esquadrão e treinamento.
-- IA local simples de patrulha, perseguição e combate; não IA avançada completa.
-- Aeronave 3D com corredor, rampa traseira, movimentação no interior, contagem de embarque de 7 segundos e saída forçada de segurança aos 34 segundos.
-- Salto, queda e paraquedas.
-- Armas locais, loot, construção, zona segura, estados derrubado/rastejar/reviver.
-- Seleção de personagens, roupas/peças, loja virtual, inventário, missões, passe Royale e perfil.
-- Modelo 3D humanoide estilizado construído com primitivas OpenGL; ainda não é malha realista com rig profissional.
+- IA local básica de patrulha, perseguição e combate.
+- Aeronave 3D com corredor, rampa, movimentação, embarque de 7 segundos e saída de segurança aos 34 segundos.
+- Salto, queda livre, paraquedas, armas, loot, construção, zona segura, estados derrubado/rastejar/reviver.
+- Loja, inventário, missões, passe, perfil, seleção visual e roupas básicas.
+- Royale de 100 diamantes com probabilidades 40/30/20/9/1; compensação por duplicados.
+- Online permanece bloqueado sem servidor multiplayer real.
+- Modelo anterior era Bloob geométrico, não personagem humano realista.
+- Build GitHub Actions do commit 54d5d359 passou; APK debug de aproximadamente 9,15 MB e pacote de conteúdo de aproximadamente 429 MB. Sem teste físico comprovado no Redmi 12.
 
-## Alterações incluídas neste commit
-- Lobby agora renderiza uma cena OpenGL 3D por trás do HUD; painéis do fundo ficaram translúcidos.
-- Seletor ONLINE/OFFLINE. OFFLINE inicia o jogo local; ONLINE é identificado como pendente e não inicia partida falsa.
-- Giro Royale custa 100 diamantes virtuais. Chances: 50 diamantes 40%; 100 diamantes 30%; camisa Neon 20%; botas Frost 9%; conjunto Orbital 1%. Soma = 100%. Repetidos geram compensação virtual.
-- Mapa tático usa dados de posição do jogador, aeronave, rota e zona publicados pela engine; toque no mapa marca um waypoint que aparece no mundo 3D após o pouso.
-- Constante FRIENDLY_FIRE_ENABLED = false e filtros explícitos contra alvos da mesma equipe.
-- HUD da aeronave exibe 30 participantes (jogador + 29 bots) no modo local.
+## Alterações desta execução
+- Navegação do lobby redesenhada de faixa horizontal para painel vertical à esquerda, liberando o topo e mantendo as telas existentes.
+- Seleção visual renomeada para quatro operadores: Caio, Maya, Dante e Luna; perfis masculino/feminino.
+- Engine recebeu uma primeira silhueta humanoide procedural com cabeça/rosto, cabelo, pescoço, tórax, cintura, membros, mãos e botas, com variação de proporções/tons para personagens masculinos e femininos.
+- Esta geometria ainda é procedural e não equivale a malha realista profissional, rig importado ou animações mocap. Não declarar esse objetivo completo.
 
-## Ainda pendente — não declarar concluído
-- Servidor de partidas online com humanos, salas, matchmaking, sincronização, reconexão, validação autoritativa e anti-cheat.
-- Fila online de 30 segundos e preenchimento de vagas com bots. ONLINE fica bloqueado até existir esse backend.
-- Sala de espera separada em ilha antes da aeronave; hoje a contagem e o embarque ocorrem dentro do avião.
-- Modelo humano realista com rig profissional, biblioteca completa de animações e customização avançada.
-- Veículos completos, mascotes, eventos, comunicação e outros sistemas ainda não integrados.
-- Mapas com geometria, interiores e assets exclusivos de alta fidelidade.
-- Teste no Redmi 12 após esta alteração.
+## Pendências explícitas
+- Criar/importar modelos humanos de alta qualidade (GLB), rig profissional e biblioteca de animações; validar skins modulares reais.
+- Fazer teste visual e funcional no Redmi 12; confirmar orientação, escala, FPS, deformações e controles.
+- Completar telas secundárias e integrar ações reais em cada uma.
+- Servidor multiplayer autoritativo, matchmaking, salas, sincronização, reconexão e anti-cheat.
+- Sala de espera separada antes do avião; hoje a contagem/embarque ocorrem no avião.
+- Mapas com geometria/interiores/assets exclusivos de alta fidelidade.
+- Revisar segurança, privacidade, pagamentos e políticas antes de monetizar.
 
-## Comprovação
-- Código no main comprova publicação das alterações.
-- GitHub Actions verde comprova compilação do commit.
-- Artefato comprova que o APK foi gerado.
-- Só teste físico confirma funcionamento no aparelho.
-- Não declarar online, servidor ou teste físico como funcionais antes de comprovar.
+## Regra de comprovação
+- Alteração publicada = código no GitHub.
+- Build verde = compilação confirmada.
+- APK baixável = artefato confirmado.
+- Teste no aparelho = funcionamento verificado no dispositivo.
+- Nunca confundir planejado, implementado, compilado e testado.
