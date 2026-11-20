@@ -51,7 +51,7 @@ public final class HudOverlay extends View {
     private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
     private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM","FROZEN FRONT","INDUSTRIAL ZONE","GREEN VALLEY","ORBITAL BASE","ABANDONED SECTOR"};
     private static final String[] MAP_DETAILS={"Praias • florestas • vilas","Arranha-céus • neon • avenidas","Dunas • cânions • ruínas","Geleiras • neve • bases polares","Fábricas • depósitos • chaminés","Campos • rios • florestas","Instalações • plataformas • tecnologia","Ruínas • depósitos • estruturas antigas"};
-    private static final String[] CHARACTER_NAMES={"BLOOB","BLOOB TÁTICO","BLOOB NEON","BLOOB DOURADO"};
+    private static final String[] CHARACTER_NAMES={"CAIO","MAYA","DANTE","LUNA"};
     private static final String[] QUALITY_NAMES={"ECONÔMICO","EQUILIBRADO","ALTO"};
     private final GameSurfaceView game;
     private final SharedPreferences prefs;
@@ -155,16 +155,18 @@ public final class HudOverlay extends View {
         return NumberFormat.getIntegerInstance(new Locale("pt","BR")).format(value);
     }
     private void drawSidebar(Canvas c) {
-        // In-game horizontal navigation, not an admin-style web sidebar.
-        panel(c,24,105,1224,50,0xB90A1B2B,0x336CA4B7,16);
+        // Navegação vertical de lobby mobile: libera o topo e mantém as telas dentro do jogo.
+        panel(c,18,104,214,562,0xD90A1B2B,0x446CA4B7,18);
+        text(c,"CENTRAL",38,130,9,0xFF79DCE7,Typeface.create("sans-serif-black",Typeface.BOLD));
         for(int i=0;i<NAV.length;i++) {
-            float x=24+i*111f;boolean active=page==i;boolean royale=i==ROYALE;
-            panel(c,x,108,108,44,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
-                    active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),9);
-            drawNavIcon(c,i,x+12,130,active||royale);
-            text(c,NAV[i],x+22,134,royale?8:6.5f,active||royale?Color.WHITE:0xFFB8CBD7,
+            float y=143+i*45.5f;boolean active=page==i;boolean royale=i==ROYALE;
+            panel(c,27,y,196,40,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
+                    active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),10);
+            drawNavIcon(c,i,48,y+20,active||royale);
+            text(c,NAV[i],67,y+25,royale?9:8.5f,active||royale?Color.WHITE:0xFFB8CBD7,
                 Typeface.create(active||royale?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
         }
+        text(c,"BATTLE ROYALE",38,655,8,0xFF7895A6,Typeface.DEFAULT_BOLD);
     }
     private void drawNavIcon(Canvas c,int i,float x,float y,boolean active){
         p.setColor(active?0xFFE9FCFF:0xFF8AA8B8);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.2f);
@@ -219,14 +221,14 @@ public final class HudOverlay extends View {
     }
     private void drawCharacters(Canvas c){
         eyebrow(c,270,175,"PERSONALIZAÇÃO");title(c,"SUA EQUIPE",270,224);
-        subtitle(c,"Escolha a skin do Bloob. As quatro variações aparecem no cenário 3D.",270,252);
-        String[] roles={"PADRÃO","TÁTICO","NEON","DOURADO"};
+        subtitle(c,"Escolha entre quatro operadores masculinos e femininos. A seleção acompanha a partida.",270,252);
+        String[] roles={"MASCULINO","FEMININO","MASCULINO","FEMININO"};
         int[] colors={0xFF08A9D8,0xFF344C5C,0xFF8D42D7,0xFFE0A62B};
         for(int i=0;i<4;i++){
             float x=270+i*146;boolean active=character==i;
             panel(c,x,295,132,210,active?0xD51B5B69:0xA51A3040,active?0xFF48D7E1:0x335D8495,16);
             circle(c,x+66,365,36,colors[i],active?0xFF68E9EF:0xFF8AA5B4);
-            text(c,new String[]{"B","T","N","G"}[i],x+59,372,19,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,new String[]{"C","M","D","L"}[i],x+59,372,19,Color.WHITE,Typeface.DEFAULT_BOLD);
             text(c,CHARACTER_NAMES[i],x+18,432,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
             text(c,roles[i],x+14,453,9,0xFF9DB6C5,Typeface.DEFAULT);
             pill(c,x+(active?27:35),470,active?78:62,23,active?"SELECIONADO":"ESCOLHER",
@@ -234,7 +236,7 @@ public final class HudOverlay extends View {
         }
         panel(c,270,535,570,92,0xA6172C3C,0x335D8495,17);
         eyebrow(c,292,563,"VISUALIZAÇÃO 3D");
-        text(c,"O operador selecionado aparece no lobby ao fundo.",292,590,15,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Operador selecionado no cenário 3D e na partida local.",292,590,15,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Cosméticos visuais não oferecem vantagem competitiva.",292,611,11,0xFF8FAAB8,Typeface.DEFAULT);
     }
     private void drawModes(Canvas c){
@@ -995,8 +997,8 @@ public final class HudOverlay extends View {
         if(hapticsEnabled)performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
         for(int i=0;i<NAV.length;i++){
-            float nx=24+i*111f;
-            if(hit(x,y,nx,111,108,38)){page=i;return;}
+            float ny=143+i*45.5f;
+            if(hit(x,y,27,ny,196,40)){page=i;return;}
         }
         if(page==HOME){
             if(hit(x,y,270,442,164,24)){
