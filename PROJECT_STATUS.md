@@ -35,11 +35,13 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Modelo anterior era Bloob geométrico, não personagem humano realista.
 - Build GitHub Actions do commit 54d5d359 passou; APK debug de aproximadamente 9,15 MB e pacote de conteúdo de aproximadamente 429 MB. Sem teste físico comprovado no Redmi 12.
 
-## Alterações desta execução
-- Navegação do lobby redesenhada de faixa horizontal para painel vertical à esquerda, liberando o topo e mantendo as telas existentes.
-- Seleção visual renomeada para quatro operadores: Caio, Maya, Dante e Luna; perfis masculino/feminino.
-- Engine recebeu uma primeira silhueta humanoide procedural com cabeça/rosto, cabelo, pescoço, tórax, cintura, membros, mãos e botas, com variação de proporções/tons para personagens masculinos e femininos.
-- Esta geometria ainda é procedural e não equivale a malha realista profissional, rig importado ou animações mocap. Não declarar esse objetivo completo.
+## Alterações publicadas nesta sequência
+- Navegação do lobby usa painel vertical compacto e mapeamento explícito de páginas para não confundir as telas com os estados internos de jogo/roleta.
+- Seleção visual mantém quatro operadores: Caio, Maya, Dante e Luna; perfis masculino/feminino.
+- Engine contém uma primeira silhueta humanoide procedural. Ela ainda não é malha realista profissional, não possui rig importado e não equivale a animações profissionais/mocap.
+- Lobby agora expõe as 14 áreas centrais planejadas: personagens, cofre/inventário, loja, Royale/passe, missões, eventos, perfil, amigos/equipe, configurações, modos, coleção/equipamentos, correio, conquistas e mapas. A tela inicial permanece como entrada adicional.
+- Novas telas de eventos e correio oferecem resgate local de recompensas únicas; conquistas liberam recompensas conforme XP; amigos permite salvar um nome de contato apenas no aparelho. Essas ações não sincronizam entre usuários e não são funcionalidades online.
+- A navegação foi compactada para caber no layout paisagem 1280x720; é necessário validar visualmente no Redmi 12.
 
 ## Pendências explícitas
 - Criar/importar modelos humanos de alta qualidade (GLB), rig profissional e biblioteca de animações; validar skins modulares reais.
