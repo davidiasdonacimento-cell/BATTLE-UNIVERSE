@@ -326,7 +326,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             return;
         }
         if (!isSignedIn()) {
-            signInWithGoogle();
+            publish(configured, "", "Entre com nome e senha para sincronizar seu progresso.");
             return;
         }
         saveProfile();
