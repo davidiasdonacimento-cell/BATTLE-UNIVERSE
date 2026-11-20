@@ -285,13 +285,16 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             Object value = data.get(key);
             if (value == null) continue;
 
-            if ("nickname".equals(key) && value instanceof String) {
+            if (value instanceof String) {
                 editor.putString(key, (String) value);
             } else if ("xp".equals(key) || "diamonds".equals(key)
-                    || "daily_reward_day".equals(key)) {
+                    || "daily_reward_day".equals(key) || "match_wins".equals(key)
+                    || "match_kills".equals(key) || "matches_played".equals(key)) {
                 if (value instanceof Number) editor.putLong(key, ((Number) value).longValue());
             } else if ("mode".equals(key) || "map".equals(key) || "character".equals(key)
-                    || "quality".equals(key) || "look_sensitivity".equals(key)) {
+                    || "quality".equals(key) || "look_sensitivity".equals(key)
+                    || "selected_shirt".equals(key) || "selected_boots".equals(key)
+                    || "selected_set".equals(key)) {
                 if (value instanceof Number) editor.putInt(key, ((Number) value).intValue());
             } else if (value instanceof Boolean) {
                 editor.putBoolean(key, (Boolean) value);
