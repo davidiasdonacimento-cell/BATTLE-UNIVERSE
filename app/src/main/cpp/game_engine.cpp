@@ -593,111 +593,139 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
                    bool aiming=false,bool firing=false,bool sprinting=false) {
     gCharacterPoseScale=(!bot&&(gCrouched||gPlayerDowned))?0.62f:1.0f;
     if(!bot&&gPlayerDowned) {
-        // Pose deitado/agachado: o corpo fica baixo e horizontal enquanto o jogador rasteja.
         drawCube({p.x,p.y+0.30f,p.z},{0.92f,0.34f,0.62f},color,yaw,0.0f,0.0f);
         drawSphere({p.x,p.y+0.43f,p.z-0.43f},{0.28f,0.28f,0.28f},{0.88f,0.70f,0.55f});
         drawCube({p.x+0.40f,p.y+0.16f,p.z+0.12f},{0.48f,0.18f,0.20f},color,yaw);
         gCharacterPoseScale=1.0f;
         return;
     }
-    // Bloob: corpo cilíndrico azul, cabeça arredondada e olhos grandes.
-    // As poses são calculadas por quadro, sem arquivos de animação externos.
+    // Operador humanoide procedural: proporções de cabeça, pescoço, tórax,
+    // cintura, membros articulados e botas. A malha ainda é geométrica;
+    // modelos escaneados/GLB e rig profissional continuam sendo uma etapa de assets.
+    const bool female=!bot&&(gSelectedCharacter==1||gSelectedCharacter==3);
     const float gait=std::clamp(movement,0.0f,1.0f);
     const float phase=time*(sprinting?10.8f:8.2f)+(bot?0.7f:0.0f);
     const float swing=std::sin(phase)*(sprinting?0.46f:0.34f)*gait;
     const float bob=std::sin(phase*2.0f)*0.035f*gait+std::sin(time*1.5f)*0.014f;
     const float recoil=firing?0.105f:0.0f;
-    Vec3 shell=color;
-    Vec3 pantsColor=color;
-    Vec3 bootColor{0.91f,0.95f,0.98f};
+    Vec3 skin{0.72f,0.49f,0.35f};
+    if(!bot) {
+        static const std::array<Vec3,4> skinTones{{
+            {0.72f,0.49f,0.35f},{0.82f,0.62f,0.48f},
+            {0.48f,0.30f,0.21f},{0.90f,0.70f,0.55f}
+        }};
+        skin=skinTones[static_cast<size_t>(std::clamp(gSelectedCharacter,0,3))];
+    } else {
+        skin={0.70f,0.48f,0.34f};
+    }
+    Vec3 shirt=color;
+    Vec3 pants{0.075f,0.105f,0.13f};
+    Vec3 boots{0.055f,0.065f,0.075f};
     if(!bot) {
         static const std::array<Vec3,5> shirts{{
-            {0.035f,0.66f,0.88f},{0.10f,0.20f,0.28f},{0.56f,0.12f,0.82f},
-            {0.70f,0.82f,0.88f},{0.72f,0.38f,0.12f}
+            {0.035f,0.34f,0.43f},{0.10f,0.20f,0.28f},{0.35f,0.12f,0.48f},
+            {0.70f,0.74f,0.78f},{0.62f,0.30f,0.12f}
         }};
         static const std::array<Vec3,5> trousers{{
             {0.055f,0.095f,0.13f},{0.16f,0.20f,0.22f},{0.18f,0.12f,0.28f},
             {0.30f,0.36f,0.40f},{0.30f,0.20f,0.10f}
         }};
-        static const std::array<Vec3,5> boots{{
-            {0.91f,0.95f,0.98f},{0.12f,0.16f,0.20f},{0.18f,0.78f,0.88f},
-            {0.82f,0.88f,0.92f},{0.88f,0.62f,0.22f}
+        static const std::array<Vec3,5> bootStyles{{
+            {0.16f,0.19f,0.21f},{0.12f,0.16f,0.20f},{0.18f,0.52f,0.58f},
+            {0.72f,0.76f,0.80f},{0.72f,0.48f,0.16f}
         }};
-        int shirt=std::clamp(gSelectedShirtStyle,0,4);
-        int boot=std::clamp(gSelectedBootStyle,0,4);
+        int shirtIndex=std::clamp(gSelectedShirtStyle,0,4);
+        int bootIndex=std::clamp(gSelectedBootStyle,0,4);
         if(gSelectedSetStyle>0) {
-            shirt=std::clamp(gSelectedSetStyle,1,4);
-            boot=std::clamp(gSelectedSetStyle,1,4);
+            shirtIndex=std::clamp(gSelectedSetStyle,1,4);
+            bootIndex=std::clamp(gSelectedSetStyle,1,4);
         }
-        shell=shirts[static_cast<size_t>(shirt)];
-        pantsColor=trousers[static_cast<size_t>(shirt)];
-        bootColor=boots[static_cast<size_t>(boot)];
+        shirt=shirts[static_cast<size_t>(shirtIndex)];
+        pants=trousers[static_cast<size_t>(shirtIndex)];
+        boots=bootStyles[static_cast<size_t>(bootIndex)];
     }
-    const Vec3 dark{0.055f,0.095f,0.13f};
-    const Vec3 white{0.95f,0.98f,1.0f};
-    const float eyeShift=std::sin(time*1.7f+(bot?1.0f:0.0f))*0.018f;
+    const Vec3 dark{0.035f,0.045f,0.055f};
+    const Vec3 hair=female?Vec3{0.075f,0.045f,0.035f}:Vec3{0.045f,0.055f,0.065f};
+    const float legWidth=female?0.105f:0.12f;
+    const float shoulder=female?0.34f:0.40f;
+    const float torsoWidth=female?0.31f:0.36f;
 
-    Vec3 hipL{-0.19f,0.72f+bob,swing*0.34f};
-    Vec3 kneeL{-0.20f,0.43f+bob,swing*0.72f};
-    Vec3 footL{-0.20f,0.17f+bob,swing*0.88f};
-    Vec3 hipR{0.19f,0.72f+bob,-swing*0.34f};
-    Vec3 kneeR{0.20f,0.43f+bob,-swing*0.72f};
-    Vec3 footR{0.20f,0.17f+bob,-swing*0.88f};
-    drawSegment(p,yaw,hipL,kneeL,0.125f,pantsColor);
-    drawSegment(p,yaw,kneeL,footL,0.105f,pantsColor);
-    drawSegment(p,yaw,hipR,kneeR,0.125f,pantsColor);
-    drawSegment(p,yaw,kneeR,footR,0.105f,pantsColor);
-    drawSphere(localPoint(p,-0.20f,0.12f+bob,-0.16f+swing*0.88f,yaw),
-        {0.25f,0.15f,0.36f},bootColor,yaw);
-    drawSphere(localPoint(p,0.20f,0.12f+bob,-0.16f-swing*0.88f,yaw),
-        {0.25f,0.15f,0.36f},bootColor,yaw);
+    // Pernas com coxas, joelhos, canelas e botas.
+    Vec3 hipL{-legWidth,0.88f+bob,swing*0.30f};
+    Vec3 kneeL{-legWidth,0.48f+bob,swing*0.70f};
+    Vec3 footL{-legWidth,0.17f+bob,swing*0.88f};
+    Vec3 hipR{legWidth,0.88f+bob,-swing*0.30f};
+    Vec3 kneeR{legWidth,0.48f+bob,-swing*0.70f};
+    Vec3 footR{legWidth,0.17f+bob,-swing*0.88f};
+    drawSegment(p,yaw,hipL,kneeL,0.115f,pants);
+    drawSegment(p,yaw,kneeL,footL,0.088f,pants);
+    drawSegment(p,yaw,hipR,kneeR,0.115f,pants);
+    drawSegment(p,yaw,kneeR,footR,0.088f,pants);
+    drawSphere(localPoint(p,-legWidth,0.12f+bob,-0.15f+swing*0.88f,yaw),
+        {0.17f,0.11f,0.29f},boots,yaw);
+    drawSphere(localPoint(p,legWidth,0.12f+bob,-0.15f-swing*0.88f,yaw),
+        {0.17f,0.11f,0.29f},boots,yaw);
 
-    drawCylinder(localPoint(p,0,0.78f+bob,0,yaw),{0.78f,0.52f,0.72f},shell,yaw);
-    drawCylinder(localPoint(p,0,1.20f+bob,0,yaw),{0.82f,0.78f,0.74f},shell,yaw);
-    drawCylinder(localPoint(p,0,1.61f+bob,0,yaw),{0.38f,0.18f,0.38f},shell,yaw);
-    drawCylinder(localPoint(p,0,1.86f+bob,0,yaw),{0.78f,0.48f,0.72f},shell,yaw);
-    drawSphere(localPoint(p,0,2.04f+bob,0,yaw),{0.79f,0.32f,0.73f},shell,yaw);
+    // Pelve, abdômen, tórax e colete em camadas.
+    drawSphere(localPoint(p,0,0.91f+bob,0,yaw),{0.31f,0.22f,0.20f},pants,yaw);
+    drawSphere(localPoint(p,0,1.13f+bob,0,yaw),{torsoWidth*0.82f,0.27f,0.19f},shirt,yaw);
+    drawSphere(localPoint(p,0,1.39f+bob,0,yaw),{shoulder,0.34f,0.22f},shirt,yaw);
+    drawSphere(localPoint(p,0,1.40f+bob,-0.035f,yaw),{torsoWidth,0.28f,0.225f},
+        {std::min(1.0f,shirt.x*1.12f),std::min(1.0f,shirt.y*1.12f),std::min(1.0f,shirt.z*1.12f)},yaw);
+    drawCube(localPoint(p,0,1.36f+bob,-0.222f,yaw),{female?0.20f:0.23f,0.22f,0.025f},
+        {0.12f,0.17f,0.20f},yaw);
+    drawCube(localPoint(p,0,1.13f+bob,-0.195f,yaw),{0.16f,0.10f,0.025f},
+        {0.16f,0.22f,0.24f},yaw);
 
-    drawSphere(localPoint(p,-0.205f,1.99f+bob,-0.322f,yaw),{0.275f,0.285f,0.145f},white,yaw);
-    drawSphere(localPoint(p,0.205f,1.99f+bob,-0.322f,yaw),{0.275f,0.285f,0.145f},white,yaw);
-    drawSphere(localPoint(p,-0.205f+eyeShift,1.99f+bob,-0.448f,yaw),{0.108f,0.12f,0.066f},dark,yaw);
-    drawSphere(localPoint(p,0.205f+eyeShift,1.99f+bob,-0.448f,yaw),{0.108f,0.12f,0.066f},dark,yaw);
-    drawSphere(localPoint(p,-0.235f+eyeShift,2.035f+bob,-0.505f,yaw),{0.025f,0.027f,0.018f},white,yaw);
-    drawSphere(localPoint(p,0.175f+eyeShift,2.035f+bob,-0.505f,yaw),{0.025f,0.027f,0.018f},white,yaw);
+    // Pescoço, cabeça, orelhas, nariz, olhos, sobrancelhas e cabelo.
+    drawCylinder(localPoint(p,0,1.68f+bob,0,yaw),{0.12f,0.16f,0.12f},skin,yaw);
+    drawSphere(localPoint(p,0,1.91f+bob,0,yaw),
+        {female?0.225f:0.235f,0.285f,0.205f},skin,yaw);
+    drawSphere(localPoint(p,0,2.075f+bob,0.005f,yaw),
+        {0.235f,0.145f,0.215f},hair,yaw);
+    drawSphere(localPoint(p,0,1.99f+bob,0.115f,yaw),
+        {0.235f,0.16f,0.12f},hair,yaw);
+    drawSphere(localPoint(p,-0.235f,1.91f+bob,0,yaw),{0.045f,0.075f,0.055f},skin,yaw);
+    drawSphere(localPoint(p,0.235f,1.91f+bob,0,yaw),{0.045f,0.075f,0.055f},skin,yaw);
+    if(female) {
+        drawSphere(localPoint(p,-0.18f,1.82f+bob,0.04f,yaw),{0.09f,0.22f,0.10f},hair,yaw);
+        drawSphere(localPoint(p,0.18f,1.82f+bob,0.04f,yaw),{0.09f,0.22f,0.10f},hair,yaw);
+    }
+    drawSphere(localPoint(p,-0.082f,1.94f+bob,-0.184f,yaw),{0.038f,0.027f,0.025f},{0.95f,0.96f,0.92f},yaw);
+    drawSphere(localPoint(p,0.082f,1.94f+bob,-0.184f,yaw),{0.038f,0.027f,0.025f},{0.95f,0.96f,0.92f},yaw);
+    drawSphere(localPoint(p,-0.082f,1.94f+bob,-0.207f,yaw),{0.017f,0.020f,0.014f},dark,yaw);
+    drawSphere(localPoint(p,0.082f,1.94f+bob,-0.207f,yaw),{0.017f,0.020f,0.014f},dark,yaw);
+    drawSphere(localPoint(p,0,1.88f+bob,-0.205f,yaw),{0.035f,0.045f,0.035f},skin,yaw);
+    drawCube(localPoint(p,0,1.835f+bob,-0.19f,yaw),{0.045f,0.009f,0.012f},{0.30f,0.10f,0.10f},yaw);
 
-    Vec3 shoulderL{-0.40f,1.48f+bob,0.0f}, shoulderR{0.40f,1.48f+bob,0.0f};
+    // Braços articulados e mãos.
+    Vec3 shoulderL{-shoulder,1.48f+bob,0.0f}, shoulderR{shoulder,1.48f+bob,0.0f};
     Vec3 elbowL,handL,elbowR,handR;
     if(aiming) {
-        elbowL={-0.31f,1.34f+bob,-0.25f}; handL={-0.15f,1.31f+bob,-0.57f};
-        elbowR={0.31f,1.36f+bob,-0.24f}; handR={0.15f,1.31f+bob,-0.58f};
+        elbowL={-0.30f,1.34f+bob,-0.25f}; handL={-0.15f,1.31f+bob,-0.57f};
+        elbowR={0.30f,1.36f+bob,-0.24f}; handR={0.15f,1.31f+bob,-0.58f};
     } else {
-        elbowL={-0.50f,1.14f+bob,-swing*0.55f}; handL={-0.47f,0.88f+bob,-swing*0.78f};
-        elbowR={0.50f,1.14f+bob,swing*0.55f}; handR={0.47f,0.88f+bob,swing*0.78f};
+        elbowL={-shoulder-0.08f,1.14f+bob,-swing*0.55f};
+        handL={-shoulder-0.05f,0.91f+bob,-swing*0.78f};
+        elbowR={shoulder+0.08f,1.14f+bob,swing*0.55f};
+        handR={shoulder+0.05f,0.91f+bob,swing*0.78f};
     }
-    drawSegment(p,yaw,shoulderL,elbowL,0.105f,shell);
-    drawSegment(p,yaw,elbowL,handL,0.083f,shell);
-    drawSegment(p,yaw,shoulderR,elbowR,0.105f,shell);
-    drawSegment(p,yaw,elbowR,handR,0.083f,shell);
-    drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.11f,0.12f,0.11f},shell,yaw);
-    drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.11f,0.12f,0.11f},shell,yaw);
+    drawSegment(p,yaw,shoulderL,elbowL,0.095f,shirt);
+    drawSegment(p,yaw,elbowL,handL,0.075f,shirt);
+    drawSegment(p,yaw,shoulderR,elbowR,0.095f,shirt);
+    drawSegment(p,yaw,elbowR,handR,0.075f,shirt);
+    drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.075f,0.09f,0.07f},skin,yaw);
+    drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.075f,0.09f,0.07f},skin,yaw);
 
     if(bot||gWeaponType>=0) {
-        if(!bot&&gWeaponType==3) {
-            drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),{0.18f,0.14f,0.40f},{0.045f,0.075f,0.085f},yaw);
-            drawCube(localPoint(p,0,1.40f+bob,-0.77f+recoil,yaw),{0.11f,0.045f,0.24f},{0.18f,0.30f,0.30f},yaw);
-            drawCube(localPoint(p,0,1.18f+bob,-0.74f+recoil,yaw),{0.10f,0.20f,0.12f},{0.06f,0.10f,0.11f},yaw);
-            drawCube(localPoint(p,0,1.31f+bob,-1.02f+recoil,yaw),{0.07f,0.08f,0.24f},{0.12f,0.20f,0.22f},yaw);
-        } else {
-            drawCube(localPoint(p,0,1.32f+bob,-0.75f+recoil,yaw),
-                {0.22f,0.16f,0.52f},{0.055f,0.105f,0.15f},yaw);
-            drawCube(localPoint(p,0,1.43f+bob,-0.70f+recoil,yaw),
-                {0.12f,0.055f,0.22f},{0.12f,0.73f,0.86f},yaw);
-            drawCube(localPoint(p,0,1.32f+bob,-1.05f+recoil,yaw),
-                {0.105f,0.105f,0.20f},{0.12f,0.62f,0.78f},yaw);
-        }
-        drawSphere(localPoint(p,0,1.32f+bob,-1.18f+recoil,yaw),
-            {firing?0.14f:0.085f,firing?0.14f:0.085f,firing?0.14f:0.085f},
-            firing?Vec3{0.45f,0.98f,1.0f}:Vec3{0.10f,0.80f,0.95f},yaw);
+        drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),
+            {0.16f,0.13f,0.42f},{0.045f,0.075f,0.085f},yaw);
+        drawCube(localPoint(p,0,1.40f+bob,-0.77f+recoil,yaw),
+            {0.10f,0.045f,0.23f},{0.18f,0.30f,0.30f},yaw);
+        drawCube(localPoint(p,0,1.31f+bob,-1.03f+recoil,yaw),
+            {0.07f,0.075f,0.22f},{0.12f,0.20f,0.22f},yaw);
+        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.22f+recoil,yaw),
+            {0.13f,0.13f,0.13f},{0.45f,0.98f,1.0f},yaw);
     }
     gCharacterPoseScale=1.0f;
 }
