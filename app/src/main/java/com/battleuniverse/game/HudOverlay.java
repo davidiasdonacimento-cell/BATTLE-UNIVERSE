@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 import android.app.AlertDialog;
 import android.text.InputType;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import java.text.NumberFormat;
 import java.util.Locale;
 import android.graphics.Canvas;
@@ -67,9 +69,13 @@ public final class HudOverlay extends View {
     private boolean onlineMode, tacticalMapVisible;
     private float scale=1, offsetX, offsetY;
     private String toast="";
+    public interface UsernameAccountAction {
+        void authenticate(String username, String password, boolean createAccount);
+    }
     private boolean googleConfigured, googleSignedIn;
-    private String googleEmail="", googleMessage="Entre com Google para sincronizar.";
-    private Runnable googleAccountAction;
+    private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
+    private UsernameAccountAction usernameAccountAction;
+    private Runnable accountSyncAction, accountSignOutAction;
     private long toastUntil, lastTap;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
@@ -324,9 +330,9 @@ public final class HudOverlay extends View {
     }
 
     private void drawProfilePage(Canvas c) {
-        eyebrow(c,270,175,googleSignedIn?"CONTA GOOGLE CONECTADA":"PERFIL E CONTA GOOGLE");
+        eyebrow(c,270,175,googleSignedIn?"CONTA BATTLE UNIVERSE VINCULADA":"PERFIL E CONTA BATTLE UNIVERSE");
         title(c,"PERFIL DO JOGADOR",270,224);
-        subtitle(c,"Entre com Google para recuperar seu progresso em outros APKs.",270,252);
+        subtitle(c,"Crie uma conta com nome e senha. Não precisa entrar com Google.",270,252);
         long xp=prefs.getLong("xp",0L),diamonds=prefs.getLong("diamonds",0L);
         int level=(int)Math.min(30L,1L+xp/500L);
         panel(c,270,286,570,196,0xAE193040,0x557AA9BC,18);
@@ -341,10 +347,10 @@ public final class HudOverlay extends View {
             :"CÓDIGO SECRETO 100K DISPONÍVEL",292,458,10,0xFF83DCD5,Typeface.DEFAULT_BOLD);
         panel(c,270,486,570,58,googleSignedIn?0xCC176A75:0xA91A3040,
             googleSignedIn?0xFF58DDE6:0x335D8495,15);
-        text(c,googleSignedIn?"CONTA GOOGLE CONECTADA":
-            (googleConfigured?"ENTRAR COM GOOGLE":"LOGIN GOOGLE A CONFIGURAR"),
+        text(c,googleSignedIn?"CONTA VINCULADA • TOQUE PARA SINCRONIZAR":
+            (googleConfigured?"CRIAR CONTA / ENTRAR":"SERVIDOR DE CONTAS NÃO CONFIGURADO"),
             292,509,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-        String accountLine=googleSignedIn&&!googleEmail.isEmpty()?googleEmail:googleMessage;
+        String accountLine=googleSignedIn&&!googleEmail.isEmpty()?"@"+googleEmail:googleMessage;
         if(accountLine.length()>68)accountLine=accountLine.substring(0,65)+"...";
         text(c,accountLine,292,530,9,0xFFBBD0D9,Typeface.DEFAULT);
         panel(c,270,558,270,70,0xCC176A75,0xFF58DDE6,16);
@@ -353,7 +359,8 @@ public final class HudOverlay extends View {
         panel(c,558,558,282,70,0xA91A3040,0x335D8495,16);
         text(c,"EDITAR NICKNAME",582,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Nome do seu perfil",582,607,10,0xFF9EB6C4,Typeface.DEFAULT);
-        text(c,"Com Google, seu save pode ser recuperado após reinstalar o jogo.",272,660,10,0xFF8FAAB8,Typeface.DEFAULT);
+        text(c,"Use a mesma conta em APKs futuros para recuperar o progresso.",272,660,10,0xFF8FAAB8,Typeface.DEFAULT);
+        if(googleSignedIn)pill(c,690,632,150,25,"SAIR DA CONTA",0x553B6172,0xFFBBD0D9);
     }
     private void drawShopPage(Canvas c) {
         eyebrow(c,270,175,"LOJA • PREÇOS FIXOS EM DIAMANTES VIRTUAIS");
@@ -1155,8 +1162,13 @@ public final class HudOverlay extends View {
             }
         }else if(page==PROFILE){
             if(hit(x,y,270,486,570,58)){
-                if(googleAccountAction!=null)googleAccountAction.run();
-                else toast("Conta Google indisponível.");
+                if(googleSignedIn) {
+                    if(accountSyncAction!=null)accountSyncAction.run();
+                } else showUsernameAccountDialog();
+                return;
+            }
+            if(googleSignedIn&&hit(x,y,690,632,150,25)){
+                if(accountSignOutAction!=null)accountSignOutAction.run();
                 return;
             }
             if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
@@ -1252,16 +1264,59 @@ public final class HudOverlay extends View {
         }
     }
 
-    public void setGoogleAccountAction(Runnable action) {
-        googleAccountAction=action;
+    public void setUsernameAccountActions(UsernameAccountAction authAction,
+                                          Runnable syncAction, Runnable signOutAction) {
+        usernameAccountAction=authAction;
+        accountSyncAction=syncAction;
+        accountSignOutAction=signOutAction;
     }
     public void setGoogleAccountStatus(boolean configured, boolean signedIn,
-                                       String email, String message) {
+                                       String username, String message) {
         googleConfigured=configured;
         googleSignedIn=signedIn;
-        googleEmail=email==null?"":email;
+        googleEmail=username==null?"":username;
         googleMessage=message==null?"":message;
         invalidate();
+    }
+    private void showUsernameAccountDialog() {
+        LinearLayout form=new LinearLayout(getContext());
+        form.setOrientation(LinearLayout.VERTICAL);
+        int pad=(int)(18*getResources().getDisplayMetrics().density);
+        form.setPadding(pad,pad,pad,0);
+        EditText username=new EditText(getContext());
+        username.setSingleLine(true);
+        username.setHint("Nome de usuário (3 a 18 caracteres)");
+        username.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        EditText password=new EditText(getContext());
+        password.setSingleLine(true);
+        password.setHint("Senha (mínimo 8 caracteres)");
+        password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        TextView note=new TextView(getContext());
+        note.setText("Use letras sem acento, números ou _. Guarde sua senha: não há recuperação por e-mail nesta versão.");
+        note.setTextSize(12);
+        form.addView(username);
+        form.addView(password);
+        form.addView(note);
+        AlertDialog dialog=new AlertDialog.Builder(getContext())
+            .setTitle("CONTA BATTLE UNIVERSE")
+            .setView(form)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("CRIAR CONTA",null)
+            .setNeutralButton("ENTRAR",null)
+            .create();
+        dialog.setOnShowListener(ignored->{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                if(usernameAccountAction!=null)usernameAccountAction.authenticate(
+                    username.getText().toString(),password.getText().toString(),true);
+                dialog.dismiss();
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
+                if(usernameAccountAction!=null)usernameAccountAction.authenticate(
+                    username.getText().toString(),password.getText().toString(),false);
+                dialog.dismiss();
+            });
+        });
+        dialog.show();
     }
     private void toast(String s){toast=s;toastUntil=System.currentTimeMillis()+1800;invalidate();}
     @Override public boolean performClick(){super.performClick();return true;}
