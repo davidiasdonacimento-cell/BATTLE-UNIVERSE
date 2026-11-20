@@ -94,6 +94,7 @@ GLint gMvpLocation=-1, gModelLocation=-1, gColorLocation=-1;
 int gScreenMode=0, gSelectedCharacter=0, gSelectedMap=0, gSelectedMode=0, gQuality=1;
 int gSelectedShirtStyle=0,gSelectedBootStyle=0,gSelectedSetStyle=0;
 Mat4 gProjection=identity();
+float gCharacterPoseScale=1.0f;
 int gWidth=1, gHeight=1;
 Vec3 gPlayer{0,0.55f,0};
 std::atomic<float> gPlayerXSnapshot{0.0f},gPlayerZSnapshot{0.0f};
@@ -308,6 +309,7 @@ void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,f
     Mat4 mvp=multiply(gProjection,model);
     glUniformMatrix4fv(gMvpLocation,1,GL_FALSE,mvp.m);
     glUniformMatrix4fv(gModelLocation,1,GL_FALSE,model.m);
+    size.y*=gCharacterPoseScale;
     glUniform4f(gColorLocation,color.x,color.y,color.z,alpha);
     glBindBuffer(GL_ARRAY_BUFFER,vbo);
     glEnableVertexAttribArray(0); glEnableVertexAttribArray(1);
@@ -541,7 +543,7 @@ void drawWorld(float time) {
 }
 Vec3 localPoint(Vec3 base,float lx,float ly,float lz,float yaw) {
     float c=std::cos(yaw), sn=std::sin(yaw);
-    return {base.x+c*lx+sn*lz,base.y+ly,base.z-sn*lx+c*lz};
+    return {base.x+c*lx+sn*lz,base.y+ly*gCharacterPoseScale,base.z-sn*lx+c*lz};
 }
 void drawSegment(Vec3 base,float yaw,Vec3 a,Vec3 b,float radius,Vec3 color) {
     float dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
@@ -555,6 +557,7 @@ void drawSegment(Vec3 base,float yaw,Vec3 a,Vec3 b,float radius,Vec3 color) {
 }
 void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movement=0.0f,
                    bool aiming=false,bool firing=false,bool sprinting=false) {
+    gCharacterPoseScale=(!bot&&gCrouched)?0.62f:1.0f;
     // Bloob: corpo cilíndrico azul, cabeça arredondada e olhos grandes.
     // As poses são calculadas por quadro, sem arquivos de animação externos.
     const float gait=std::clamp(movement,0.0f,1.0f);
@@ -654,6 +657,7 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
             {firing?0.14f:0.085f,firing?0.14f:0.085f,firing?0.14f:0.085f},
             firing?Vec3{0.45f,0.98f,1.0f}:Vec3{0.10f,0.80f,0.95f},yaw);
     }
+    gCharacterPoseScale=1.0f;
 }
 void drawCrystal(Vec3 p,float time,int index) {
     float bob=std::sin(time*2.2f+index)*0.16f, spin=time*0.55f+index*0.7f;
@@ -717,6 +721,10 @@ void updateStatus() {
     std::ostringstream out;
     if(gSpectatorMode) {
         out<<"MODO ESPECTADOR  •  ACOMPANHANDO SOBREVIVENTES";
+        setStatus(out.str());return;
+    }
+    if(gPlayerDowned) {
+        out<<"DERRUBADO • AGUARDANDO REVIVER • "<<static_cast<int>(gDownedTimer)<<"s";
         setStatus(out.str());return;
     }
     if(gDropState==1) {
