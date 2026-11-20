@@ -25,6 +25,7 @@ constexpr int BUTTON_RUN = 8;
 constexpr int BUTTON_PULSE = 16;
 constexpr int BUTTON_SWAP = 32;
 constexpr int BUTTON_AIM = 64;
+constexpr int BUTTON_CROUCH = 128;
 constexpr int BUILD_CAPACITY = 24;
 constexpr int TARGET_COUNT = 3;
 
@@ -148,6 +149,8 @@ int gPlayerHealth=100,gEliminations=0;
 int gDamageDealt=0,gDamageTaken=0,gAiEliminations=0;
 bool gMatchFinished=false,gSpectatorMode=false;
 int gSpectatorTarget=-1;
+bool gPlayerDowned=false,gCrouched=false,gBuildPreview=false;
+float gDownedTimer=0.0f,gReviveProgress=0.0f;
 float gPulseCooldown=0, gPulseFlash=0, gDropTimer=0;
 float gZoneDamageTimer=0,gLookSensitivity=1.0f;
 constexpr float PLANE_COUNTDOWN_SECONDS=7.0f;
@@ -298,22 +301,22 @@ bool initializeGraphics() {
     gConeVbo=gConeMesh.vbo; gConeCount=gConeMesh.count;
     return gCubeVbo!=0 && gSphereVbo!=0 && gCylinderVbo!=0 && gConeVbo!=0;
 }
-void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
+void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0,float alpha=1.0f) {
     if(!gProgram||!vbo||count<=0)return;
     Mat4 model=multiply(translation(p.x,p.y,p.z),
         multiply(rotationY(yaw),multiply(rotationZ(tilt),multiply(rotationX(tiltX),scaling(size.x,size.y,size.z)))));
     Mat4 mvp=multiply(gProjection,model);
     glUniformMatrix4fv(gMvpLocation,1,GL_FALSE,mvp.m);
     glUniformMatrix4fv(gModelLocation,1,GL_FALSE,model.m);
-    glUniform4f(gColorLocation,color.x,color.y,color.z,1.0f);
+    glUniform4f(gColorLocation,color.x,color.y,color.z,alpha);
     glBindBuffer(GL_ARRAY_BUFFER,vbo);
     glEnableVertexAttribArray(0); glEnableVertexAttribArray(1);
     glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),reinterpret_cast<void*>(0));
     glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),reinterpret_cast<void*>(3*sizeof(float)));
     glDrawArrays(GL_TRIANGLES,0,count);
 }
-void drawCube(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0) {
-    drawMesh(gCubeVbo,36,p,size,color,yaw,tilt,tiltX);
+void drawCube(Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0,float alpha=1.0f) {
+    drawMesh(gCubeVbo,36,p,size,color,yaw,tilt,tiltX,alpha);
 }
 void drawDamagePopup(Vec3 origin,int damage,float yaw,float rise) {
     // Números 3D em sete segmentos, sempre voltados para a câmera.
@@ -826,7 +829,7 @@ void updateBots(float dt) {
                     targetBot=other;
                 }
             }
-            if(!ally && playerDistance<20.0f && playerDistance<targetDistance
+            if(!ally && !gPlayerDowned && playerDistance<20.0f && playerDistance<targetDistance
                     && botsPressuringPlayer<2) {
                 targetDistance=playerDistance;
                 targetPlayer=true;
@@ -848,7 +851,7 @@ void updateBots(float dt) {
 
         if(ally && gDropState==3 && !engaging) {
             const float formationAngle=bot.phase+static_cast<float>(i)*0.75f;
-            const float followRadius=7.5f+static_cast<float>(i%2)*2.0f;
+            const float followRadius=gPlayerDowned?2.0f:(7.5f+static_cast<float>(i%2)*2.0f);
             target={gPlayer.x+std::cos(formationAngle)*followRadius,0.55f,
                     gPlayer.z+std::sin(formationAngle)*followRadius};
         } else if(!engaging) {
@@ -885,15 +888,7 @@ void updateBots(float dt) {
                     && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
                 bot.fireFlash=0.32f;
                 if(targetPlayer) {
-                    gPlayerHealth=std::max(0,gPlayerHealth-1);++gDamageTaken;
-                    if(gPlayerHealth<=0) {
-                        gMatchFinished=true;
-                        setStatus("ELIMINADO • FIM DA PARTIDA");
-                    } else {
-                        std::ostringstream hit;
-                        hit<<"DISPARO DE BOT • VIDA "<<gPlayerHealth<<"%";
-                        setStatus(hit.str());
-                    }
+                    applyPlayerDamage(1,"ELIMINADO • FIM DA PARTIDA");
                 } else if(targetBot>=0 && gBotActive[static_cast<size_t>(targetBot)]) {
                     const size_t victim=static_cast<size_t>(targetBot);
                     gBotHealth[victim]=std::max(0,gBotHealth[victim]-1);
@@ -925,20 +920,34 @@ void updateBots(float dt) {
         }
     }
 }
+Vec3 buildPreviewPosition() {
+    const Vec3 forward{-std::sin(gPlayerYaw),0,-std::cos(gPlayerYaw)};
+    const Vec3 right{std::cos(gPlayerYaw),0,-std::sin(gPlayerYaw)};
+    const int sequence=gBuildCount%6;
+    const float forwardStep=3.3f+static_cast<float>(sequence/2)*2.65f;
+    const float sideStep=(sequence%2==0?-1.0f:1.0f)*1.65f;
+    return {gPlayer.x+forward.x*forwardStep+right.x*sideStep,0.68f,gPlayer.z+forward.z*forwardStep+right.z*sideStep};
+}
+void updateDownedState(float dt) {
+    if(!gPlayerDowned)return;
+    gDownedTimer=std::max(0.0f,gDownedTimer-dt);float nearest=999.0f;
+    for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotActive[static_cast<size_t>(i)]){float dx=gBots[static_cast<size_t>(i)].pos.x-gPlayer.x,dz=gBots[static_cast<size_t>(i)].pos.z-gPlayer.z;nearest=std::min(nearest,std::sqrt(dx*dx+dz*dz));}
+    if(nearest<=3.2f){gReviveProgress+=dt;std::ostringstream st;st<<"DERRUBADO • ALIADO REVIVENDO "<<static_cast<int>(std::min(100.0f,gReviveProgress*25.0f))<<"%";setStatus(st.str());
+        if(gReviveProgress>=4.0f){gPlayerDowned=false;gPlayerHealth=45;gDownedTimer=0;gReviveProgress=0;setStatus("REVIVIDO PELO ESQUADRÃO • VIDA 45%");}}
+    else {gReviveProgress=0;if(gDownedTimer<=0){gPlayerDowned=false;gMatchFinished=true;setStatus("ELIMINADO • NENHUM ALIADO CONSEGUIU REVIVER");}else setStatus("DERRUBADO • AGUARDANDO ALIADO • "+std::to_string(static_cast<int>(gDownedTimer))+"s");}
+}
+void applyPlayerDamage(int amount,const char* reason) {
+    if(gPlayerDowned||gMatchFinished)return;gPlayerHealth=std::max(0,gPlayerHealth-amount);gDamageTaken+=amount;
+    if(gPlayerHealth<=0){bool ally=false;if(gSelectedMode==1||gSelectedMode==2)for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])ally=true;
+        if(ally){gPlayerDowned=true;gDownedTimer=25;gReviveProgress=0;setStatus("DERRUBADO • SEU ESQUADRÃO PODE REVIVER VOCÊ");}else{gMatchFinished=true;setStatus(reason);}}
+    else setStatus("DANO RECEBIDO • VIDA "+std::to_string(gPlayerHealth)+"%");
+}
 void placeBuildPiece() {
     if(gBuildCount>=gBuildLimit||gBuildCount>=BUILD_CAPACITY) {
         setStatus("LIMITE DE CONSTRUÇÕES ATINGIDO");return;
     }
     if(gWood<10) {setStatus("MADEIRA INSUFICIENTE • COLETE RECURSOS");return;}
-    const Vec3 forward{-std::sin(gPlayerYaw),0,-std::cos(gPlayerYaw)};
-    const Vec3 right{std::cos(gPlayerYaw),0,-std::sin(gPlayerYaw)};
-    // Rapid-build places successive pieces in a compact forward pattern instead
-    // of trying to occupy the exact same point (which previously blocked piece 2).
-    const int sequence=gBuildCount%6;
-    const float forwardStep=3.3f+static_cast<float>(sequence/2)*2.65f;
-    const float sideStep=(sequence%2==0?-1.0f:1.0f)*1.65f;
-    Vec3 pos{gPlayer.x+forward.x*forwardStep+right.x*sideStep,0.68f,
-             gPlayer.z+forward.z*forwardStep+right.z*sideStep};
+    Vec3 pos=buildPreviewPosition();
     for(int i=0;i<gBuildCount;++i) {
         float dx=pos.x-gBuildPieces[static_cast<size_t>(i)].pos.x;
         float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;
@@ -950,9 +959,21 @@ void placeBuildPiece() {
     const int placedType=gBuildType;
     gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,placedType};
     ++gBuildCount;gWood-=10;gBuildType=(gBuildType+1)%3;
-    const char* names[]={"PAREDE","PLATAFORMA","RAMPA"};
+    const char* names[]={"GELO","PLATAFORMA","RAMPA"};
     std::ostringstream out;out<<names[placedType]<<" CONSTRUÍDA  |  "<<gWood<<" MADEIRA RESTANTE";
     setStatus(out.str());
+}
+void drawBuildPreview() {
+    if(!gBuildPreview||gDropState!=3)return;
+    const Vec3 pos=buildPreviewPosition();
+    bool valid=gWood>=10&&gBuildCount<gBuildLimit&&gBuildCount<BUILD_CAPACITY&&!worldPositionBlocked(pos.x,pos.z,1.15f);
+    for(int i=0;i<gBuildCount;++i){const float dx=pos.x-gBuildPieces[static_cast<size_t>(i)].pos.x;const float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;if(dx*dx+dz*dz<2.0f)valid=false;}
+    glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    const Vec3 tint=valid?Vec3{0.30f,0.88f,1.0f}:Vec3{1.0f,0.22f,0.18f};
+    if(gBuildType==0)drawCube({pos.x,1.85f,pos.z},{3.2f,2.25f,0.24f},tint,gPlayerYaw,0,0,0.38f);
+    else if(gBuildType==1)drawCube({pos.x,0.78f,pos.z},{3.0f,0.22f,3.0f},tint,gPlayerYaw,0,0,0.38f);
+    else drawCube({pos.x,0.98f,pos.z},{3.0f,0.20f,3.0f},tint,gPlayerYaw,0.0f,0.26f,0.38f);
+    glDisable(GL_BLEND);
 }
 void drawBuildPieces() {
     for(int i=0;i<gBuildCount;++i) {
@@ -1192,6 +1213,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
         gPlayerHealth=100;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
+        gPlayerDowned=false;gCrouched=false;gBuildPreview=false;gDownedTimer=0;gReviveProgress=0;
         resetGroundLoot();
         if(gSelectedMode==3) {
             gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);
@@ -1256,6 +1278,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gBuildCount=0;gBuildType=0;gWood=180;gBuildCooldown=0;gBuildLimit=12;gResourceCount=5;gContentPackReady=false;
     gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
     gPlayerHealth=100;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
+    gPlayerDowned=false;gCrouched=false;gBuildPreview=false;gDownedTimer=0;gReviveProgress=0;
     gBotAttackCooldown.fill(0.0f);gLookSensitivity=1.0f;
     gDropState=0;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;gParachuteOpen=false;
     gTargets[0]={{0,1.25f,-10},3,true};
@@ -1288,6 +1311,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
 
     if(gSpectatorMode){moveX=0.0f;moveY=0.0f;buttons=0;}
     const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
+    const bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
+    gCrouched=(buttons&BUTTON_CROUCH)!=0&&!gPlayerDowned;
     const bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
     const bool buildHeld=(buttons&BUTTON_BUILD)!=0;
     const bool pulseHeld=(buttons&BUTTON_PULSE)!=0;
@@ -1412,9 +1437,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         dz=std::sin(gCameraYaw)*strafe-std::cos(gCameraYaw)*forward;
         moveLength=std::sqrt(dx*dx+dz*dz);
         moving=moveLength>0.08f;
-        if(moving) {
+        if(moving&&!gPlayerDowned) {
             dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
-            const float speed=(buttons&BUTTON_RUN)?8.0f:5.2f;
+            const float speed=gCrouched?2.35f:((buttons&BUTTON_RUN)?8.0f:5.2f);
             const float nx=std::clamp(gPlayer.x+dx*speed*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
             const float nz=std::clamp(gPlayer.z+dz*speed*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
             moveWithCollision(gPlayer,nx,nz,0.42f);
@@ -1473,24 +1498,24 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             setStatus("RECURSO COLETADO  •  +20 MADEIRA");
         } else setStatus("NADA PRÓXIMO • PROCURE ARMAS, MUNIÇÃO OU CRISTAIS");
     }
-    if(buildHeld&&gDropState==3&&gBuildCooldown<=0.0f) {
-        placeBuildPiece();gBuildCooldown=0.14f;
+    if(buildPressed&&gDropState==3&&!gPlayerDowned) {
+        if(!gBuildPreview){gBuildPreview=true;setStatus("PRÉVIA DE GELO • TOQUE CONSTRUIR NOVAMENTE PARA CONFIRMAR");}
+        else {placeBuildPiece();gBuildPreview=false;gBuildCooldown=0.14f;}
     }
     // Segurar DISPARAR mantém o disparo automático; um toque rápido dispara uma vez.
-    if(pulseHeld&&gDropState==3&&gPulseCooldown<=0.0f) {
+    if(pulseHeld&&gDropState==3&&!gPlayerDowned&&gPulseCooldown<=0.0f) {
         firePulse();gPulseCooldown=(gWeaponType==3?0.10f:(gWeaponType==2?0.55f:0.24f));
     }
 
     if(gDropState==3) {
         updateBots(dt);
-        if(gSelectedMode!=3&&!gMatchFinished) {
+        updateDownedState(dt);
+        if(gSelectedMode!=3&&!gMatchFinished&&!gPlayerDowned) {
             gZoneDamageTimer=std::max(0.0f,gZoneDamageTimer-dt);
             const float fromCenter=std::sqrt(gPlayer.x*gPlayer.x+gPlayer.z*gPlayer.z);
             if(fromCenter>gZoneRadius&&gZoneDamageTimer<=0.0f) {
-                gPlayerHealth=std::max(0,gPlayerHealth-3);gDamageTaken+=3;
+                applyPlayerDamage(3,"ELIMINADO PELA ZONA • FIM DA PARTIDA");
                 gZoneDamageTimer=1.0f;
-                if(gPlayerHealth<=0){gMatchFinished=true;setStatus("ELIMINADO PELA ZONA • FIM DA PARTIDA");}
-                else setStatus("FORA DA ZONA SEGURA • VIDA "+std::to_string(gPlayerHealth)+"%");
             }
         }
     }
@@ -1499,7 +1524,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     // Mira em terceira pessoa: câmera mais afastada e deslocada para o ombro,
     // deixando a cabeça do operador fora do centro do retículo.
     const float cameraDistance=aimHeld?4.15f:8.5f;
-    const float cameraHeight=aimHeld?1.78f:(3.7f+gCameraPitch*3.1f);
+    const float cameraHeight=aimHeld?1.78f:(gCrouched?2.75f:(3.7f+gCameraPitch*3.1f));
     const float shoulder=aimHeld?1.08f:0.0f;
     Vec3 cameraSubject=gPlayer;
     if(gSpectatorMode) {
@@ -1529,7 +1554,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     for(int i=0;i<gResourceCount;++i)
         if(!gCrystalTaken[static_cast<size_t>(i)])
             drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
-    drawTargets(gMatchTime);drawBuildPieces();drawGroundLoot(gMatchTime);
+    drawTargets(gMatchTime);drawBuildPieces();drawBuildPreview();drawGroundLoot(gMatchTime);
 
     const std::array<Vec3,4> outfits{{{0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
         {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}}};
