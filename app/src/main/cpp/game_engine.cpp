@@ -109,6 +109,9 @@ std::array<int,BOT_COUNT> gBotDamageAmount{};
 std::array<float,BOT_COUNT> gBotDamageTimer{};
 std::array<Vec3,BOT_COUNT> gBotDamagePosition{};
 std::array<bool,BOT_COUNT> gBotActive{};
+std::array<bool,BOT_COUNT> gBotDowned{};
+std::array<float,BOT_COUNT> gBotDownedTimer{};
+std::array<float,BOT_COUNT> gBotReviveProgress{};
 std::array<float,BOT_COUNT> gBotRespawn{};
 std::array<float,BOT_COUNT> gBotAttackCooldown{};
 bool isAllyBot(int index) {
@@ -152,6 +155,8 @@ bool gMatchFinished=false,gSpectatorMode=false;
 int gSpectatorTarget=-1;
 bool gPlayerDowned=false,gCrouched=false,gBuildPreview=false;
 float gDownedTimer=0.0f,gReviveProgress=0.0f;
+int gPlayerReviveTarget=-1;
+float gPlayerReviveProgress=0.0f;
 float gPulseCooldown=0, gPulseFlash=0, gDropTimer=0;
 float gZoneDamageTimer=0,gLookSensitivity=1.0f;
 constexpr float PLANE_COUNTDOWN_SECONDS=7.0f;
@@ -774,6 +779,7 @@ void resetBots() {
     gBotDamageAmount.fill(0);
     gBotDamageTimer.fill(0.0f);
     gBotActive.fill(true);
+    gBotDowned.fill(false);gBotDownedTimer.fill(0.0f);gBotReviveProgress.fill(0.0f);
     gBotRespawn.fill(0.0f);
     for(int i=0;i<BOT_COUNT;++i) {
         if(isAllyBot(i)) {
@@ -819,6 +825,7 @@ void updateBots(float dt) {
         }
 
         const bool ally=isAllyBot(i);
+        if(gBotDowned[static_cast<size_t>(i)]) { bot.speed=0.0f; continue; }
         const float toPlayerX=gPlayer.x-bot.pos.x;
         const float toPlayerZ=gPlayer.z-bot.pos.z;
         const float playerDistance=std::sqrt(toPlayerX*toPlayerX+toPlayerZ*toPlayerZ);
@@ -907,8 +914,11 @@ void updateBots(float dt) {
                     const size_t victim=static_cast<size_t>(targetBot);
                     gBotHealth[victim]=std::max(0,gBotHealth[victim]-1);
                     if(gBotHealth[victim]<=0) {
-                        gBotActive[victim]=false;++gAiEliminations;
-                        gBotRespawn[victim]=gSelectedMode==3?3.0f:0.0f;
+                        if(isAllyBot(targetBot)&&(gSelectedMode==1||gSelectedMode==2)) {
+                            gBotDowned[victim]=true;gBotDownedTimer[victim]=25.0f;gBotReviveProgress[victim]=0.0f;
+                            gBotHealth[victim]=0;
+                        } else { gBotActive[victim]=false;++gAiEliminations;
+                            gBotRespawn[victim]=gSelectedMode==3?3.0f:0.0f; }
                     }
                 }
                 gBotAttackCooldown[static_cast<size_t>(i)]=0.95f+static_cast<float>(i%5)*0.15f;
@@ -1034,7 +1044,7 @@ void firePulse() {
         }
     }
     for(int i=0;i<BOT_COUNT;++i) {
-        if(!gBotActive[static_cast<size_t>(i)]||isAllyBot(i))continue;
+        if(!gBotActive[static_cast<size_t>(i)]||gBotDowned[static_cast<size_t>(i)]||isAllyBot(i))continue;
         const Vec3 pos=gBots[static_cast<size_t>(i)].pos;
         float dx=pos.x-gPlayer.x,dz=pos.z-gPlayer.z;
         float along=dx*fx+dz*fz,side=std::fabs(dx*fz-dz*fx);
@@ -1061,7 +1071,11 @@ void firePulse() {
         { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/"<<BOT_MAX_HEALTH; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
-            gBotActive[static_cast<size_t>(hitBot)]=false;
+            if(isAllyBot(hitBot)&&(gSelectedMode==1||gSelectedMode==2)) {
+                gBotDowned[static_cast<size_t>(hitBot)]=true;gBotDownedTimer[static_cast<size_t>(hitBot)]=25.0f;
+                gBotReviveProgress[static_cast<size_t>(hitBot)]=0.0f;
+                setStatus("ALIADO DERRUBADO • APROXIME-SE E TOQUE USAR PARA REVIVER");
+            } else { gBotActive[static_cast<size_t>(hitBot)]=false;
             if(gSelectedMode==3) {
                 gBotRespawn[static_cast<size_t>(hitBot)]=12.0f;
                 gTrainingScore+=150;
@@ -1077,7 +1091,7 @@ void firePulse() {
                 gMatchFinished=true;
                 setStatus("VITÓRIA • TODOS OS OPONENTES ELIMINADOS");
             } else if(gSelectedMode==3) setStatus("ALVO BOT DESATIVADO • +150 PONTOS");
-            else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining));
+            else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining)); }
         }
     }
     if(hitTarget<0&&hitBot<0) {
@@ -1228,6 +1242,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
         gPlayerHealth=100;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
         gPlayerDowned=false;gCrouched=false;gBuildPreview=false;gDownedTimer=0;gReviveProgress=0;
+    gPlayerReviveTarget=-1;gPlayerReviveProgress=0;
         resetGroundLoot();
         if(gSelectedMode==3) {
             gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);
@@ -1328,6 +1343,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
     gCrouched=(buttons&BUTTON_CROUCH)!=0&&!gPlayerDowned;
     const bool interactPressed=(buttons&BUTTON_INTERACT)&&!(gPreviousButtons&BUTTON_INTERACT);
+    const bool interactHeld=(buttons&BUTTON_INTERACT)!=0;
     const bool pulseHeld=(buttons&BUTTON_PULSE)!=0;
     const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
     const bool aimHeld=(buttons&BUTTON_AIM)!=0;
@@ -1523,6 +1539,31 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(gDropState==3) {
         updateBots(dt);
         updateDownedState(dt);
+        // Reviver controlado pelo jogador: mantenha USAR pressionado perto do aliado caído.
+        if(!interactHeld){gPlayerReviveTarget=-1;gPlayerReviveProgress=0.0f;}
+        if(interactHeld&&!gPlayerDowned&&(gSelectedMode==1||gSelectedMode==2)) {
+            if(gPlayerReviveTarget<0||gPlayerReviveTarget>=BOT_COUNT||!gBotDowned[static_cast<size_t>(gPlayerReviveTarget)]) {
+                gPlayerReviveTarget=-1;float nearest=3.6f;
+                for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotDowned[static_cast<size_t>(i)]){
+                    float dx=gBots[static_cast<size_t>(i)].pos.x-gPlayer.x,dz=gBots[static_cast<size_t>(i)].pos.z-gPlayer.z;
+                    float d=std::sqrt(dx*dx+dz*dz);if(d<nearest){nearest=d;gPlayerReviveTarget=i;}}
+            }
+            if(gPlayerReviveTarget>=0){int i=gPlayerReviveTarget;float dx=gBots[static_cast<size_t>(i)].pos.x-gPlayer.x,dz=gBots[static_cast<size_t>(i)].pos.z-gPlayer.z;
+                if(dx*dx+dz*dz<=3.6f*3.6f){gPlayerReviveProgress+=dt;std::ostringstream st;st<<"REVIVENDO ALIADO "<<static_cast<int>(std::min(100.0f,gPlayerReviveProgress*25.0f))<<"% • MANTENHA USAR";setStatus(st.str());
+                    if(gPlayerReviveProgress>=4.0f){gBotDowned[static_cast<size_t>(i)]=false;gBotHealth[static_cast<size_t>(i)]=BOT_MAX_HEALTH/2;gBotActive[static_cast<size_t>(i)]=true;gBotDownedTimer[static_cast<size_t>(i)]=0;gBotReviveProgress[static_cast<size_t>(i)]=0;gPlayerReviveTarget=-1;gPlayerReviveProgress=0;gInteractCooldown=0.5f;setStatus("ALIADO REVIVIDO • VIDA 50%");}
+                }else{gPlayerReviveTarget=-1;gPlayerReviveProgress=0;}}
+        }
+        // Aliados controlados pela IA também socorrem companheiros caídos próximos.
+        for(int down=0;down<BOT_COUNT;++down)if(gBotDowned[static_cast<size_t>(down)]){
+            gBotDownedTimer[static_cast<size_t>(down)]=std::max(0.0f,gBotDownedTimer[static_cast<size_t>(down)]-dt);
+            float nearest=999.0f;bool helper=false;
+            for(int ally=0;ally<BOT_COUNT;++ally)if(ally!=down&&isAllyBot(ally)&&gBotActive[static_cast<size_t>(ally)]&&!gBotDowned[static_cast<size_t>(ally)]){
+                float dx=gBots[static_cast<size_t>(ally)].pos.x-gBots[static_cast<size_t>(down)].pos.x,dz=gBots[static_cast<size_t>(ally)].pos.z-gBots[static_cast<size_t>(down)].pos.z;
+                float d=std::sqrt(dx*dx+dz*dz);if(d<nearest)nearest=d;}
+            if(nearest<=3.6f){gBotReviveProgress[static_cast<size_t>(down)]+=dt;helper=true;}
+            if(gBotReviveProgress[static_cast<size_t>(down)]>=4.0f){gBotDowned[static_cast<size_t>(down)]=false;gBotHealth[static_cast<size_t>(down)]=BOT_MAX_HEALTH/2;gBotActive[static_cast<size_t>(down)]=true;gBotDownedTimer[static_cast<size_t>(down)]=0;gBotReviveProgress[static_cast<size_t>(down)]=0;setStatus("IA ALIADA REVIVIDA PELO ESQUADRÃO");}
+            else if(gBotDownedTimer[static_cast<size_t>(down)]<=0){gBotDowned[static_cast<size_t>(down)]=false;gBotActive[static_cast<size_t>(down)]=false;++gAiEliminations;}
+        }
         if(gSelectedMode!=3&&!gMatchFinished&&!gPlayerDowned) {
             gZoneDamageTimer=std::max(0.0f,gZoneDamageTimer-dt);
             const float fromCenter=std::sqrt(gPlayer.x*gPlayer.x+gPlayer.z*gPlayer.z);
@@ -1582,6 +1623,12 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         if(botDistance2>renderDistance*renderDistance)continue;
         const bool botAiming=bot.aiming||(!isAllyBot(i)&&botDistance2<34.0f*34.0f);
         Vec3 botDrawPos=bot.pos;
+        if(gBotDowned[static_cast<size_t>(i)]) {
+            drawCube({bot.pos.x,bot.pos.y+0.20f,bot.pos.z},{0.95f,0.38f,0.62f},{0.18f,0.72f,0.60f},bot.yaw,0.0f,0.75f);
+            drawSphere({bot.pos.x,bot.pos.y+0.48f,bot.pos.z-0.34f},{0.34f,0.34f,0.34f},{0.88f,0.70f,0.55f});
+            drawSphere({bot.pos.x,bot.pos.y+0.08f,bot.pos.z},{1.25f,0.08f,1.25f},{0.10f,0.82f,0.70f});
+            continue;
+        }
         botDrawPos.y+=gBotDropHeight[static_cast<size_t>(i)];
         drawCharacter(botDrawPos,bot.yaw,botColor,true,
             gMatchTime+bot.phase,std::min(1.0f,bot.speed/4.6f),
