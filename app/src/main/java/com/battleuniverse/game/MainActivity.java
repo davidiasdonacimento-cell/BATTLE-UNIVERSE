@@ -62,16 +62,18 @@ public final class MainActivity extends Activity {
         }
         profilePrefs=getSharedPreferences("battle_universe_profile",MODE_PRIVATE);
         hud=new HudOverlay(this,gameSurface,profilePrefs);
-        hud.setGoogleAccountAction(()->{
-            if(accountSync==null)return;
-            if(accountSync.isSignedIn())accountSync.syncNow();
-            else accountSync.signInWithGoogle();
+        hud.setUsernameAccountActions((username,password,createAccount)->{
+            if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
+        },()->{
+            if(accountSync!=null)accountSync.syncNow();
+        },()->{
+            if(accountSync!=null)accountSync.signOut();
         });
-        accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,email,message)->{
-            if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,email,message);
+        accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
+            if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
         });
-        hud.setGoogleAccountStatus(accountSync.isConfigured(),accountSync.isSignedIn(),"",
-            accountSync.isConfigured()?"Entre com Google para sincronizar.":"Configuração Firebase pendente.");
+        hud.setGoogleAccountStatus(accountSync.isConfigured(),accountSync.isSignedIn(),accountSync.getUsername(),
+            accountSync.isConfigured()?"Crie uma conta ou entre com nome e senha.":"Servidor de contas não configurado neste APK.");
         accountSync.restoreExistingSession();
 
         root.addView(gameSurface,new FrameLayout.LayoutParams(
