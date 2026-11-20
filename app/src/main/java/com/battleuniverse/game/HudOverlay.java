@@ -18,10 +18,12 @@ import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.HapticFeedbackConstants;
+import java.security.SecureRandom;
 
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
-        INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10, GAME=11;
+        INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
+        GAME=11, ROYALE_SPIN=12;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS"};
     private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
@@ -55,10 +57,12 @@ public final class HudOverlay extends View {
     private final SharedPreferences prefs;
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r=new RectF();
+    private final SecureRandom royaleRandom=new SecureRandom();
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private int selectedShirt,selectedBoots,selectedSet;
     private boolean music=true, effects=true, forwarding, resultSpectating;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
+    private boolean onlineMode, tacticalMapVisible;
     private float scale=1, offsetX, offsetY;
     private String toast="";
     private boolean googleConfigured, googleSignedIn;
@@ -73,6 +77,7 @@ public final class HudOverlay extends View {
         setClickable(true); setFocusable(true);
         mode=prefs.getInt("mode",0); map=prefs.getInt("map",0);
         character=prefs.getInt("character",0); quality=prefs.getInt("quality",1);
+        onlineMode=prefs.getBoolean("online_mode",false);
         map=Math.max(0,Math.min(MAP_NAMES.length-1,map));
         music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
         lookSensitivity=prefs.getInt("look_sensitivity",1);
@@ -108,17 +113,17 @@ public final class HudOverlay extends View {
     }
     private void drawLobbyBackdrop(Canvas c) {
         p.setShader(new LinearGradient(0,0,1280,720,
-            new int[]{0xFF071521,0xFF102A3B,0xFF0A1825},null,Shader.TileMode.CLAMP));
+            new int[]{0x88071521,0x88102A3B,0x880A1825},null,Shader.TileMode.CLAMP));
         c.drawRect(0,0,1280,720,p);p.setShader(null);
-        p.setColor(0xFF102D3A);c.drawOval(680,300,1360,920,p);
-        p.setColor(0xFF123A45);c.drawOval(820,390,1410,850,p);
-        p.setColor(0xFF173D46);c.drawOval(920,450,1370,800,p);
+        p.setColor(0x88102D3A);c.drawOval(680,300,1360,920,p);
+        p.setColor(0x77123A45);c.drawOval(820,390,1410,850,p);
+        p.setColor(0x66173D46);c.drawOval(920,450,1370,800,p);
         p.setColor(0x4429BFD0);c.drawCircle(1070,250,145,p);
         p.setColor(0x2227B7D2);c.drawCircle(1070,250,190,p);
         Path ridge=new Path();ridge.moveTo(0,520);ridge.lineTo(190,430);ridge.lineTo(330,488);
         ridge.lineTo(510,382);ridge.lineTo(690,470);ridge.lineTo(880,398);
         ridge.lineTo(1040,468);ridge.lineTo(1280,350);ridge.lineTo(1280,720);
-        ridge.lineTo(0,720);ridge.close();p.setColor(0xFF0B2430);c.drawPath(ridge,p);
+        ridge.lineTo(0,720);ridge.close();p.setColor(0x990B2430);c.drawPath(ridge,p);
         p.setColor(0x4439D7E8);p.setStrokeWidth(1.2f);
         for(int i=0;i<7;i++)c.drawLine(0,570+i*22,1280,500+i*22,p);
         for(int i=0;i<34;i++) {
@@ -177,6 +182,7 @@ public final class HudOverlay extends View {
         else if(page==INVENTORY)drawInventory(c); else if(page==SETTINGS)drawSettings(c);
         else if(page==PROFILE)drawProfilePage(c); else if(page==SHOP)drawShopPage(c);
         else if(page==ROYALE)drawRoyalePage(c);
+        else if(page==ROYALE_SPIN)drawRoyaleSpinPage(c);
         else if(page==MISSIONS)drawMissionsPage(c);
         else if(page==WARDROBE)drawWardrobePage(c);
         else if(page==WARDROBE)drawWardrobePage(c);
@@ -196,14 +202,20 @@ public final class HudOverlay extends View {
         text(c,MAP_NAMES[map],578,390,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,MAP_DETAILS[map],578,417,11,0xFF9DB6C5,Typeface.DEFAULT);
         chevron(c,817,385);
-        gradientButton(c,270,468,342,78,"JOGAR AGORA","ENTRAR NA PARTIDA",0xFFFFB45E,0xFFE97543);
-        text(c,"▶",292,516,21,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
-        panel(c,628,468,222,78,0xB9183040,0x557AA9BC,17);
+        pill(c,270,442,164,24,onlineMode?"OFFLINE":"OFFLINE SELECIONADO",
+            onlineMode?0x553B6172:0xFF176A75,Color.WHITE);
+        pill(c,442,442,200,24,onlineMode?"ONLINE • SERVIDOR PENDENTE":"ONLINE • INDISPONÍVEL",
+            onlineMode?0xFF7A4D25:0x553B6172,Color.WHITE);
+        gradientButton(c,270,472,342,78,"JOGAR AGORA","ENTRAR NA PARTIDA",0xFFFFB45E,0xFFE97543);
+        text(c,"▶",292,520,21,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
+        panel(c,628,472,222,78,0xB9183040,0x557AA9BC,17);
         text(c,"◆ PASSE DE TEMPORADA",650,498,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
         text(c,"MENU ROYALE",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"30 participantes offline • 1 jogador + 29 bots IA.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
+        text(c,onlineMode?"ONLINE AINDA NÃO DISPONÍVEL • SERVIDOR MULTIPLAYER PENDENTE":
+            "30 participantes offline • 1 jogador + 29 bots IA.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
         panel(c,270,608,580,58,0x70152B3A,0x225B8296,14);
-        stat(c,292,642,"30","PARTICIPANTES");stat(c,468,642,"29","BOTS IA");stat(c,665,642,"OFF","MODO OFFLINE");
+        stat(c,292,642,"30","PARTICIPANTES");stat(c,468,642,"29","BOTS IA");
+        stat(c,665,642,onlineMode?"PEND.":"OFF",onlineMode?"ONLINE NÃO ATIVO":"MODO OFFLINE");
     }
     private void drawCharacters(Canvas c){
         eyebrow(c,270,175,"PERSONALIZAÇÃO");title(c,"SUA EQUIPE",270,224);
@@ -397,7 +409,8 @@ public final class HudOverlay extends View {
     private void drawRoyalePage(Canvas c) {
         eyebrow(c,270,175,"TEMPORADA 02 • PROGRESSÃO OFFLINE");
         title(c,"MENU ROYALE",270,224);
-        subtitle(c,"Trilha de recompensas, níveis, bônus diário e itens desbloqueáveis.",270,252);
+        pill(c,674,184,166,32,"GIRO ROYALE",0xFF5A4321,0xFFFFD27A);
+        subtitle(c,"Passe de temporada e giro de recompensas com probabilidades visíveis.",270,252);
         long xp=prefs.getLong("xp",0L);
         int level=(int)Math.min(30L,1L+xp/500L),progress=(int)(xp%500L);
         panel(c,270,276,570,128,0xAE193040,0x557AA9BC,17);
@@ -423,6 +436,60 @@ public final class HudOverlay extends View {
                 claimed?0xFF176A75:unlocked?0xFF345D79:0x553B6172,Color.WHITE);
         }
         text(c,"Recompensas locais • sem compras reais ou conexão online.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
+    }
+
+    private void drawRoyaleSpinPage(Canvas c) {
+        eyebrow(c,270,175,"RECOMPENSAS ALEATÓRIAS • SOMENTE DIAMANTES VIRTUAIS");
+        title(c,"GIRO ROYALE",270,224);
+        pill(c,674,184,166,32,"VOLTAR AO PASSE",0x553B6172,0xFFD7E6ED);
+        panel(c,270,264,570,48,0xA91A3040,0x557AA9BC,14);
+        text(c,"CUSTO  ◆ 100 DIAMANTES",292,294,14,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),590,294,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        String[] prizes={"50 DIAMANTES","100 DIAMANTES","CAMISA NEON","BOTAS FROST","CONJUNTO ORBITAL"};
+        String[] chances={"40%","30%","20%","9%","1%"};
+        int[] colors={0xFFB77B36,0xFFD69D42,0xFF8D42D7,0xFFB8DDE8,0xFF6B83C4};
+        for(int i=0;i<prizes.length;i++) {
+            int col=i%3,row=i/3;float x=270+col*192f,y=326+row*94f;
+            panel(c,x,y,174,82,0xB51A3040,0x557AA9BC,13);
+            circle(c,x+25,y+28,15,colors[i],0xFFB5D6E1);
+            text(c,prizes[i],x+48,y+27,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"CHANCE DE GANHAR",x+14,y+54,7,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+            text(c,chances[i],x+14,y+72,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        }
+        panel(c,270,520,570,126,0xA91A3040,0x557AA9BC,16);
+        gradientButton(c,288,546,220,68,"GIRAR • 100 ◆","USAR DIAMANTES VIRTUAIS",0xFF9A6527,0xFFE1A848);
+        String last=prefs.getString("royale_last_reward","NENHUM GIRO REALIZADO");
+        if(last.length()>38)last=last.substring(0,35)+"...";
+        text(c,"ÚLTIMO PRÊMIO",530,559,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+        text(c,last,530,587,13,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"GIROS REGISTRADOS: "+prefs.getInt("royale_spin_count",0),530,612,9,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+        text(c,"As probabilidades somam 100%. Itens repetidos geram compensação virtual.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
+    }
+
+    private void performRoyaleSpin() {
+        final long cost=100L;
+        long balance=prefs.getLong("diamonds",0L);
+        if(balance<cost) { toast("Diamantes insuficientes para girar.");return; }
+        int roll=royaleRandom.nextInt(100);
+        int prize=roll<40?0:(roll<70?1:(roll<90?2:(roll<99?3:4)));
+        long remaining=balance-cost;
+        String result;
+        if(prize==0) { remaining+=50L;result="50 DIAMANTES"; }
+        else if(prize==1) { remaining+=100L;result="100 DIAMANTES"; }
+        else {
+            int itemIndex=prize==2?4:(prize==3?9:13);
+            String item=SHOP_NAMES[itemIndex];
+            if(prefs.getBoolean(SHOP_KEYS[itemIndex],false)) {
+                long compensation=prize==2?75L:(prize==3?90L:150L);
+                remaining+=compensation;result=item+" REPETIDO • +"+compensation+" DIAMANTES";
+            } else {
+                prefs.edit().putBoolean(SHOP_KEYS[itemIndex],true).apply();
+                result=item;
+            }
+        }
+        prefs.edit().putLong("diamonds",remaining).putString("royale_last_reward",result)
+            .putInt("royale_spin_count",prefs.getInt("royale_spin_count",0)+1).apply();
+        toast("ROYALE: "+result);
     }
 
     private void ensureDailyMissionWindow() {
@@ -684,6 +751,7 @@ public final class HudOverlay extends View {
             p.setColor(0xFFFFC66F);c.drawCircle(1159+8*0.88f,105-9*0.88f,4,p);
             c.drawCircle(1159-10*0.88f,105-6*0.88f,4,p);
             c.drawCircle(1159+12*0.88f,105+10*0.88f,4,p);
+            pill(c,1080,150,158,25,"MAPA TÁTICO",0xFF176A75,Color.WHITE);
         }
         if(gameStatus.contains("PARAQUEDAS")||gameStatus.contains("QUEDA LIVRE")) {
             panel(c,22,170,330,76,0xD9081928,0x5579DDEB,16);
@@ -698,6 +766,7 @@ public final class HudOverlay extends View {
                 40,222,11,rampReady?0xFF83E9B2:Color.WHITE,
                 Typeface.create("sans-serif-black",Typeface.BOLD));
             text(c,"ANALÓGICO: MOVER  •  LADO DIREITO: CÂMERA",40,240,8,0xFF9FC6D3,Typeface.DEFAULT_BOLD);
+            text(c,"30 PARTICIPANTES  •  1 JOGADOR + 29 BOTS IA",40,272,8,0xFFB9DCE5,Typeface.DEFAULT_BOLD);
             pill(c,40,250,160,20,gameStatus.startsWith("EMBARQUE")?"PORTA TRASEIRA FECHADA":
                     (rampReady?"RAMPA PRONTA":"CAMINHE ATÉ A RAMPA"),
                 rampReady?0xFF176A75:0x553A6B7C,0xFFB9E8EF);
@@ -774,8 +843,63 @@ public final class HudOverlay extends View {
             applyMatchRewards(victory);
             drawMatchResult(c,victory);
         }
+        if(tacticalMapVisible)drawTacticalMap(c);
         postInvalidateDelayed(120);
     }
+    private void drawTacticalMap(Canvas c) {
+        float[] info=game.getFlightInfo();
+        p.setColor(0xE9000812);c.drawRect(0,0,1280,720,p);
+        panel(c,280,38,720,644,0xF20B1C2A,0xFF4BCDD5,24);
+        eyebrow(c,320,76,"MAPA TÁTICO • ROTA E MARCADORES");
+        title(c,"VISÃO DA ILHA",320,116);
+        pill(c,816,55,154,34,"FECHAR MAPA",0xFF176A75,Color.WHITE);
+        final float cx=640.0f,cy=372.0f,scaleMap=1.45f;
+        p.setShader(new LinearGradient(cx-220,cy-220,cx+220,cy+220,
+            new int[]{0xFF315E62,0xFF244C42,0xFF17313B},null,Shader.TileMode.CLAMP));
+        c.drawCircle(cx,cy,218,p);p.setShader(null);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.0f);p.setColor(0xFF82D2BC);
+        c.drawCircle(cx,cy,218,p);c.drawCircle(cx,cy,145,p);c.drawCircle(cx,cy,72,p);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(0xFF557A58);c.drawOval(cx-165,cy-96,cx-42,cy+84,p);
+        p.setColor(0xFF6C8560);c.drawOval(cx+22,cy-150,cx+172,cy-18,p);
+        p.setColor(0xFF647D65);c.drawOval(cx+18,cy+48,cx+136,cy+166,p);
+        p.setColor(0xFF496F63);c.drawOval(cx-154,cy+72,cx-32,cy+160,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setColor(0xFFB7A27A);
+        c.drawLine(cx-160,cy-20,cx+165,cy+72,p);c.drawLine(cx-60,cy-164,cx+65,cy+164,p);
+        p.setStyle(Paint.Style.FILL);
+        float zoneRadius=Math.max(0f,Math.min(112f,info[6]))*scaleMap;
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(0xAA66E6B8);
+        c.drawCircle(cx,cy,zoneRadius,p);p.setStyle(Paint.Style.FILL);
+        float routeY=cy-32.0f*scaleMap;
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3.0f);p.setColor(0xFFFFD27A);
+        c.drawLine(cx-110.0f*scaleMap,routeY,cx+112.0f*scaleMap,routeY,p);
+        p.setStyle(Paint.Style.FILL);p.setColor(0xFFFFD27A);
+        c.drawCircle(cx-110.0f*scaleMap,routeY,5,p);c.drawCircle(cx+112.0f*scaleMap,routeY,5,p);
+        float playerX=cx+info[3]*scaleMap,playerY=cy+info[4]*scaleMap;
+        p.setColor(0xFF55E5F0);c.drawCircle(playerX,playerY,8,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(Color.WHITE);
+        c.drawCircle(playerX,playerY,11,p);p.setStyle(Paint.Style.FILL);
+        if(info[0]>=1.0f&&info[0]<2.0f) {
+            float planeX=cx+info[1]*scaleMap,planeY=cy+info[2]*scaleMap;
+            p.setColor(0xFFFFB45E);Path plane=new Path();
+            plane.moveTo(planeX,planeY-11);plane.lineTo(planeX+7,planeY+8);
+            plane.lineTo(planeX,planeY+5);plane.lineTo(planeX-7,planeY+8);
+            plane.close();c.drawPath(plane,p);
+            text(c,"AERONAVE",planeX+12,planeY-8,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        }
+        if(info[9]>0.5f) {
+            float wx=cx+info[7]*scaleMap,wy=cy+info[8]*scaleMap;
+            p.setColor(0xFFFFD27A);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);
+            c.drawCircle(wx,wy,12,p);c.drawLine(wx-17,wy,wx+17,wy,p);
+            c.drawLine(wx,wy-17,wx,wy+17,p);p.setStyle(Paint.Style.FILL);
+        }
+        text(c,"N",cx-4,cy-228,11,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"TOQUE NA ILHA PARA MARCAR UM LOCAL DE POUSO",322,622,10,0xFFB8D9E3,Typeface.DEFAULT_BOLD);
+        text(c,"ROTA DA AERONAVE",322,649,9,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"JOGADOR",505,649,9,0xFF55E5F0,Typeface.DEFAULT_BOLD);
+        text(c,"ZONA SEGURA",625,649,9,0xFF79E3B7,Typeface.DEFAULT_BOLD);
+    }
+
     private void drawControl(Canvas c,float x,float y,float radius,String label,int fill,int edge){
         drawControl(c,x,y,radius,label,fill,edge,false);
     }
@@ -827,6 +951,17 @@ public final class HudOverlay extends View {
         if(page==GAME){
             if(e.getActionMasked()==MotionEvent.ACTION_DOWN){
                 float[] q=design(e.getX(),e.getY());
+                if(tacticalMapVisible) {
+                    if(hit(q[0],q[1],816,55,154,34)) { tacticalMapVisible=false;invalidate();return true; }
+                    float mx=q[0]-640.0f,my=q[1]-372.0f;
+                    if(mx*mx+my*my<=218.0f*218.0f) {
+                        game.setWaypoint(mx/1.45f,my/1.45f);
+                        toast("LOCAL DE POUSO MARCADO NO MAPA.");
+                        tacticalMapVisible=false;invalidate();return true;
+                    }
+                    return true;
+                }
+                if(hit(q[0],q[1],1080,150,158,25)) { tacticalMapVisible=true;invalidate();return true; }
                 if(!resultSpectating&&isMatchOver()) {
                     boolean victory=game.getGameStatus().contains("VITÓRIA");
                     if(hit(q[0],q[1],300,548,300,68)) {
@@ -864,9 +999,21 @@ public final class HudOverlay extends View {
             if(hit(x,y,nx,111,108,38)){page=i;return;}
         }
         if(page==HOME){
+            if(hit(x,y,270,442,164,24)){
+                onlineMode=false;prefs.edit().putBoolean("online_mode",false).apply();
+                toast("MODO OFFLINE SELECIONADO.");return;
+            }
+            if(hit(x,y,442,442,200,24)){
+                onlineMode=true;prefs.edit().putBoolean("online_mode",true).apply();
+                toast("ONLINE AINDA PRECISA DE UM SERVIDOR DE PARTIDAS.");return;
+            }
             if(hit(x,y,270,328,275,112)){page=MODES_PAGE;return;}
             if(hit(x,y,558,328,292,112)){page=MAPS_PAGE;return;}
-            if(hit(x,y,270,468,342,78)){
+            if(hit(x,y,270,472,342,78)){
+                if(onlineMode){
+                    toast("ONLINE INDISPONÍVEL: SERVIDOR MULTIPLAYER AINDA NÃO CONFIGURADO. SELECIONE OFFLINE.");
+                    return;
+                }
                 ensureDailyMissionWindow();
                 prefs.edit().putBoolean("match_recorded_for_missions",false)
                     .putBoolean("match_reward_recorded",false).apply();
@@ -875,7 +1022,7 @@ public final class HudOverlay extends View {
                 game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
                 game.setGameScreen(true);page=GAME;return;
             }
-            if(hit(x,y,628,468,222,78)){page=ROYALE;return;}
+            if(hit(x,y,628,472,222,78)){page=ROYALE;return;}
         }else if(page==CHARACTERS){
             for(int i=0;i<4;i++)if(hit(x,y,270+i*146,295,132,210)){
                 character=i;game.setCharacter(i);prefs.edit().putInt("character",i).apply();
@@ -935,7 +1082,11 @@ public final class HudOverlay extends View {
                 }
             }
         }else if(page==ROYALE){
+            if(hit(x,y,674,184,166,32)){page=ROYALE_SPIN;return;}
             if(hit(x,y,681,423,138,30)){claimDailyReward();return;}
+        }else if(page==ROYALE_SPIN){
+            if(hit(x,y,674,184,166,32)){page=ROYALE;return;}
+            if(hit(x,y,288,546,220,68)){performRoyaleSpin();return;}
             for(int i=0;i<ROYALE_LEVELS.length;i++){
                 float rx=270+(i%3)*192f,ry=476+(i/3)*88f;
                 if(hit(x,y,rx,ry,174,78)){claimRoyaleTier(i);return;}

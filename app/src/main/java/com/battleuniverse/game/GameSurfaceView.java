@@ -89,6 +89,20 @@ public final class GameSurfaceView extends GLSurfaceView {
         try { return nativeGetPlayerPosition(); }
         catch(UnsatisfiedLinkError error) { return new float[]{0f,0f}; }
     }
+    public float[] getFlightInfo() {
+        try {
+            float[] info=nativeGetFlightInfo();
+            return info==null||info.length<10?new float[]{0,-110,-32,0,0,0,112,0,0,0}:info;
+        } catch(UnsatisfiedLinkError error) {
+            return new float[]{0,-110,-32,0,0,0,112,0,0,0};
+        }
+    }
+    public void setWaypoint(float worldX,float worldZ) {
+        float x=Math.max(-145f,Math.min(145f,worldX));
+        float z=Math.max(-145f,Math.min(145f,worldZ));
+        queueEvent(()->nativeSetWaypoint(x,z));
+    }
+    public void clearWaypoint() { queueEvent(()->nativeSetWaypoint(Float.NaN,Float.NaN)); }
     public String getGameStatus() {
         try { return nativeGetStatus(); }
         catch(UnsatisfiedLinkError error) { return "INICIALIZANDO SISTEMAS..."; }
@@ -222,6 +236,8 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetContentData(int buildLimit,int resourceCount);
     private static native String nativeGetStatus();
     private static native float[] nativeGetPlayerPosition();
+    private static native float[] nativeGetFlightInfo();
+    private static native void nativeSetWaypoint(float worldX,float worldZ);
     private static native int nativeGetEliminations();
     private static native int nativeGetCollected();
     private static native int[] nativeGetMatchStats();

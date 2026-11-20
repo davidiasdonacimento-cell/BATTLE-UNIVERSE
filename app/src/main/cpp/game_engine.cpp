@@ -17,6 +17,7 @@ namespace {
 constexpr float PI = 3.14159265358979323846f;
 constexpr int BOT_COUNT = 29;
 constexpr int BOT_MAX_HEALTH = 12;
+constexpr bool FRIENDLY_FIRE_ENABLED = false;
 constexpr int CRYSTAL_COUNT = 12;
 constexpr int BUTTON_JUMP = 1;
 constexpr int BUTTON_INTERACT = 2;
@@ -98,6 +99,11 @@ float gCharacterPoseScale=1.0f;
 int gWidth=1, gHeight=1;
 Vec3 gPlayer{0,0.55f,0};
 std::atomic<float> gPlayerXSnapshot{0.0f},gPlayerZSnapshot{0.0f};
+std::atomic<int> gDropStateSnapshot{0};
+std::atomic<float> gPlaneXSnapshot{-110.0f},gPlaneZSnapshot{-32.0f};
+std::atomic<float> gDropTimerSnapshot{0.0f},gZoneRadiusSnapshot{112.0f};
+std::atomic<float> gWaypointXSnapshot{0.0f},gWaypointZSnapshot{0.0f};
+std::atomic<bool> gWaypointActiveSnapshot{false};
 float gPlayerYaw=0, gCameraYaw=0, gCameraPitch=0.36f;
 float gJumpHeight=0, gJumpVelocity=0, gMatchTime=0, gZoneRadius=30;
 float gInteractCooldown=0;
@@ -178,6 +184,8 @@ float gPlaneWalkX=1.0f,gPlaneWalkZ=0.0f;
 Vec3 gPulseStartPosition{0,1.5f,0},gPulseHitPosition{0,1.4f,-8};
 bool gParachuteOpen=false;
 bool gPlaneExteriorView=false;
+Vec3 gWaypoint{0.0f,0.55f,0.0f};
+bool gWaypointActive=false;
 std::mutex gStatusMutex;
 std::string gHudStatus="CARREGANDO CENÁRIO 3D...";
 
@@ -189,6 +197,16 @@ const std::array<Vec3,CRYSTAL_COUNT> gCrystals{{
 
 void setStatus(const std::string& value) {
     std::lock_guard<std::mutex> lock(gStatusMutex); gHudStatus=value;
+}
+void publishFlightInfo() {
+    gDropStateSnapshot.store(gDropState,std::memory_order_relaxed);
+    gPlaneXSnapshot.store(gPlanePosition.x,std::memory_order_relaxed);
+    gPlaneZSnapshot.store(gPlanePosition.z,std::memory_order_relaxed);
+    gDropTimerSnapshot.store(gDropTimer,std::memory_order_relaxed);
+    gZoneRadiusSnapshot.store(gZoneRadius,std::memory_order_relaxed);
+    gWaypointXSnapshot.store(gWaypoint.x,std::memory_order_relaxed);
+    gWaypointZSnapshot.store(gWaypoint.z,std::memory_order_relaxed);
+    gWaypointActiveSnapshot.store(gWaypointActive,std::memory_order_relaxed);
 }
 GLuint compileShader(GLenum type,const char* source) {
     GLuint shader=glCreateShader(type); glShaderSource(shader,1,&source,nullptr);
@@ -903,7 +921,7 @@ void updateBots(float dt) {
         if(!rescuing && gDropState==3 && gSelectedMode!=3 && !(ally&&gPlayerDowned)) {
             for(int other=0;other<BOT_COUNT;++other) {
                 if(other==i||!gBotActive[static_cast<size_t>(other)]||gBotDowned[static_cast<size_t>(other)])continue;
-                if((gSelectedMode==1||gSelectedMode==2)&&sameBotTeam(i,other))continue;
+                if(!FRIENDLY_FIRE_ENABLED&&sameBotTeam(i,other))continue;
                 if(gSelectedMode==0 && isAllyBot(other)==ally)continue;
                 const Vec3 op=gBots[static_cast<size_t>(other)].pos;
                 const float ox=op.x-bot.pos.x,oz=op.z-bot.pos.z;
@@ -1112,7 +1130,8 @@ void firePulse() {
         }
     }
     for(int i=0;i<BOT_COUNT;++i) {
-        if(!gBotActive[static_cast<size_t>(i)]||gBotDowned[static_cast<size_t>(i)]||isAllyBot(i))continue;
+        if(!gBotActive[static_cast<size_t>(i)]||gBotDowned[static_cast<size_t>(i)]
+                ||(!FRIENDLY_FIRE_ENABLED&&isAllyBot(i)))continue;
         const Vec3 pos=gBots[static_cast<size_t>(i)].pos;
         float dx=pos.x-gPlayer.x,dz=pos.z-gPlayer.z;
         float along=dx*fx+dz*fz,side=std::fabs(dx*fz-dz*fx);
@@ -1330,7 +1349,11 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         resetBots();updateStatus();
     } else {
         gDropState=0;gJumpHeight=0;gJumpVelocity=0;gParachuteOpen=false;
+        gPlayer={32.0f,0.55f,-8.0f};
+        gPlayerXSnapshot.store(gPlayer.x);gPlayerZSnapshot.store(gPlayer.z);
+        gWaypointActive=false;
     }
+    publishFlightInfo();
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,jint id) {
@@ -1378,6 +1401,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gPlayerDowned=false;gCrouched=false;gBuildPreview=false;gDownedTimer=0;gReviveProgress=0;
     gBotAttackCooldown.fill(0.0f);gLookSensitivity=1.0f;
     gDropState=0;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;gParachuteOpen=false;
+    gWaypoint={0.0f,0.55f,0.0f};gWaypointActive=false;publishFlightInfo();
     gTargets[0]={{0,1.25f,-10},3,true};
     gTargets[1]={{-10,1.25f,-14},3,true};
     gTargets[2]={{10,1.25f,-14},3,true};
@@ -1416,6 +1440,33 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
     const bool aimHeld=(buttons&BUTTON_AIM)!=0;
     gPreviousButtons=buttons;
+
+    if(gScreenMode==0) {
+        gDropState=0;gZoneRadius=112.0f;
+        gPlayer={32.0f,0.55f,-8.0f};gPlayerYaw=PI;
+        gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
+        gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
+        const float lobbyOrbit=std::sin(gMatchTime*0.16f)*0.10f;
+        Vec3 eye{gPlayer.x+lobbyOrbit*8.0f,gPlayer.y+4.25f,gPlayer.z+11.5f};
+        Vec3 target{gPlayer.x,gPlayer.y+1.18f,gPlayer.z};
+        Mat4 view=lookAt(eye,target,{0,1,0});
+        gProjection=multiply(perspective(0.86f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
+        glClearColor(0.24f,0.47f,0.58f,1.0f);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
+        drawWorld(gMatchTime);
+        const std::array<Vec3,4> lobbyOutfits{{
+            {0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
+            {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}
+        }};
+        drawCharacter(gPlayer,gPlayerYaw,lobbyOutfits[static_cast<size_t>(gSelectedCharacter)],
+            false,gMatchTime,0.0f,false,false,false);
+        drawCharacter({gPlayer.x-4.1f,0.55f,gPlayer.z-1.8f},PI+0.18f,
+            {0.10f,0.18f,0.23f},true,gMatchTime+0.8f,0.0f,false,false,false);
+        drawCharacter({gPlayer.x+4.0f,0.55f,gPlayer.z-2.2f},PI-0.18f,
+            {0.52f,0.12f,0.88f},true,gMatchTime+1.6f,0.0f,false,false,false);
+        publishFlightInfo();
+        glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
+        return;
+    }
 
     // Grande aeronave: movimento livre durante a rota, câmera acompanhando o operador.
     if(gDropState==1) {
@@ -1484,6 +1535,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             false,gMatchTime,movement>0.08f?std::min(1.0f,movement):0.0f,false,false,false);
         static float planeStatusTimer=0.0f;planeStatusTimer+=dt;
         if(planeStatusTimer>0.25f){planeStatusTimer=0.0f;updateStatus();}
+        publishFlightInfo();
         glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
         return;
     }
@@ -1690,6 +1742,12 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         if(!gCrystalTaken[static_cast<size_t>(i)])
             drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
     drawTargets(gMatchTime);drawBuildPieces();drawBuildPreview();drawGroundLoot(gMatchTime);
+    if(gWaypointActive&&gDropState==3) {
+        drawCylinder({gWaypoint.x,0.72f,gWaypoint.z},{0.32f,0.65f,0.32f},{0.10f,0.90f,0.82f});
+        drawSegment({0,0,0},0.0f,{gWaypoint.x,1.05f,gWaypoint.z},
+            {gWaypoint.x,7.8f,gWaypoint.z},0.075f,{0.10f,0.90f,0.82f});
+        drawSphere({gWaypoint.x,8.1f,gWaypoint.z},{0.48f,0.48f,0.48f},{0.95f,0.78f,0.20f});
+    }
 
     const std::array<Vec3,4> outfits{{{0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
         {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}}};
@@ -1771,7 +1829,32 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
 
     static float statusTimer=0;statusTimer+=dt;
     if(statusTimer>=0.85f){statusTimer=0;updateStatus();}
+    publishFlightInfo();
     glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
+}
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetFlightInfo(JNIEnv* env,jclass) {
+    jfloat values[10]={
+        static_cast<jfloat>(gDropStateSnapshot.load(std::memory_order_relaxed)),
+        gPlaneXSnapshot.load(std::memory_order_relaxed),gPlaneZSnapshot.load(std::memory_order_relaxed),
+        gPlayerXSnapshot.load(std::memory_order_relaxed),gPlayerZSnapshot.load(std::memory_order_relaxed),
+        gDropTimerSnapshot.load(std::memory_order_relaxed),gZoneRadiusSnapshot.load(std::memory_order_relaxed),
+        gWaypointXSnapshot.load(std::memory_order_relaxed),gWaypointZSnapshot.load(std::memory_order_relaxed),
+        gWaypointActiveSnapshot.load(std::memory_order_relaxed)?1.0f:0.0f
+    };
+    jfloatArray result=env->NewFloatArray(10);
+    if(result)env->SetFloatArrayRegion(result,0,10,values);
+    return result;
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetWaypoint(JNIEnv*,jclass,jfloat worldX,jfloat worldZ) {
+    if(!std::isfinite(worldX)||!std::isfinite(worldZ))gWaypointActive=false;
+    else {
+        gWaypoint.x=std::clamp(static_cast<float>(worldX),-WORLD_LIMIT+3.0f,WORLD_LIMIT-3.0f);
+        gWaypoint.y=0.55f;gWaypoint.z=std::clamp(static_cast<float>(worldZ),-WORLD_LIMIT+3.0f,WORLD_LIMIT-3.0f);
+        gWaypointActive=true;
+    }
+    publishFlightInfo();
 }
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetPlayerPosition(JNIEnv* env,jclass) {
