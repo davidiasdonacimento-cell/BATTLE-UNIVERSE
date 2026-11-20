@@ -304,12 +304,12 @@ bool initializeGraphics() {
 }
 void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0,float alpha=1.0f) {
     if(!gProgram||!vbo||count<=0)return;
+    size.y*=gCharacterPoseScale;
     Mat4 model=multiply(translation(p.x,p.y,p.z),
         multiply(rotationY(yaw),multiply(rotationZ(tilt),multiply(rotationX(tiltX),scaling(size.x,size.y,size.z)))));
     Mat4 mvp=multiply(gProjection,model);
     glUniformMatrix4fv(gMvpLocation,1,GL_FALSE,mvp.m);
     glUniformMatrix4fv(gModelLocation,1,GL_FALSE,model.m);
-    size.y*=gCharacterPoseScale;
     glUniform4f(gColorLocation,color.x,color.y,color.z,alpha);
     glBindBuffer(GL_ARRAY_BUFFER,vbo);
     glEnableVertexAttribArray(0); glEnableVertexAttribArray(1);
