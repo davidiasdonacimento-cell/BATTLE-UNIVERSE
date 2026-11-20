@@ -621,6 +621,7 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     Vec3 shirt=color;
     Vec3 pants{0.075f,0.105f,0.13f};
     Vec3 boots{0.055f,0.065f,0.075f};
+    int shirtIndex=0,bootIndex=0,setIndex=0;
     if(!bot) {
         static const std::array<Vec3,5> shirts{{
             {0.035f,0.34f,0.43f},{0.10f,0.20f,0.28f},{0.35f,0.12f,0.48f},
@@ -634,12 +635,10 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
             {0.16f,0.19f,0.21f},{0.12f,0.16f,0.20f},{0.18f,0.52f,0.58f},
             {0.72f,0.76f,0.80f},{0.72f,0.48f,0.16f}
         }};
-        int shirtIndex=std::clamp(gSelectedShirtStyle,0,4);
-        int bootIndex=std::clamp(gSelectedBootStyle,0,4);
-        if(gSelectedSetStyle>0) {
-            shirtIndex=std::clamp(gSelectedSetStyle,1,4);
-            bootIndex=std::clamp(gSelectedSetStyle,1,4);
-        }
+        shirtIndex=std::clamp(gSelectedShirtStyle,0,4);
+        bootIndex=std::clamp(gSelectedBootStyle,0,4);
+        setIndex=std::clamp(gSelectedSetStyle,0,4);
+        if(setIndex>0) { shirtIndex=setIndex; bootIndex=setIndex; }
         shirt=shirts[static_cast<size_t>(shirtIndex)];
         pants=trousers[static_cast<size_t>(shirtIndex)];
         boots=bootStyles[static_cast<size_t>(bootIndex)];
@@ -665,6 +664,17 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
         {0.17f,0.11f,0.29f},boots,yaw);
     drawSphere(localPoint(p,legWidth,0.12f+bob,-0.15f-swing*0.88f,yaw),
         {0.17f,0.11f,0.29f},boots,yaw);
+    if(!bot&&shirtIndex>0) {
+        static const std::array<Vec3,5> accents{{
+            {0.10f,0.72f,0.82f},{0.28f,0.92f,0.98f},{0.90f,0.35f,0.92f},
+            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f}
+        }};
+        const Vec3 trim=accents[static_cast<size_t>(shirtIndex)];
+        drawCube(localPoint(p,-legWidth,0.49f+bob,-0.105f,yaw),{0.105f,0.12f,0.045f},trim,yaw);
+        drawCube(localPoint(p,legWidth,0.49f+bob,-0.105f,yaw),{0.105f,0.12f,0.045f},trim,yaw);
+        drawCube(localPoint(p,-legWidth,0.25f+bob,-0.09f,yaw),{0.085f,0.045f,0.035f},trim,yaw);
+        drawCube(localPoint(p,legWidth,0.25f+bob,-0.09f,yaw),{0.085f,0.045f,0.035f},trim,yaw);
+    }
 
     // Pelve, abdômen, tórax e colete em camadas.
     drawSphere(localPoint(p,0,0.91f+bob,0,yaw),{0.31f,0.22f,0.20f},pants,yaw);
@@ -676,6 +686,25 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
         {0.12f,0.17f,0.20f},yaw);
     drawCube(localPoint(p,0,1.13f+bob,-0.195f,yaw),{0.16f,0.10f,0.025f},
         {0.16f,0.22f,0.24f},yaw);
+    if(!bot&&shirtIndex>0) {
+        static const std::array<Vec3,5> accents{{
+            {0.10f,0.72f,0.82f},{0.28f,0.92f,0.98f},{0.90f,0.35f,0.92f},
+            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f}
+        }};
+        const Vec3 trim=accents[static_cast<size_t>(shirtIndex)];
+        const Vec3 darkTrim{0.035f,0.055f,0.075f};
+        drawCube(localPoint(p,0,1.43f+bob,-0.247f,yaw),{0.19f,0.19f,0.035f},trim,yaw);
+        drawCube(localPoint(p,0,1.12f+bob,-0.222f,yaw),{0.28f,0.075f,0.035f},darkTrim,yaw);
+        drawCube(localPoint(p,-0.275f,1.43f+bob,-0.065f,yaw),{0.12f,0.14f,0.13f},trim,yaw);
+        drawCube(localPoint(p,0.275f,1.43f+bob,-0.065f,yaw),{0.12f,0.14f,0.13f},trim,yaw);
+        drawCube(localPoint(p,-0.36f,1.18f+bob,-0.045f,yaw),{0.09f,0.16f,0.10f},darkTrim,yaw);
+        drawCube(localPoint(p,0.36f,1.18f+bob,-0.045f,yaw),{0.09f,0.16f,0.10f},darkTrim,yaw);
+        drawCube(localPoint(p,0,1.19f+bob,0.235f,yaw),{0.25f,0.32f,0.15f},darkTrim,yaw);
+        drawCube(localPoint(p,-0.22f,1.38f+bob,0.10f,yaw),{0.055f,0.24f,0.055f},trim,yaw);
+        drawCube(localPoint(p,0.22f,1.38f+bob,0.10f,yaw),{0.055f,0.24f,0.055f},trim,yaw);
+        drawCube(localPoint(p,-legWidth,0.12f+bob,-0.34f+swing*0.88f,yaw),{0.13f,0.055f,0.045f},trim,yaw);
+        drawCube(localPoint(p,legWidth,0.12f+bob,-0.34f-swing*0.88f,yaw),{0.13f,0.055f,0.045f},trim,yaw);
+    }
 
     // Pescoço, cabeça, orelhas, nariz, olhos, sobrancelhas e cabelo.
     drawCylinder(localPoint(p,0,1.68f+bob,0,yaw),{0.12f,0.16f,0.12f},skin,yaw);
@@ -690,6 +719,15 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     if(female) {
         drawSphere(localPoint(p,-0.18f,1.82f+bob,0.04f,yaw),{0.09f,0.22f,0.10f},hair,yaw);
         drawSphere(localPoint(p,0.18f,1.82f+bob,0.04f,yaw),{0.09f,0.22f,0.10f},hair,yaw);
+    }
+    if(!bot&&setIndex>0) {
+        static const std::array<Vec3,5> accents{{
+            {0.10f,0.72f,0.82f},{0.28f,0.92f,0.98f},{0.90f,0.35f,0.92f},
+            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f}
+        }};
+        const Vec3 trim=accents[static_cast<size_t>(setIndex)];
+        drawSphere(localPoint(p,0,2.16f+bob,0.01f,yaw),{0.255f,0.075f,0.23f},trim,yaw);
+        drawCube(localPoint(p,0,2.11f+bob,-0.17f,yaw),{0.23f,0.035f,0.12f},trim,yaw);
     }
     drawSphere(localPoint(p,-0.082f,1.94f+bob,-0.184f,yaw),{0.038f,0.027f,0.025f},{0.95f,0.96f,0.92f},yaw);
     drawSphere(localPoint(p,0.082f,1.94f+bob,-0.184f,yaw),{0.038f,0.027f,0.025f},{0.95f,0.96f,0.92f},yaw);

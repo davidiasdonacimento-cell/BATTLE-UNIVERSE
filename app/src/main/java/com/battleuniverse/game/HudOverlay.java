@@ -92,8 +92,9 @@ public final class HudOverlay extends View {
         invertCameraY=prefs.getBoolean("invert_camera_y",false);
         showMinimap=prefs.getBoolean("show_minimap",true);
         hapticsEnabled=prefs.getBoolean("haptics",true);
-        selectedShirt=prefs.getInt("selected_shirt",0);
-        selectedBoots=prefs.getInt("selected_boots",0);
+        ensureStarterWardrobe();
+        selectedShirt=prefs.getInt("selected_shirt",1);
+        selectedBoots=prefs.getInt("selected_boots",1);
         selectedSet=prefs.getInt("selected_set",0);
         ensureDailyMissionWindow();
         game.setInvertCameraY(invertCameraY);
@@ -418,6 +419,7 @@ public final class HudOverlay extends View {
             pill(c,x+12,590,108,24,active?"EQUIPADO":owned?"VESTIR":"BLOQUEADO",
                 active?0xFF176A75:owned?0xFF345D79:0x553B6172,Color.WHITE);
         }
+        text(c,"KIT INICIAL LIBERADO: CAMISA TÁTICA + BOTAS DE COMBATE.",270,654,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
     }
 
     private void drawRoyalePage(Canvas c) {
@@ -504,6 +506,16 @@ public final class HudOverlay extends View {
         prefs.edit().putLong("diamonds",remaining).putString("royale_last_reward",result)
             .putInt("royale_spin_count",prefs.getInt("royale_spin_count",0)+1).apply();
         toast("ROYALE: "+result);
+    }
+
+    private void ensureStarterWardrobe() {
+        if(prefs.getBoolean("wardrobe_starter_v2_granted",false)) return;
+        SharedPreferences.Editor editor=prefs.edit()
+            .putBoolean(SHOP_KEYS[3],true)
+            .putBoolean(SHOP_KEYS[7],true);
+        if(prefs.getInt("selected_shirt",0)==0) editor.putInt("selected_shirt",1);
+        if(prefs.getInt("selected_boots",0)==0) editor.putInt("selected_boots",1);
+        editor.putBoolean("wardrobe_starter_v2_granted",true).apply();
     }
 
     private void ensureDailyMissionWindow() {
