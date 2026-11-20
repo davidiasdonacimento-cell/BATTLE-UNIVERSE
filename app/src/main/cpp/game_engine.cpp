@@ -728,7 +728,8 @@ void updateStatus() {
         setStatus(out.str());return;
     }
     if(gBuildPreview) {
-        out<<"PRÉVIA DE GELO • TOQUE CONSTRUIR NOVAMENTE PARA CONFIRMAR";
+        const char* buildNames[]={"GELO","PLATAFORMA","RAMPA"};
+        out<<"PRÉVIA DE "<<buildNames[std::clamp(gBuildType,0,2)]<<" • TOQUE CONSTRUIR NOVAMENTE PARA CONFIRMAR";
         setStatus(out.str());return;
     }
     if(gDropState==1) {
