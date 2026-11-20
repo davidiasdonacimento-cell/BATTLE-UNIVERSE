@@ -199,7 +199,6 @@ public final class HudOverlay extends View {
         else if(page==FRIENDS)drawFriendsPage(c);
         else if(page==MAIL)drawMailPage(c);
         else if(page==ACHIEVEMENTS)drawAchievementsPage(c);
-        else if(page==WARDROBE)drawWardrobePage(c);
     }
     private void drawHome(Canvas c){
         eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.4.0  /  SEASON 03");
@@ -266,7 +265,7 @@ public final class HudOverlay extends View {
         }
     }
     private void drawMaps(Canvas c){
-        eyebrow(c,270,175,"7 DESTINOS • MAPAS SELECIONÁVEIS");title(c,"ESCOLHA O MAPA",270,224);
+        eyebrow(c,270,175,"8 DESTINOS • MAPAS SELECIONÁVEIS");title(c,"ESCOLHA O MAPA",270,224);
         subtitle(c,"Cada arena usa uma identidade visual própria na partida.",270,252);
         int[] colors={0xFF1B7B72,0xFF554C91,0xFFB77B43,0xFF8CB8CE,0xFF59666C,0xFF43875A,0xFF344B70,0xFF62564A};
         for(int i=0;i<MAP_NAMES.length;i++){
