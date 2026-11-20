@@ -67,3 +67,32 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - APK baixável = artefato confirmado.
 - Teste no aparelho = funcionamento verificado no dispositivo.
 - Nunca confundir planejado, implementado, compilado e testado.
+
+
+## Novos modos solicitados — regras confirmadas em 2026-11-20
+
+### Gladiadores
+- Duelo individual: vence o primeiro participante a alcançar 5 eliminações.
+- Ao atingir 5 eliminações, encerrar o duelo, exibir placar/resultado e preparar uma nova partida com contagem reiniciada.
+- Cada participante escolhe seu equipamento antes do duelo; adversários controlados por IA também devem usar escolhas válidas.
+- A implementação precisa de estado próprio de duelo, placar até 5, reinício de rodada e seleção de equipamento. Não reutilizar o contador de BR como se fosse o modo completo.
+
+### Contra Squad (CS)
+- Dois times; a partida termina quando um time vence 4 rounds.
+- Um round termina quando todos os integrantes de um dos times forem eliminados.
+- Início da economia: cada participante começa com pistola e saldo inicial definido pelo balanceamento.
+- Recompensas em moeda por round/desempenho; loja de equipamentos entre rounds; compras descontam do saldo e o inventário comprado vale para a partida.
+- Selecionar/alternar mapa entre partidas, não no meio de uma partida em andamento.
+- Exige lógica de times, eliminação completa, placar de rounds, fase de compra, carteira e inventário por partida. Ainda não considerar implementado pela tela de seleção.
+
+### Battle Royale (BR)
+- Expandir o mapa real da engine, não apenas o desenho do minimapa: maior área navegável, setores distintos, casas com interiores acessíveis, cidades/vilas, estradas, vegetação e pontos de interesse.
+- Distribuir itens/coletas pelo mundo com posições reais, colisão e interação; manter inventário e persistência coerentes durante a partida.
+- Melhorar qualidade visual com geometria, materiais, iluminação, sombras e efeitos compatíveis com OpenGL ES 3.0 e com o desempenho do Redmi 12.
+- Preservar o limite atual de 30 participantes offline (jogador + 29 bots) até que testes confirmem capacidade maior.
+
+### Regras de implementação e comprovação
+- Os modos novos devem coexistir com os modos atuais (BR, Dupla, Esquadrão e Treinamento), sem alterar os IDs 0–3 usados pela JNI/native engine.
+- Antes de ativar qualquer novo modo na interface, implementar e testar o respectivo fluxo na engine; não apresentar seleção visual como modo funcional.
+- Multiplayer humano exige servidor autoritativo e matchmaking; bots locais não contam como jogadores online.
+- Testar compilação e, separadamente, testar no Redmi 12. Não afirmar que mapas, interiores, IA, economia ou modos estão prontos sem evidência.
