@@ -574,6 +574,107 @@ void drawWorld(float time) {
         }
         drawCube({72,0.9f,-72},{24.0f,1.8f,16.0f},{0.27f,0.24f,0.20f});
     }
+
+    // Landmark sets give every destination a distinct silhouette and readable identity.
+    // These are native low-poly meshes, not color-only variants or downloaded placeholders.
+    if(gSelectedMap==0) { // Ilha Tropical: marina, stilt huts and coastal cliffs.
+        drawCube({-112,0.62f,-24},{28,0.22f,9},{0.39f,0.25f,0.13f});
+        for(int i=0;i<5;++i) {
+            float x=-120.0f+i*4.0f;
+            drawCylinder({x,1.8f,-24},{0.22f,2.5f,0.22f},{0.34f,0.22f,0.12f});
+            drawCone({x,3.2f,-24},{3.6f,1.7f,3.2f},{0.43f,0.20f,0.12f});
+        }
+        for(int i=0;i<4;++i) {
+            float z=-68.0f+i*38.0f;
+            drawSphere({-103,1.0f,z},{8,2.0f,5},{0.34f,0.39f,0.25f});
+        }
+        drawCube({-112,0.65f,48},{18,0.24f,12},{0.48f,0.34f,0.18f});
+    } else if(gSelectedMap==1) { // Neon City: skyline, elevated transit and luminous facades.
+        for(int i=0;i<7;++i) {
+            float x=-92.0f+i*29.0f, h=13.0f+static_cast<float>((i*7)%5)*2.2f;
+            drawCube({x,h*0.5f,-104},{13,h,12},{0.10f,0.13f,0.25f});
+            for(int band=0;band<4;++band)
+                drawCube({x,h*(0.22f+band*0.18f),-97.8f},{10,0.22f,0.10f},
+                    (i+band)%2?Vec3{0.08f,0.78f,0.91f}:Vec3{0.72f,0.20f,0.88f});
+        }
+        drawCube({0,5.2f,38},{150,0.65f,5},{0.16f,0.20f,0.30f});
+        for(int i=0;i<8;++i)drawCylinder({-65.0f+i*18.5f,4.9f,38},{0.42f,7.5f,0.42f},{0.12f,0.65f,0.78f});
+        drawCube({-92,1.1f,88},{26,2.2f,18},{0.15f,0.18f,0.29f});
+    } else if(gSelectedMap==2) { // Desert Storm: mesas, sandstone arches and dry ravines.
+        for(int i=0;i<6;++i) {
+            float x=-112.0f+i*43.0f;
+            drawSphere({x,2.2f,-106},{17,4.4f,12},{0.62f,0.37f,0.19f});
+            drawCube({x,4.0f,-106},{8,4.0f,5},{0.69f,0.43f,0.23f});
+        }
+        for(int i=0;i<4;++i) {
+            float x=-84.0f+i*54.0f;
+            drawCube({x,3.0f,82},{3,6,3},{0.52f,0.31f,0.18f});
+            drawCube({x+5,3.0f,82},{3,6,3},{0.52f,0.31f,0.18f});
+            drawCube({x+2.5f,6.0f,82},{8,1.2f,3},{0.66f,0.40f,0.22f});
+        }
+        drawSphere({82,0.9f,-42},{28,1.8f,18},{0.74f,0.48f,0.27f});
+    } else if(gSelectedMap==3) { // Frozen Front: ice shelves, glacier spires and polar station.
+        for(int i=0;i<8;++i) {
+            float x=-112.0f+i*31.0f;
+            drawCone({x,5.0f,-104.0f+(i%2)*13.0f},{8,10,7},{0.72f,0.88f,0.96f});
+        }
+        drawSphere({-84,1.0f,70},{38,2.0f,23},{0.48f,0.70f,0.82f});
+        drawCube({76,2.2f,74},{28,4.4f,20},{0.54f,0.67f,0.75f});
+        drawSphere({76,5.1f,74},{13,5.8f,13},{0.75f,0.88f,0.94f});
+        for(int i=0;i<3;++i)drawCylinder({64+i*12.0f,1.2f,86},{0.5f,2.4f,0.5f},{0.24f,0.42f,0.53f});
+    } else if(gSelectedMap==4) { // Industrial Zone: storage tanks, pipe racks and gantry.
+        for(int i=0;i<5;++i) {
+            float x=-104.0f+i*43.0f;
+            drawCylinder({x,4.0f,88},{10,8,10},{0.38f,0.43f,0.44f});
+            drawCylinder({x,8.1f,88},{10.2f,0.35f,10.2f},{0.72f,0.38f,0.17f});
+        }
+        for(int i=0;i<6;++i) {
+            float x=-90.0f+i*34.0f;
+            drawCylinder({x,3.0f,-98},{0.65f,6.0f,0.65f},{0.31f,0.37f,0.39f});
+            drawCube({x,6.2f,-98},{2.0f,0.35f,2.0f},{0.85f,0.42f,0.17f});
+        }
+        drawCube({0,5.5f,0},{58,0.8f,4},{0.30f,0.35f,0.37f});
+        for(int i=0;i<5;++i)drawCube({-25+i*12.5f,3.0f,0},{0.7f,6,0.7f},{0.85f,0.40f,0.15f});
+    } else if(gSelectedMap==5) { // Green Valley: river, bridges and rolling hill groups.
+        drawSphere({-70,0.22f,-12},{16,0.18f,115},{0.08f,0.37f,0.43f});
+        drawSphere({-70,0.28f,-12},{12,0.10f,110},{0.18f,0.56f,0.57f});
+        for(int i=0;i<4;++i) {
+            float z=-82.0f+i*52.0f;
+            drawCube({-70,1.0f,z},{24,0.55f,7},{0.42f,0.34f,0.22f});
+        }
+        for(int i=0;i<7;++i) {
+            float x=-112.0f+i*36.0f;
+            drawSphere({x,1.2f,104},{22,2.4f,15},{0.16f,0.39f,0.20f});
+        }
+        drawCube({78,0.85f,-74},{34,0.35f,18},{0.24f,0.48f,0.27f});
+    } else if(gSelectedMap==6) { // Orbital Base: launch pads, radar dishes and modular hangars.
+        for(int i=0;i<4;++i) {
+            float x=-96.0f+i*62.0f;
+            drawCylinder({x,0.85f,82},{22,0.45f,22},{0.20f,0.29f,0.43f});
+            drawCylinder({x,1.25f,82},{15,0.35f,15},{0.36f,0.49f,0.62f});
+            drawCylinder({x,5.0f,82},{1.0f,7.5f,1.0f},{0.25f,0.63f,0.78f});
+            drawSphere({x,9.0f,82},{4,1.0f,4},{0.16f,0.78f,0.90f});
+        }
+        for(int i=0;i<3;++i) {
+            float x=-72.0f+i*72.0f;
+            drawCube({x,2.5f,-88},{24,5,18},{0.15f,0.24f,0.39f});
+            drawCube({x,5.2f,-78.8f},{16,0.25f,0.15f},{0.10f,0.82f,0.94f});
+        }
+        drawSphere({76,1.1f,-22},{18,2.2f,18},{0.18f,0.35f,0.52f});
+    } else { // Abandoned Sector: collapsed walls, broken towers and debris fields.
+        for(int i=0;i<7;++i) {
+            float x=-112.0f+i*36.0f;
+            drawCube({x,1.5f,94},{19,3.0f,2.0f},{0.34f,0.30f,0.25f},0.08f*i);
+            drawCube({x+4.0f,4.2f,94},{2.0f,5.4f,2.0f},{0.43f,0.36f,0.27f});
+            drawCube({x-5.0f,0.9f,88},{7,1.8f,7},{0.27f,0.25f,0.22f},0.3f*i);
+        }
+        for(int i=0;i<5;++i) {
+            float x=-96.0f+i*47.0f;
+            drawCylinder({x,4.5f,-98},{2.0f,9.0f,2.0f},{0.31f,0.29f,0.25f});
+            drawCube({x+2.0f,8.2f,-98},{5.0f,1.0f,5.0f},{0.42f,0.35f,0.27f},0.2f*i);
+        }
+        drawSphere({76,0.8f,-28},{26,1.6f,22},{0.30f,0.27f,0.22f});
+    }
 }
 Vec3 localPoint(Vec3 base,float lx,float ly,float lz,float yaw) {
     float c=std::cos(yaw), sn=std::sin(yaw);

@@ -52,6 +52,12 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Limitação importante: o identificador interno não é um e-mail real. Não existe recuperação de senha por e-mail neste fluxo. O jogador precisa guardar a senha. O Firebase/Firestore precisa estar configurado no projeto e as regras firestore.rules precisam estar publicadas no console Firebase.
 - A conta só recupera dados de APKs que usem o mesmo projeto Firebase, o mesmo applicationId e o mesmo esquema de dados. Build compilado não comprova sincronização real; testar criação, login, gravação, logout e restauração em instalação separada.
  
+## Mundo 3D — expansão de marcos por mapa (código publicado, build pendente)
+- A engine OpenGL ES recebeu conjuntos geométricos próprios para os oito destinos: marina e cabanas costeiras (Ilha Tropical); skyline, fachadas luminosas e via elevada (Neon City); mesas, ravinas e arcos de pedra (Desert Storm); espigões de gelo e estação polar (Frozen Front); tanques, tubulações e pórticos (Industrial Zone); rio, pontes e colinas (Green Valley); plataformas de lançamento e hangares (Orbital Base); muros colapsados, torres partidas e campos de destroços (Abandoned Sector).
+- Os marcos são desenhados com primitivas 3D nativas da engine; não são imagens planas nem apenas troca de paleta.
+- Limitação desta alteração: a base territorial, parte das estradas e a distribuição principal de edifícios ainda são compartilhadas entre os oito mapas. Os novos marcos são principalmente visuais e ainda não têm colisão/interação própria, loot exclusivo, interiores exclusivos ou navegação específica. Portanto, os oito mapas ainda não devem ser descritos como oito mundos totalmente independentes.
+- A compilação do commit desta expansão e o teste visual no Redmi 12 ainda precisam ser confirmados.
+
 ## Pendências explícitas
 - Criar/importar modelos humanos de alta qualidade (GLB), rig profissional e biblioteca de animações; validar skins modulares reais.
 - Fazer teste visual e funcional no Redmi 12; confirmar orientação, escala, FPS, deformações e controles.
