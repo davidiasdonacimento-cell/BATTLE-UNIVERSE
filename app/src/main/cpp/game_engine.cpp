@@ -573,7 +573,15 @@ void drawSegment(Vec3 base,float yaw,Vec3 a,Vec3 b,float radius,Vec3 color) {
 }
 void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movement=0.0f,
                    bool aiming=false,bool firing=false,bool sprinting=false) {
-    gCharacterPoseScale=(!bot&&gCrouched)?0.62f:1.0f;
+    gCharacterPoseScale=(!bot&&(gCrouched||gPlayerDowned))?0.62f:1.0f;
+    if(!bot&&gPlayerDowned) {
+        // Pose deitado/agachado: o corpo fica baixo e horizontal enquanto o jogador rasteja.
+        drawCube({p.x,p.y+0.30f,p.z},{0.92f,0.34f,0.62f},color,yaw,0.0f,0.0f);
+        drawSphere({p.x,p.y+0.43f,p.z-0.43f},{0.28f,0.28f,0.28f},{0.88f,0.70f,0.55f});
+        drawCube({p.x+0.40f,p.y+0.16f,p.z+0.12f},{0.48f,0.18f,0.20f},color,yaw);
+        gCharacterPoseScale=1.0f;
+        return;
+    }
     // Bloob: corpo cilíndrico azul, cabeça arredondada e olhos grandes.
     // As poses são calculadas por quadro, sem arquivos de animação externos.
     const float gait=std::clamp(movement,0.0f,1.0f);
@@ -1687,9 +1695,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         const bool botAiming=bot.aiming||(!isAllyBot(i)&&botDistance2<34.0f*34.0f);
         Vec3 botDrawPos=bot.pos;
         if(gBotDowned[static_cast<size_t>(i)]) {
-            drawCube({bot.pos.x,bot.pos.y+0.43f,bot.pos.z},{0.62f,0.82f,0.42f},{0.18f,0.72f,0.60f},bot.yaw);
-            drawSphere({bot.pos.x,bot.pos.y+0.90f,bot.pos.z-0.18f},{0.34f,0.34f,0.34f},{0.88f,0.70f,0.55f});
-            drawCube({bot.pos.x+0.24f,bot.pos.y+0.16f,bot.pos.z+0.10f},{0.34f,0.24f,0.38f},{0.12f,0.48f,0.38f},bot.yaw);
+            drawCube({bot.pos.x,bot.pos.y+0.28f,bot.pos.z},{0.96f,0.34f,0.58f},{0.18f,0.72f,0.60f},bot.yaw);
+            drawSphere({bot.pos.x,bot.pos.y+0.42f,bot.pos.z-0.43f},{0.28f,0.28f,0.28f},{0.88f,0.70f,0.55f});
+            drawCube({bot.pos.x+0.42f,bot.pos.y+0.14f,bot.pos.z+0.10f},{0.44f,0.18f,0.22f},{0.12f,0.48f,0.38f},bot.yaw);
             drawSphere({bot.pos.x,bot.pos.y+0.08f,bot.pos.z},{1.25f,0.08f,1.25f},{0.10f,0.82f,0.70f});
             continue;
         }
