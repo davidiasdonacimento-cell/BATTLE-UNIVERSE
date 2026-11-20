@@ -979,9 +979,9 @@ void drawBuildPieces() {
     for(int i=0;i<gBuildCount;++i) {
         const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
         if(b.type==0) {
-            drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},{0.50f,0.34f,0.20f},b.yaw);
-            drawCube({b.pos.x-0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.70f,0.51f,0.30f},b.yaw);
-            drawCube({b.pos.x+0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.70f,0.51f,0.30f},b.yaw);
+            drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},{0.20f,0.67f,0.82f},b.yaw);
+            drawCube({b.pos.x-0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.48f,0.88f,0.96f},b.yaw);
+            drawCube({b.pos.x+0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.48f,0.88f,0.96f},b.yaw);
         } else if(b.type==1) {
             drawCube({b.pos.x,0.78f,b.pos.z},{3.0f,0.22f,3.0f},{0.52f,0.37f,0.23f},b.yaw);
             drawCube({b.pos.x,0.62f,b.pos.z-1.28f},{3.0f,0.10f,0.16f},{0.72f,0.51f,0.30f},b.yaw);
