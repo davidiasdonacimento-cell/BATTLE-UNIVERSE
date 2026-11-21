@@ -77,7 +77,7 @@ public final class AdminActivity extends Activity {
 
     private void work(String label, Work job) {
         message(label);
-        io.execute(() -> { try { job.run(); } catch (Exception e) { message("Erro: " + safe(e.getMessage())); } });
+        io.execute(() -> { try { job.run(); } catch (Exception e) { String error = safe(e.getMessage()); if (error.contains("HTTP 401") || error.contains("HTTP 403")) { token = ""; clearToken(); runOnUiThread(this::showSecurityGate); } else message("Erro: " + error); } });
     }
     private String safe(String s) { return s == null ? "falha de comunicação" : s; }
 
