@@ -111,7 +111,7 @@ public final class ContentPackInstaller {
                 if(expectedSize<MIN_DOWNLOAD_BYTES||expectedSize>MAX_DOWNLOAD_BYTES)
                     throw new Exception("O pacote Season 02 precisa ter entre 1 e 5 GiB.");
                 StatFs storage=new StatFs(root.getAbsolutePath());
-                long needed=expectedSize*2L+256L*1024L*1024L;
+                long needed=expectedSize*2L+MAX_EXTRACTED_BYTES+256L*1024L*1024L;
                 if(storage.getAvailableBytes()<needed)
                     throw new Exception("Espaço insuficiente para configurar o conteúdo. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
@@ -151,6 +151,7 @@ public final class ContentPackInstaller {
                     throw new Exception("Falha ao ativar os dados. A versão anterior foi preservada.");
                 }
                 deleteTree(backup);
+                archive.delete(); // Keep the shared Downloads copy; remove only the private working copy.
                 postProgress(1,1,"PACOTE SALVO NO CELULAR • UNIVERSO CONFIGURADO...");
 
                 main.post(()->{running=false;listener.onSuccess();});
