@@ -2552,7 +2552,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetSpectator(JNIEnv*,jclass,j
     if(gSpectatorMode) {
         gSpectatorTarget=-1;
         for(int i=0;i<BOT_COUNT;++i)if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i)){gSpectatorTarget=i;break;}
-        gMatchFinished=false;
+        if(gSelectedMode!=4)gMatchFinished=false;
         setStatus(gSpectatorTarget>=0?"MODO ESPECTADOR • ACOMPANHANDO IA":"MODO ESPECTADOR • PARTIDA ENCERRADA");
     }
 }
