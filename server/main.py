@@ -44,8 +44,8 @@ PROFILE_FIELDS = {
     "selected_boots", "selected_set", "wear_shirt_tactical", "wear_shirt_neon",
     "wear_shirt_frost", "wear_shirt_desert", "wear_boots_combat", "wear_boots_neon",
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
-    "wear_set_orbit", "wear_set_desert", "equipped_beard", "equipped_helmet",
-    "equipped_backpack", "equipped_vest",
+    "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
+    "wear_set_cerrado", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest",
 }
 
 class Base(DeclarativeBase):
