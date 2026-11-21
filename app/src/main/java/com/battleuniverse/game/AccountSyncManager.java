@@ -88,7 +88,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             if(token.isEmpty()||seconds<=0||player==null)throw new ApiException(502,"Sessão inválida retornada pelo servidor.");
             session.save(token,player.optString("username",name),System.currentTimeMillis()/1000L+seconds);
             applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();registerDevice(token);
-            publish(true,true,name,create?"Conta criada e sessão protegida neste aparelho.":"Login realizado; sessão salva para atualizações.");
+            String firstRecoveryCode=create?r.optString("recovery_code",""):"";
+            if(!firstRecoveryCode.isEmpty()&&listener!=null)
+                main.post(()->{if(!closed)listener.onRecoveryCode(firstRecoveryCode);});
+            publish(true,true,name,create?"Conta criada. Guarde o código de recuperação exibido.":"Login realizado; sessão salva para atualizações.");
             if(create)saveProfile();
         }catch(ApiException e){publish(true,isSignedIn(),getUsername(),e.getMessage());}
         catch(Exception e){publish(true,isSignedIn(),getUsername(),"Não foi possível conectar. Verifique a internet.");}});
