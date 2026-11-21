@@ -104,6 +104,10 @@ public final class GameSurfaceView extends GLSurfaceView {
         try { int[] stats=nativeGetMatchStats(); return stats==null?new int[]{0,0,0,0,100}:stats; }
         catch(UnsatisfiedLinkError error) { return new int[]{0,0,0,0,100}; }
     }
+    public int[] getDuelStats() {
+        try { int[] stats=nativeGetDuelStats(); return stats==null?new int[]{0,0}:stats; }
+        catch(UnsatisfiedLinkError error) { return new int[]{0,0}; }
+    }
     public void setSpectatorMode(boolean enabled) {
         queueEvent(()->nativeSetSpectator(enabled));
     }
@@ -275,6 +279,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native int nativeGetCollected();
     private static native int nativeGetMedkits();
     private static native int[] nativeGetMatchStats();
+    private static native int[] nativeGetDuelStats();
     private static native void nativeSetSpectator(boolean enabled);
 
     private final class GameRenderer implements GLSurfaceView.Renderer {
