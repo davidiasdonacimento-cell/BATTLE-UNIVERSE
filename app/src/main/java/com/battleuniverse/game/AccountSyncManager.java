@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,6 +36,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     public interface DailyRewardListener {
         void onResult(boolean claimed,long coins,long diamonds,String message);
     }
+    private static final Set<String> LONG_PROFILE_KEYS=Set.of(
+        "xp","coins","diamonds","missions_day","match_reward_session_id",
+        "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
+    );
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
         "invert_camera_y","show_minimap","haptics","selected_mode","selected_map","selected_character",
@@ -42,7 +47,16 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "wear_shirt_desert","wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
         "wear_set_volcano","wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical",
-        "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name"
+        "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name",
+        "nickname","xp","coins","diamonds","profile_schema_version","coins_wallet_initialized",
+        "matches_played","match_wins","match_kills","match_damage","match_resources",
+        "last_match_kills","last_match_damage","last_match_resources","last_match_result","match_history",
+        "economy_ledger","royale_history","royale_spin_count",
+        "mission_matches","mission_eliminations","mission_crystals","missions_day",
+        "mission_claimed_0","mission_claimed_1","mission_claimed_2","wardrobe_starter_v2_granted",
+        "shop_frame_neon","shop_emblem_bloob","shop_title_champion",
+        "match_reward_session_id","match_reward_recorded",
+        "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
     };
     private final SharedPreferences prefs;
     private final Context appContext;
@@ -72,7 +86,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             JSONObject r=request("GET","/v1/accounts/me",null,session.getToken()),p=r.optJSONObject("player");
             if(p==null)throw new ApiException(502,"Resposta inválida do servidor.");
             String name=p.optString("username",getUsername());session.save(session.getToken(),name,session.getExpiresAt());
-            applyProfile(p.optJSONObject("profile"));syncGameSettings(session.getToken());registerListener();registerDevice(session.getToken());publish(true,true,name,"Login restaurado automaticamente.");
+            applyProfile(p.optJSONObject("profile"));syncGameSettings(session.getToken());registerListener();registerDevice(session.getToken());saveProfile();publish(true,true,name,"Login restaurado automaticamente.");
         }catch(ApiException e){if(e.code==401)session.clear();publish(true,false,"",e.code==401?"Sessão expirada. Entre novamente.":e.getMessage());
         }catch(Exception e){publish(true,true,getUsername(),"Servidor indisponível. Sessão mantida neste aparelho; tente novamente com internet.");}});
     }
@@ -89,12 +103,12 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             String token=r.optString("access_token","");int seconds=r.optInt("expires_in",0);JSONObject player=r.optJSONObject("player");
             if(token.isEmpty()||seconds<=0||player==null)throw new ApiException(502,"Sessão inválida retornada pelo servidor.");
             session.save(token,player.optString("username",name),System.currentTimeMillis()/1000L+seconds);
-            applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();registerDevice(token);
+            applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();registerDevice(token);saveProfile();
             String firstRecoveryCode=create?r.optString("recovery_code",""):"";
             if(!firstRecoveryCode.isEmpty()&&listener!=null)
                 main.post(()->{if(!closed)listener.onRecoveryCode(firstRecoveryCode);});
             publish(true,true,name,create?"Conta criada. Guarde o código de recuperação exibido.":"Login realizado; sessão salva para atualizações.");
-            if(create)saveProfile();
+            saveProfile();
         }catch(ApiException e){publish(true,isSignedIn(),getUsername(),e.getMessage());}
         catch(Exception e){publish(true,isSignedIn(),getUsername(),"Não foi possível conectar. Verifique a internet.");}});
     }
@@ -268,7 +282,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         if(profile==null||closed)return;applying=true;SharedPreferences.Editor ed=prefs.edit();Map<String,?> old=prefs.getAll();
         for(String key:PROFILE_KEYS){if(!profile.has(key)||profile.isNull(key))continue;Object v=profile.opt(key),prior=old.get(key);
             if(v instanceof Boolean)ed.putBoolean(key,(Boolean)v);
-            else if(v instanceof Number)ed.putInt(key,((Number)v).intValue());
+            else if(v instanceof Number) {
+                if(LONG_PROFILE_KEYS.contains(key)||prior instanceof Long)ed.putLong(key,((Number)v).longValue());
+                else ed.putInt(key,((Number)v).intValue());
+            }
             else if(v instanceof String&&(prior==null||prior instanceof String))ed.putString(key,(String)v);}
         ed.commit();applying=false;
     }
