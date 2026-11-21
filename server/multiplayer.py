@@ -400,6 +400,17 @@ def build_router(Base, db_session, current_player) -> APIRouter:
                                   "eliminations": p.eliminations, "connected": p.connected}
                                  for p in participants]}
 
+    @router.delete("/v1/matches/{match_id}/leave")
+    def leave_match(match_id: str, db: Session = Depends(db_session), player=Depends(current_player)):
+        match, participant = participant_for(db, match_id, player.id)
+        if match.status in {"completed", "cancelled"}:
+            return {"left": True, "status": match.status}
+        participant.connected = False
+        participant.last_seen_at = utcnow()
+        db.add(participant)
+        db.commit()
+        return {"left": True, "status": match.status}
+
     @router.post("/v1/matches/{match_id}/heartbeat")
     def match_heartbeat(match_id: str, db: Session = Depends(db_session), player=Depends(current_player)):
         match, participant = participant_for(db, match_id, player.id)
