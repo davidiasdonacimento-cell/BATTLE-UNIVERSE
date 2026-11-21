@@ -461,6 +461,16 @@ def migrate_legacy_wallet_once(db: Session, player: Player, wallet: PlayerWallet
     legacy_diamonds = max(0, int(profile.get("diamonds", 0) or 0))
     wallet.coins += legacy_coins
     wallet.diamonds += legacy_diamonds
+    # Preserve the old one-time 100K redemption so it cannot be claimed twice
+    # after moving the old local balance into the server wallet.
+    legacy_ledger = str(profile.get("economy_ledger", "") or "")
+    old_code_used = bool(profile.get("code_100k_redeemed")) or any(
+        row.startswith("promo_100k|") for row in legacy_ledger.splitlines())
+    if old_code_used and db.scalar(select(PromoCodeRedemption.id).where(
+            PromoCodeRedemption.player_id == player.id,
+            PromoCodeRedemption.code_id == "WELCOME_100K")) is None:
+        db.add(PromoCodeRedemption(player_id=player.id, code_id="WELCOME_100K",
+                                   diamonds=0, created_at=datetime.now(timezone.utc)))
     profile.pop("coins", None)
     profile.pop("diamonds", None)
     profile["server_wallet_migrated_v1"] = True
