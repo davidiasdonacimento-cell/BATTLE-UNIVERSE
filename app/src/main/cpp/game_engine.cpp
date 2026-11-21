@@ -1540,7 +1540,26 @@ void updateBots(float dt) {
                 bot.projectileStart=localPoint(bot.pos,0.0f,1.32f,-1.18f,bot.yaw);
                 bot.projectileEnd=enemy;
                 bot.projectileEnd.y+=1.25f+(targetPlayer?gJumpHeight:0.0f);
-                if(targetPlayer) {
+                const float rayX=attackDx/std::max(0.001f,attackDistance);
+                const float rayZ=attackDz/std::max(0.001f,attackDistance);
+                int blockingWall=-1;
+                float blockingDistance=attackDistance;
+                for(int wallIndex=0;wallIndex<gBuildCount;++wallIndex) {
+                    BuildPiece& wall=gBuildPieces[static_cast<size_t>(wallIndex)];
+                    if(wall.type!=0||wall.health<=0)continue;
+                    const float wx=wall.pos.x-bot.pos.x,wz=wall.pos.z-bot.pos.z;
+                    const float along=wx*rayX+wz*rayZ;
+                    const float side=std::fabs(wx*rayZ-wz*rayX);
+                    if(along>0.8f&&along<blockingDistance&&side<1.85f) {
+                        blockingDistance=along;
+                        blockingWall=wallIndex;
+                    }
+                }
+                if(blockingWall>=0) {
+                    BuildPiece& wall=gBuildPieces[static_cast<size_t>(blockingWall)];
+                    wall.health=std::max(0,wall.health-12);
+                    if(wall.health==0)wall.type=-1;
+                } else if(targetPlayer) {
                     const int duelDamage=(gSelectedMode==4&&(gBotDuelWeapon==0||gBotDuelWeapon==2))?2:1;
                     applyPlayerDamage(duelDamage,"ELIMINADO • FIM DO DUELO");
                 } else if(targetBot>=0 && gBotActive[static_cast<size_t>(targetBot)]) {
