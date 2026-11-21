@@ -216,3 +216,11 @@ A fase permanece em desenvolvimento até build Android, testes automatizados, te
 - A recompensa diária e a roleta já usam operações no servidor.
 - Ainda não há servidor autoritativo de partidas. Resultados e recompensas de partidas, missões, passe, eventos, correio, conquistas e compras que continuam no armazenamento local não devem ser tratados como saldo online.
 - Esta etapa só pode ser considerada operacional após deploy da API, testes automatizados, compilação Android e teste com conta real no aparelho.
+
+
+## MODMENU2 e sincronização segura — 2026-11-21
+- MODMENU2 é um painel de desenvolvimento, acessível em Configurações. God Mode altera a engine nativa somente quando o modo selecionado é Treinamento e a sessão é offline.
+- Aimbot e adulteração client-side da carteira online não fazem parte do projeto; saldos virtuais devem ser alterados apenas por endpoints administrativos autenticados.
+- A falha “Falha ao sincronizar. Dados locais preservados” vinha de I/O HTTP síncrono no thread principal Android. O debounce e `syncNow()` agora enviam o salvamento ao executor de rede; falhas transitórias são repetidas sem apagar os dados locais.
+- A aplicação do perfil remoto mescla contadores, flags de desbloqueio e históricos com dados locais para reduzir risco de perda de progresso.
+- Validação pendente: CI Android DEBUG, APK, deploy e teste de sincronização com conta real.
