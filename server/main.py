@@ -128,6 +128,16 @@ class DailyRewardClaim(Base):
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=100)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class PromoCodeConfig(Base):
+    __tablename__ = "promo_codes"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
+    diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    max_redemptions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class PromoCodeRedemption(Base):
     __tablename__ = "promo_code_redemptions"
     __table_args__ = (UniqueConstraint("player_id", "code_id", name="uq_promo_player_code"),)
@@ -204,6 +214,14 @@ class RoyaleSpinBody(BaseModel):
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
 
+class AdminPromoCreateBody(BaseModel):
+    code: str = Field(min_length=4, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    diamonds: int = Field(gt=0, le=1000000000)
+    max_redemptions: int = Field(default=0, ge=0, le=10000000)
+
+class AdminPromoToggleBody(BaseModel):
+    active: bool
+
 class AdminWalletAdjustmentBody(BaseModel):
     operation_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
     action: str = Field(pattern=r"^(add|remove)$")
@@ -251,6 +269,11 @@ def startup() -> None:
     with engine.begin() as connection:
         connection.exec_driver_sql("ALTER TABLE IF EXISTS player_wallets DROP COLUMN IF EXISTS coins")
         connection.exec_driver_sql("ALTER TABLE IF EXISTS daily_reward_claims DROP COLUMN IF EXISTS coins")
+    with SessionLocal() as db:
+        if db.get(PromoCodeConfig, "WELCOME_100K") is None:
+            db.add(PromoCodeConfig(id="WELCOME_100K", code="100K", diamonds=100000,
+                active=True, max_redemptions=0, created_by="system"))
+            db.commit()
     # Owner pairing code stays in the hosting environment and is never embedded in the APK.
     if OWNER_PAIRING_CODE and len(OWNER_PAIRING_CODE) < 32:
         raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
@@ -515,11 +538,16 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
 def redeem_promo_code(body: PromoCodeBody, db: Session = Depends(db_session),
                       player: Player = Depends(current_player)):
     code = body.code.strip().upper()
-    promo = PROMO_CODES.get(code)
-    if promo is None:
-        raise HTTPException(400, "Código promocional inválido.")
-    code_id = promo["id"]
-    reward_diamonds = promo["diamonds"]
+    promo = db.scalar(select(PromoCodeConfig).where(PromoCodeConfig.code == code).with_for_update())
+    if promo is None or not promo.active:
+        raise HTTPException(400, "Código promocional inválido ou desativado.")
+    if promo.max_redemptions > 0:
+        used = db.scalar(select(func.count(PromoCodeRedemption.id)).where(
+            PromoCodeRedemption.code_id == promo.id)) or 0
+        if used >= promo.max_redemptions:
+            raise HTTPException(409, "Este código atingiu o limite de resgates.")
+    code_id = promo.id
+    reward_diamonds = promo.diamonds
     existing = db.scalar(select(PromoCodeRedemption).where(
         PromoCodeRedemption.player_id == player.id,
         PromoCodeRedemption.code_id == code_id))
@@ -669,8 +697,9 @@ def admin_overview(db: Session = Depends(db_session), owner: str = Depends(curre
     total = db.scalar(select(func.count(Player.id))) or 0
     suspended = db.scalar(select(func.count(AccountControl.player_id)).where(AccountControl.state == "suspended")) or 0
     deleted = db.scalar(select(func.count(AccountControl.player_id)).where(AccountControl.state == "deleted")) or 0
+    diamonds_total = db.scalar(select(func.coalesce(func.sum(PlayerWallet.diamonds), 0))) or 0
     return {"accounts_total": total, "accounts_suspended": suspended, "accounts_deleted": deleted,
-            "admin": owner}
+            "diamonds_total": int(diamonds_total), "admin": owner}
 
 @app.get("/v1/owner/accounts")
 def admin_accounts(search: str = Query(default="", max_length=40), limit: int = Query(default=50, ge=1, le=100),
@@ -688,6 +717,50 @@ def admin_accounts(search: str = Query(default="", max_length=40), limit: int = 
                      "diamonds": wallet.diamonds if wallet else 0,
                      "state": ctl.state if ctl else "active", "created_at": p.created_at.isoformat()})
     return {"accounts": rows, "limit": limit, "offset": offset}
+
+@app.get("/v1/owner/promos")
+def owner_list_promos(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    rows = db.scalars(select(PromoCodeConfig).order_by(PromoCodeConfig.created_at.desc())).all()
+    result = []
+    for promo in rows:
+        used = db.scalar(select(func.count(PromoCodeRedemption.id)).where(
+            PromoCodeRedemption.code_id == promo.id)) or 0
+        result.append({"id": promo.id, "code": promo.code, "diamonds": promo.diamonds,
+            "active": promo.active, "max_redemptions": promo.max_redemptions,
+            "redemptions": used, "created_at": promo.created_at.isoformat()})
+    return {"promos": result}
+
+@app.post("/v1/owner/promos")
+def owner_create_promo(body: AdminPromoCreateBody, db: Session = Depends(db_session),
+                       owner: str = Depends(current_owner)):
+    code = body.code.strip().upper()
+    existing = db.scalar(select(PromoCodeConfig).where(PromoCodeConfig.code == code))
+    if existing is not None:
+        raise HTTPException(409, "Esse código já existe.")
+    promo_id = "PROMO_" + secrets.token_hex(8).upper()
+    promo = PromoCodeConfig(id=promo_id, code=code, diamonds=body.diamonds,
+        active=True, max_redemptions=body.max_redemptions, created_by=owner)
+    db.add(promo)
+    audit(db, owner, "promo_created", promo_id,
+        {"code": code, "diamonds": body.diamonds, "max_redemptions": body.max_redemptions})
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(409, "Não foi possível criar o código; verifique se já existe.")
+    return {"created": True, "id": promo_id, "code": code, "diamonds": body.diamonds,
+            "max_redemptions": body.max_redemptions, "active": True}
+
+@app.patch("/v1/owner/promos/{promo_id}")
+def owner_toggle_promo(promo_id: str, body: AdminPromoToggleBody,
+                       db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    promo = db.get(PromoCodeConfig, promo_id)
+    if promo is None:
+        raise HTTPException(404, "Código promocional não encontrado.")
+    promo.active = body.active
+    audit(db, owner, "promo_status", promo_id, {"code": promo.code, "active": body.active})
+    db.add(promo); db.commit()
+    return {"updated": True, "id": promo.id, "code": promo.code, "active": promo.active}
 
 @app.get("/v1/owner/accounts/{player_id}/wallet")
 def owner_get_wallet(player_id: int, db: Session = Depends(db_session),
