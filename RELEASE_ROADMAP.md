@@ -38,7 +38,7 @@ Tarefas:
 - Ler integralmente os itens 1–11 e todos os documentos de planejamento.
 - Inventariar módulos Java, C++, JNI, IDs nativos, modos, telas, banco, API, autenticação, saves, assets, pacotes e workflows.
 - Mapear todas as fontes de dados de perfil, carteira, inventário, XP, partidas, estatísticas e recompensas.
-- Mapear chamadas e dependências entre engine, HUD, backend, Firestore/PostgreSQL e instalador de conteúdo.
+- Mapear chamadas e dependências entre engine, HUD, API própria FastAPI, PostgreSQL e instalador de conteúdo.
 - Identificar funções duplicadas, telas sem integração, recursos falsamente apresentados como online e lacunas de testes.
 - Criar matriz requisito → arquivo/módulo → dependência → teste → evidência.
 - Fazer backup lógico e registrar hashes/versões dos dados e artefatos críticos.
@@ -298,8 +298,8 @@ Esta seção torna explícitos requisitos que já estavam no estado do projeto e
 - O Royale existente tem custo de 100 diamantes, probabilidades 40/30/20/9/1 (total de 100%), cinco cosméticos, compensação por repetição e histórico. Preservar transparência das chances, validação da soma, compensação e histórico durante a migração para a carteira única.
 
 ### Conta, autenticação e sincronização — conflito que a Fase 0 precisa resolver
-- Os documentos registram arquiteturas em momentos diferentes: uma seção antiga de `PROJECT_STATUS.md` descreve Firebase Authentication/Firestore; a arquitetura confirmada mais recente declara Firebase descontinuado e migração para FastAPI + PostgreSQL; atualizações posteriores também registram sincronização Firestore e carteira PostgreSQL.
-- Não presumir que essas descrições são simultaneamente a arquitetura final. Na Fase 0, verificar o código atual, os endpoints realmente implantados, os fluxos de login/sincronização e a fonte de verdade de cada dado. Produzir uma decisão arquitetural explícita (incluindo plano de migração e compatibilidade) antes de alterar autenticação ou persistência.
+- Decisão arquitetural: Firebase está descontinuado e proibido na arquitetura-alvo. Identidade, autenticação, perfis, sincronização e carteira online usarão exclusivamente a API própria FastAPI + PostgreSQL; o servidor de partidas continuará separado e autoritativo.
+- Na Fase 0, verificar o código atual, os endpoints realmente implantados, os fluxos de login/sincronização e a fonte de verdade de cada dado. Localizar e remover SDKs, arquivos de configuração, regras, chamadas e dependências legadas; migrar dados necessários com compatibilidade e sem perda de contas/progresso. Não declarar remoção concluída até testes de cadastro, login, gravação, logout, restauração em outra instalação e reconciliação offline.
 - A carteira PostgreSQL é registrada como fonte de verdade online para saldo; o armazenamento local é cache/fila offline. O objetivo final continua sendo uma única carteira de diamantes, com reconciliação idempotente e sem saldo duplicado.
 - A API administrativa, os papéis player/admin, auditoria, exclusão lógica e configurações globais precisam ser auditados e testados; alterações de nome exibido não podem mudar applicationId, pacote ou assinatura.
 
