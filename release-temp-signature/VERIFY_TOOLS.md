@@ -1,0 +1,1 @@
+Validação usa caminhos explícitos do Android SDK Build Tools 35.0.0 e cmdline-tools.
