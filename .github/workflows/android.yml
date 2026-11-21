@@ -29,30 +29,6 @@ jobs:
         run: |
           python -m compileall -q server
           python -m unittest discover -s server/tests -v
-      - name: Configure required stable RELEASE signing
-        env:
-          BATTLE_UNIVERSE_KEYSTORE_BASE64: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_BASE64 }}
-          BATTLE_UNIVERSE_KEYSTORE_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_PASSWORD }}
-          BATTLE_UNIVERSE_KEY_ALIAS: ${{ secrets.BATTLE_UNIVERSE_KEY_ALIAS }}
-          BATTLE_UNIVERSE_KEY_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          for name in BATTLE_UNIVERSE_KEYSTORE_BASE64 BATTLE_UNIVERSE_KEYSTORE_PASSWORD BATTLE_UNIVERSE_KEY_ALIAS BATTLE_UNIVERSE_KEY_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing required GitHub Actions secret: $name. RELEASE APK will not be built or published."
-              exit 1
-            fi
-          done
-          printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/battle-universe.jks"
-          test -s "$RUNNER_TEMP/battle-universe.jks"
-          {
-            echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/battle-universe.jks"
-            echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
-            echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
-            echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
-          } >> "$GITHUB_ENV"
-          keytool -list -keystore "$RUNNER_TEMP/battle-universe.jks" -storepass "$BATTLE_UNIVERSE_KEYSTORE_PASSWORD" -alias "$BATTLE_UNIVERSE_KEY_ALIAS" >/dev/null
-          echo "Stable RELEASE signing key loaded and alias verified."
       - name: Build expanded Season 02 4K content package
         run: python scripts/build_content_pack.py
       - name: Verify external Season 02 package (1–5 GiB)
@@ -91,11 +67,40 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Compile and test DEBUG APKs before RELEASE signing
+        env:
+          ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
+          ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :admin:assembleDebug
+      - name: Configure required stable RELEASE signing
+        env:
+          BATTLE_UNIVERSE_KEYSTORE_BASE64: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_BASE64 }}
+          BATTLE_UNIVERSE_KEYSTORE_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_PASSWORD }}
+          BATTLE_UNIVERSE_KEY_ALIAS: ${{ secrets.BATTLE_UNIVERSE_KEY_ALIAS }}
+          BATTLE_UNIVERSE_KEY_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in BATTLE_UNIVERSE_KEYSTORE_BASE64 BATTLE_UNIVERSE_KEYSTORE_PASSWORD BATTLE_UNIVERSE_KEY_ALIAS BATTLE_UNIVERSE_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $name. RELEASE APK will not be built or published."
+              exit 1
+            fi
+          done
+          printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/battle-universe.jks"
+          test -s "$RUNNER_TEMP/battle-universe.jks"
+          {
+            echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/battle-universe.jks"
+            echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
+            echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
+            echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+          keytool -list -keystore "$RUNNER_TEMP/battle-universe.jks" -storepass "$BATTLE_UNIVERSE_KEYSTORE_PASSWORD" -alias "$BATTLE_UNIVERSE_KEY_ALIAS" >/dev/null
+          echo "Stable RELEASE signing key loaded and alias verified."
       - name: Compile game RELEASE and administration APK
         env:
           ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
           ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleRelease :admin:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
       - name: Verify signed non-debuggable RELEASE APK and content
         run: |
           set -euo pipefail
