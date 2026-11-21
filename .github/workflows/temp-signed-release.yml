@@ -69,13 +69,12 @@ jobs:
         run: |
           set -euo pipefail
           STORE_PASS="$(openssl rand -hex 24)"
-          KEY_PASS="$(openssl rand -hex 24)"
-          keytool -genkeypair -v -keystore "$RUNNER_TEMP/bu-temp-release.jks" -storepass "$STORE_PASS" -keypass "$KEY_PASS" -alias bu-temp-release -keyalg RSA -keysize 2048 -validity 30 -dname "CN=BATTLE UNIVERSE TEMPORARY, OU=TEST, O=BATTLE UNIVERSE, L=Miguel Calmon, ST=Bahia, C=BR"
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/bu-temp-release.jks" -storepass "$STORE_PASS" -keypass "$STORE_PASS" -alias bu-temp-release -keyalg RSA -keysize 2048 -validity 30 -dname "CN=BATTLE UNIVERSE TEMPORARY, OU=TEST, O=BATTLE UNIVERSE, L=Miguel Calmon, ST=Bahia, C=BR"
           {
             echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/bu-temp-release.jks"
             echo "BU_KEYSTORE_PASSWORD=$STORE_PASS"
             echo "BU_KEY_ALIAS=bu-temp-release"
-            echo "BU_KEY_PASSWORD=$KEY_PASS"
+            echo "BU_KEY_PASSWORD=$STORE_PASS"
           } >> "$GITHUB_ENV"
           keytool -list -keystore "$RUNNER_TEMP/bu-temp-release.jks" -storepass "$STORE_PASS" -alias bu-temp-release >/dev/null
       - name: Build Android RELEASE APK and run unit tests
