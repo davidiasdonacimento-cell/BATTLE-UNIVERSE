@@ -76,6 +76,8 @@ public final class HudOverlay extends View {
     private UsernameAccountAction usernameAccountAction;
     private Runnable accountSyncAction, accountSignOutAction;
     private long toastUntil, lastTap;
+    private int royaleRevealItem=-1;
+    private long royaleRevealUntil=0L;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
         super(context);
@@ -579,10 +581,18 @@ public final class HudOverlay extends View {
         int[] items={4,9,13};
         String[] rarity={"CLÁSSICA • RARA","LEGADO • ÉPICA","RELÍQUIA • LENDÁRIA"};
         int[] colors={0xFF8D42D7,0xFFB8DDE8,0xFFFFC66F};
+        long now=System.currentTimeMillis();
         for(int i=0;i<items.length;i++) {
             int item=items[i];float x=270+i*192f,y=340;
             boolean owned=prefs.getBoolean(SHOP_KEYS[item],false);
             panel(c,x,y,174,196,owned?0xB51A4650:0xB51A3040,owned?0xFF4BD4C9:0x557AA9BC,14);
+            if(royaleRevealItem==item&&now<royaleRevealUntil) {
+                float phase=(now-(royaleRevealUntil-1100L))/1100.0f;
+                float radius=34.0f+12.0f*(float)Math.sin(phase*Math.PI*5.0f);
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3.0f);
+                p.setColor(0xFFFFD27A);c.drawCircle(x+87,y+45,radius,p);p.setStyle(Paint.Style.FILL);
+                postInvalidateDelayed(45);
+            }
             circle(c,x+87,y+45,28,colors[i],0xFFB5D6E1);
             text(c,rarity[i],x+15,y+91,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
             text(c,SHOP_NAMES[item],x+15,y+119,9,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -795,20 +805,21 @@ public final class HudOverlay extends View {
                 toast("Nickname atualizado.");
             }).show();
     }
-    private void purchaseShopItem(int index) {
-        if(index<0||index>=SHOP_NAMES.length)return;
+    private boolean purchaseShopItem(int index) {
+        if(index<0||index>=SHOP_NAMES.length)return false;
         if(prefs.getBoolean(SHOP_KEYS[index],false)) {
-            toast("Este item já está no seu inventário.");return;
+            toast("Este item já está no seu inventário.");return false;
         }
         PlayerProfileStore.PurchaseResult result=index<3
             ?profile.purchaseWithCoins(SHOP_KEYS[index],SHOP_PRICES[index])
             :profile.purchase(SHOP_KEYS[index],SHOP_PRICES[index]);
         if(result==PlayerProfileStore.PurchaseResult.INSUFFICIENT_FUNDS){
-            toast(index<3?"Moedas insuficientes.":"Diamantes insuficientes.");return;
+            toast(index<3?"Moedas insuficientes.":"Diamantes insuficientes.");return false;
         }
-        if(result==PlayerProfileStore.PurchaseResult.ALREADY_OWNED){toast("Este item já está no seu inventário.");return;}
-        if(result!=PlayerProfileStore.PurchaseResult.PURCHASED){toast("Falha ao salvar a compra. Saldo preservado.");return;}
+        if(result==PlayerProfileStore.PurchaseResult.ALREADY_OWNED){toast("Este item já está no seu inventário.");return false;}
+        if(result!=PlayerProfileStore.PurchaseResult.PURCHASED){toast("Falha ao salvar a compra. Saldo preservado.");return false;}
         toast(SHOP_NAMES[index]+" adquirido com "+(index<3?"moedas!":"diamantes!"));
+        return true;
     }
 
     private void drawEventsPage(Canvas c) {
@@ -1344,7 +1355,13 @@ public final class HudOverlay extends View {
             int[] items={4,9,13};
             for(int i=0;i<items.length;i++){
                 float rx=270+i*192f,ry=340;
-                if(hit(x,y,rx,ry,174,196)){purchaseShopItem(items[i]);return;}
+                if(hit(x,y,rx,ry,174,196)){
+                    if(purchaseShopItem(items[i])) {
+                        royaleRevealItem=items[i];royaleRevealUntil=System.currentTimeMillis()+1100L;
+                        postInvalidate();
+                    }
+                    return;
+                }
             }
         }else if(page==MISSIONS){
             for(int i=0;i<MISSION_NAMES.length;i++){
