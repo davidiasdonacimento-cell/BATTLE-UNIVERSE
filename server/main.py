@@ -322,7 +322,7 @@ def update_profile(body: ProfileBody, db: Session = Depends(db_session),
     clean: dict[str, Any] = {}
     for key, value in body.profile.items():
         if key in PROFILE_FIELDS and (isinstance(value, (str, bool, int, float)) or value is None):
-            max_length = 4096 if key in {"match_history", "economy_ledger", "royale_history"} else 256
+            max_length = 8192 if key == "economy_ledger" else (4096 if key in {"match_history", "royale_history"} else 256)
             if isinstance(value, str) and len(value) > max_length:
                 raise HTTPException(422, f"Valor muito longo: {key}")
             clean[key] = value
