@@ -172,3 +172,12 @@ Estados oficiais: **planejado**, **em desenvolvimento**, **implementado**, **com
 - Não criar botões decorativos, jogadores falsos ou arquivos de conteúdo artificiais.
 - Não fazer alterações concorrentes que cancelem builds; agrupar mudanças coerentes e validar cada integração.
 - Consultar o estado atual do repositório antes de cada conjunto de alterações.
+
+
+## Registro de execução — fundação compartilhada iniciada em 2026-11-21
+A fase 2 (fundação de dados e serviços) está **em desenvolvimento**, não concluída. Código já publicado:
+- `PlayerProfileStore`: contrato local compartilhado de perfil/carteiras, migração de esquema, compras atômicas, resgates idempotentes e ledger limitado.
+- `HudOverlay`: lobby/perfil/loja/inventário conectados à mesma fonte; saldo de moedas e diamantes; cosméticos de perfil com preço fixo em moedas; histórico de carteira e atalho funcional para missões.
+- `AccountSyncManager`: persistência/restauração de moedas, ledger, sensibilidades, missões e marcos do passe no Firestore.
+- A base ainda é local/offline e não substitui validação autoritativa no servidor. Não habilitar multiplayer, compras online ou saldos seguros até construir o serviço autoritativo.
+- Critérios restantes antes de promover esta fase: build Gradle/NDK, testes automatizados de migração/idempotência/conflitos, verificação de sincronização em duas instalações e teste físico no Redmi 12.
