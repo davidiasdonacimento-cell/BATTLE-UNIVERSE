@@ -165,6 +165,16 @@ make_texture_set("tropical_rock",(.34,.33,.29),2002,"rock")
 make_texture_set("operator_fabric",(.11,.19,.23),3003,"fabric")
 make_texture_set("neon_concrete",(.18,.21,.27),4004,"concrete")
 make_texture_set("desert_sand",(.68,.49,.29),5005,"sand")
+# Distinct material families for the remaining biomes and major world surfaces.
+# Each set has its own deterministic surface detail; no duplicated or padding files.
+make_texture_set("frozen_ice",(.62,.78,.86),6006,"ice")
+make_texture_set("industrial_metal",(.29,.34,.38),7007,"metal")
+make_texture_set("green_moss",(.20,.34,.19),8008,"moss")
+make_texture_set("orbital_composite",(.24,.29,.39),9009,"composite")
+make_texture_set("abandoned_stone",(.39,.38,.34),10101,"stone")
+make_texture_set("tropical_water",(.08,.31,.42),11111,"water")
+make_texture_set("neon_alloy",(.19,.23,.36),12121,"neon")
+make_texture_set("volcanic_rock",(.25,.16,.14),13131,"volcanic")
 
 world_templates={
 "island":{"id":"tropical_island","name":"Ilha Tropical","biome":"tropical","spawn":[0,0,0],
@@ -253,7 +263,7 @@ required=[
  "textures/island_ground_albedo_4k.png","textures/island_ground_normal_4k.png",
  "textures/desert_sand_albedo_4k.png","audio/transport_engine.wav",
  "effects/weapons.json"]
-pack_manifest={"pack_id":"battle_universe_season_02","version":2,
+pack_manifest={"pack_id":"battle_universe_season_02","version":3,
  "title":"Battle Universe — Conteúdo Expandido 4K",
  "engine":"Android OpenGL ES 3.0","texture_resolution":"4096x4096",
  "world_count":8,"files":files,"required":required}
@@ -271,13 +281,15 @@ with zipfile.ZipFile(archive,"w",zipfile.ZIP_DEFLATED,compresslevel=1) as z:
     for item in sorted(ROOT.rglob("*")):
         if item.is_file():z.write(item,item.relative_to(ROOT).as_posix())
 size=archive.stat().st_size
-if size<250*1024*1024:
-    raise SystemExit(f"Content pack too small ({size} bytes); refusing to publish padded or incomplete assets.")
+if size<1024*1024*1024:
+    raise SystemExit(f"Content pack below the 1 GiB real-content target ({size} bytes); refusing to publish incomplete assets.")
+if size>5*1024*1024*1024:
+    raise SystemExit(f"Content pack exceeds the 5 GiB distribution limit ({size} bytes).")
 h=hashlib.sha256()
 with archive.open("rb") as inp:
     for chunk in iter(lambda:inp.read(4*1024*1024),b""):h.update(chunk)
-manifest={"version":2,"title":"Battle Universe Season 02 — Pacote 4K",
- "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v2/battle-universe-season-02-pack.zip",
+manifest={"version":3,"title":"Battle Universe Season 02 — Pacote 4K",
+ "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v3/battle-universe-season-02-pack.zip",
  "size_bytes":size,"sha256":h.hexdigest()}
 (OUT/"content-pack-manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
 print(f"Season 02 pack: {size/1024/1024:.1f} MiB; {len(files)} real hashed resources; SHA-256 {manifest['sha256']}",flush=True)
