@@ -63,6 +63,7 @@ public final class HudOverlay extends View {
     private final RectF r=new RectF();
     private final SecureRandom royaleRandom=new SecureRandom();
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
+    private int generalSensitivity=100, aimSensitivity=100;
     private int selectedShirt,selectedBoots,selectedSet;
     private boolean music=true, effects=true, forwarding, resultSpectating;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
@@ -89,6 +90,10 @@ public final class HudOverlay extends View {
         map=Math.max(0,Math.min(MAP_NAMES.length-1,map));
         music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
         lookSensitivity=prefs.getInt("look_sensitivity",1);
+        generalSensitivity=prefs.getInt("sensitivity_general",lookSensitivity==0?65:(lookSensitivity==2?145:100));
+        aimSensitivity=prefs.getInt("sensitivity_aim",100);
+        generalSensitivity=Math.max(25,Math.min(200,generalSensitivity));
+        aimSensitivity=Math.max(25,Math.min(200,aimSensitivity));
         invertCameraY=prefs.getBoolean("invert_camera_y",false);
         showMinimap=prefs.getBoolean("show_minimap",true);
         hapticsEnabled=prefs.getBoolean("haptics",true);
@@ -99,7 +104,8 @@ public final class HudOverlay extends View {
         ensureDailyMissionWindow();
         game.setInvertCameraY(invertCameraY);
         game.setCharacter(character); game.setMap(map); game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
-        game.setMatchMode(mode); game.setQuality(quality); game.setLookSensitivity(lookSensitivity); game.setGameScreen(false);
+        game.setMatchMode(mode); game.setQuality(quality);
+        game.setLookSensitivity(generalSensitivity/100.0f,aimSensitivity/100.0f); game.setGameScreen(false);
     }
 
     @Override protected void onDraw(Canvas c) {
@@ -369,35 +375,37 @@ public final class HudOverlay extends View {
         }
     }
 
+    private void drawSensitivityBar(Canvas c,String label,int value,float y){
+        text(c,label,292,y+6,11,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,value+"%",455,y+6,10,0xFF75E2EA,Typeface.DEFAULT_BOLD);
+        for(int i=1;i<=8;i++){
+            float x=520+(i-1)*37f;
+            pill(c,x,y-13,32,27,i==8?"200":String.valueOf(i*25),
+                value>=i*25?0xFF176A75:0x553B6172,Color.WHITE);
+        }
+    }
     private void drawSettings(Canvas c){
-        eyebrow(c,270,175,"CONTROLES E PREFERÊNCIAS");title(c,"CONFIGURAÇÕES",270,224);
-        subtitle(c,"Ajustes locais para a tela e o controle do operador.",270,252);
-        panel(c,270,282,570,84,0xAE193040,0x335D8495,16);
-        eyebrow(c,292,309,"QUALIDADE GRÁFICA");
-        text(c,QUALITY_NAMES[quality],292,344,14,Color.WHITE,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<3;i++)pill(c,520+i*100,302,92,38,QUALITY_NAMES[i],
+        eyebrow(c,270,175,"AJUSTES DO MOTOR • SALVOS NESTE APARELHO");
+        title(c,"CONFIGURAÇÕES",270,224);
+        subtitle(c,"Sensibilidade aplicada à câmera; qualidade aplicada à renderização.",270,252);
+        panel(c,270,278,570,104,0xAE193040,0x335D8495,16);
+        eyebrow(c,292,304,"SENSIBILIDADE GERAL • CÂMERA LIVRE");
+        drawSensitivityBar(c,"GERAL",generalSensitivity,342);
+        panel(c,270,394,570,104,0xAE193040,0x335D8495,16);
+        eyebrow(c,292,420,"SENSIBILIDADE AO MIRAR");
+        drawSensitivityBar(c,"MIRA",aimSensitivity,458);
+        panel(c,270,510,570,78,0xAE193040,0x335D8495,15);
+        eyebrow(c,292,536,"QUALIDADE GRÁFICA • ENGINE OPENGL ES");
+        for(int i=0;i<3;i++)pill(c,520+i*100,545,92,32,QUALITY_NAMES[i],
             quality==i?0xFF176A75:0x553B6172,Color.WHITE);
-        panel(c,270,378,276,60,0xAE193040,0x335D8495,14);
-        text(c,"MÚSICA",290,414,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-        pill(c,430,392,100,32,music?"ATIVADA":"DESATIVADA",music?0xFF176A75:0x553B6172,Color.WHITE);
-        panel(c,562,378,278,60,0xAE193040,0x335D8495,14);
-        text(c,"EFEITOS",582,414,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-        pill(c,718,392,104,32,effects?"ATIVADOS":"DESATIVADOS",effects?0xFF176A75:0x553B6172,Color.WHITE);
-        panel(c,270,450,570,76,0xAE193040,0x335D8495,15);
-        eyebrow(c,292,477,"SENSIBILIDADE DA CÂMERA");
-        String[] levels={"BAIXA","MÉDIA","ALTA"};
-        for(int i=0;i<3;i++)pill(c,520+i*100,466,92,38,levels[i],
-            lookSensitivity==i?0xFF176A75:0x553B6172,Color.WHITE);
-        panel(c,270,538,570,108,0xAE193040,0x335D8495,15);
-        text(c,"CÂMERA INVERTIDA",292,565,11,Color.WHITE,Typeface.DEFAULT_BOLD);
-        pill(c,690,549,130,30,invertCameraY?"ATIVADA":"DESATIVADA",
-            invertCameraY?0xFF176A75:0x553B6172,Color.WHITE);
-        text(c,"MINIMAPA",292,598,11,Color.WHITE,Typeface.DEFAULT_BOLD);
-        pill(c,690,582,130,30,showMinimap?"VISÍVEL":"OCULTO",
-            showMinimap?0xFF176A75:0x553B6172,Color.WHITE);
-        text(c,"VIBRAÇÃO NOS TOQUES",292,631,11,Color.WHITE,Typeface.DEFAULT_BOLD);
-        pill(c,690,615,130,26,hapticsEnabled?"ATIVADA":"DESATIVADA",
-            hapticsEnabled?0xFF176A75:0x553B6172,Color.WHITE);
+        panel(c,270,600,570,64,0xAE193040,0x335D8495,14);
+        text(c,"INVERTER EIXO VERTICAL",290,625,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        pill(c,470,609,105,30,invertCameraY?"ATIVADO":"DESATIVADO",invertCameraY?0xFF176A75:0x553B6172,Color.WHITE);
+        text(c,"MINIMAPA",590,625,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        pill(c,675,609,75,30,showMinimap?"ON":"OFF",showMinimap?0xFF176A75:0x553B6172,Color.WHITE);
+        text(c,"HÁPTICA",765,625,9,Color.WHITE,Typeface.DEFAULT_BOLD);
+        pill(c,790,609,42,30,hapticsEnabled?"ON":"OFF",hapticsEnabled?0xFF176A75:0x553B6172,Color.WHITE);
+        text(c,"ÁUDIO/MIXAGEM: ainda não disponível; sem controles falsos nesta tela.",272,682,8,0xFFFFD27A,Typeface.DEFAULT);
     }
 
     private void drawProfilePage(Canvas c) {
@@ -1312,32 +1320,31 @@ public final class HudOverlay extends View {
                 if(hit(x,y,ax,292,174,190)){claimAchievement(i);return;}
             }
         }else if(page==SETTINGS){
-            if(hit(x,y,515,292,300,60)){
+            if(hit(x,y,515,329,300,36)){
+                generalSensitivity=Math.max(25,Math.min(200,Math.round((x-520)/37f+1)*25));
+                game.setLookSensitivity(generalSensitivity/100.0f,aimSensitivity/100.0f);
+                prefs.edit().putInt("sensitivity_general",generalSensitivity).apply();
+                toast("Sensibilidade geral: "+generalSensitivity+"%");return;
+            }
+            if(hit(x,y,515,445,300,36)){
+                aimSensitivity=Math.max(25,Math.min(200,Math.round((x-520)/37f+1)*25));
+                game.setLookSensitivity(generalSensitivity/100.0f,aimSensitivity/100.0f);
+                prefs.edit().putInt("sensitivity_aim",aimSensitivity).apply();
+                toast("Sensibilidade ao mirar: "+aimSensitivity+"%");return;
+            }
+            if(hit(x,y,515,540,300,45)){
                 quality=x<620?0:x<720?1:2;game.setQuality(quality);
                 prefs.edit().putInt("quality",quality).apply();toast("Qualidade: "+QUALITY_NAMES[quality]);return;
             }
-            if(hit(x,y,420,386,110,42)){
-                music=!music;prefs.edit().putBoolean("music",music).apply();
-                toast(music?"Música ativada":"Música desativada");return;
-            }
-            if(hit(x,y,718,386,110,42)){
-                effects=!effects;prefs.edit().putBoolean("effects",effects).apply();
-                toast(effects?"Efeitos ativados":"Efeitos desativados");return;
-            }
-            if(hit(x,y,515,460,300,50)){
-                lookSensitivity=x<620?0:x<720?1:2;game.setLookSensitivity(lookSensitivity);
-                prefs.edit().putInt("look_sensitivity",lookSensitivity).apply();
-                toast("Sensibilidade: "+new String[]{"baixa","média","alta"}[lookSensitivity]);return;
-            }
-            if(hit(x,y,680,545,145,38)){
+            if(hit(x,y,470,605,105,38)){
                 invertCameraY=!invertCameraY;game.setInvertCameraY(invertCameraY);
-                prefs.edit().putBoolean("invert_camera_y",invertCameraY).apply();toast("Inversão da câmera atualizada");return;
+                prefs.edit().putBoolean("invert_camera_y",invertCameraY).apply();toast("Inversão vertical "+(invertCameraY?"ativada":"desativada"));return;
             }
-            if(hit(x,y,680,578,145,38)){
+            if(hit(x,y,675,605,75,38)){
                 showMinimap=!showMinimap;prefs.edit().putBoolean("show_minimap",showMinimap).apply();
                 toast(showMinimap?"Minimapa visível":"Minimapa oculto");return;
             }
-            if(hit(x,y,680,610,145,38)){
+            if(hit(x,y,790,605,42,38)){
                 hapticsEnabled=!hapticsEnabled;prefs.edit().putBoolean("haptics",hapticsEnabled).apply();
                 toast(hapticsEnabled?"Vibração ativada":"Vibração desativada");return;
             }
