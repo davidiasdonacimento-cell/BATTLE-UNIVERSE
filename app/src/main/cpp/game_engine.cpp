@@ -155,6 +155,15 @@ constexpr std::array<Vec3,32> gBuildingPositions{{
     {130,0,62},{116,0,116},{62,0,130},{8,0,132},
     {-48,0,130},{-104,0,120},{-132,0,66},{-132,0,2}
 }};
+constexpr std::array<Vec3,32> gTreePositions{{
+    {-112,0,-88},{-105,0,-52},{-112,0,-12},{-110,0,36},{-104,0,88},
+    {-82,0,109},{-45,0,111},{-4,0,111},{39,0,108},{82,0,105},
+    {111,0,78},{112,0,38},{110,0,-6},{112,0,-49},{91,0,-111},
+    {49,0,-113},{8,0,-112},{-35,0,-111},{-77,0,-108},{-93,0,12},
+    {-91,0,56},{-61,0,42},{-55,0,-45},{-4,0,-51},{45,0,-43},
+    {56,0,20},{39,0,54},{-20,0,58},{-6,0,12},{24,0,13},
+    {5,0,-20},{-28,0,18}
+}};
 bool gContentPackReady=false;
 float gBuildCooldown=0;
 struct TrainingTarget { Vec3 pos; int energy=3; bool active=true; };
@@ -514,19 +523,25 @@ bool terrainPositionBlocked(float x,float z,float radius) {
         return dx*dx+dz*dz<1.0f;
     };
     switch(gSelectedMap) {
-        case 0: return ellipse(-64,-62,17,13)||ellipse(61,-58,22,15)||ellipse(-66,66,19,14)||ellipse(62,66,17,13)||ellipse(0,-88,24,9);
+        case 0: return ellipse(-64,-62,31,23)||ellipse(61,-58,40,27)||ellipse(-66,66,34,25)||ellipse(62,66,30,23)||ellipse(0,-88,43,15);
         case 1: return ellipse(-76,-72,15,13)||ellipse(76,-72,15,13)||ellipse(-78,72,15,13)||ellipse(78,72,15,13);
-        case 2: return ellipse(-82,-88,19,15)||ellipse(-20,-88,17,14)||ellipse(48,-88,18,15)||ellipse(88,58,19,15)||ellipse(-62,58,17,14);
-        case 3: return ellipse(-82,-78,22,14)||ellipse(-28,-88,20,13)||ellipse(42,-80,24,15)||ellipse(82,60,23,16)||ellipse(-70,62,20,14);
-        case 4: return ellipse(-82,-76,18,14)||ellipse(-28,-76,18,14)||ellipse(34,-76,18,14)||ellipse(84,-76,18,14)||ellipse(-76,68,18,14)||ellipse(32,68,18,14);
-        case 5: return ellipse(-82,-70,23,16)||ellipse(-28,-76,21,15)||ellipse(36,-72,24,17)||ellipse(82,66,22,16)||ellipse(-8,70,22,16);
+        case 2: return ellipse(-82,-88,35,27)||ellipse(-20,-88,31,25)||ellipse(48,-88,33,27)||ellipse(88,58,35,27)||ellipse(-62,58,31,25);
+        case 3: return ellipse(-82,-78,41,25)||ellipse(-28,-88,37,23)||ellipse(42,-80,45,27)||ellipse(82,60,43,29)||ellipse(-70,62,37,25);
+        case 4: return ellipse(-82,-76,33,25)||ellipse(-28,-76,33,25)||ellipse(34,-76,33,25)||ellipse(84,-76,33,25)||ellipse(-76,68,33,25)||ellipse(32,68,33,25);
+        case 5: return ellipse(-82,-70,43,29)||ellipse(-28,-76,39,27)||ellipse(36,-72,45,31)||ellipse(82,66,41,29)||ellipse(-8,70,41,29);
         case 6: return ellipse(-82,-70,20,16)||ellipse(-24,-70,20,16)||ellipse(38,-70,20,16)||ellipse(82,62,20,16)||ellipse(-52,62,20,16);
-        default:return ellipse(-82,-72,20,15)||ellipse(-26,-72,18,14)||ellipse(34,-72,21,16)||ellipse(82,64,21,16)||ellipse(-58,64,18,14);
+        default:return ellipse(-82,-72,39,17)||ellipse(-26,-72,37,17)||ellipse(34,-72,43,17)||ellipse(82,64,41,17)||ellipse(-58,64,37,25);
     }
 }
 bool worldPositionBlocked(float x,float z,float radius) {
     if(x<-WORLD_LIMIT+radius||x>WORLD_LIMIT-radius||z<-WORLD_LIMIT+radius||z>WORLD_LIMIT-radius)return true;
     if(terrainPositionBlocked(x,z,radius))return true;
+    const size_t treeLimit=gQuality==0?8:(gQuality==1?14:24);
+    for(size_t i=0;i<treeLimit;++i) {
+        const Vec3 tree=gTreePositions[i];
+        const float dx=x-tree.x,dz=z-tree.z;
+        if(dx*dx+dz*dz<(radius+0.72f)*(radius+0.72f))return true;
+    }
     for(size_t i=0;i<gBuildingPositions.size();++i) {
         const Vec3 h=gBuildingPositions[i];
         const float halfW=buildingWidth(i)*0.5f,halfD=buildingDepth(i)*0.5f;
@@ -713,7 +728,7 @@ void drawWorld(float time) {
         const float width=buildingWidth(i),depth=buildingDepth(i),height=buildingHeight(i);
         const Vec3 pos=gBuildingPositions[i];
         drawBuilding(pos.x,pos.z,width,depth,height,tint,roof);
-        drawCube({pos.x,0.72f+height+0.30f,pos.z},
+        drawCube({pos.x,terrainHeightForMap(gSelectedMap,pos.x,pos.z)+0.08f+height+0.30f,pos.z},
             {width*0.52f,0.22f,depth*0.55f},
             gSelectedMap==1?Vec3{0.14f,0.74f,0.83f}:
             (gSelectedMap==3?Vec3{0.82f,0.91f,0.98f}:
@@ -722,15 +737,7 @@ void drawWorld(float time) {
     }
 
     // A forest ring and smaller groves break up sightlines and make the island feel broad.
-    const std::array<Vec3,32> trees{{
-        {-112,0,-88},{-105,0,-52},{-112,0,-12},{-110,0,36},{-104,0,88},
-        {-82,0,109},{-45,0,111},{-4,0,111},{39,0,108},{82,0,105},
-        {111,0,78},{112,0,38},{110,0,-6},{112,0,-49},{91,0,-111},
-        {49,0,-113},{8,0,-112},{-35,0,-111},{-77,0,-108},{-93,0,12},
-        {-91,0,56},{-61,0,42},{-55,0,-45},{-4,0,-51},{45,0,-43},
-        {56,0,20},{39,0,54},{-20,0,58},{-6,0,12},{24,0,13},
-        {5,0,-20},{-28,0,18}
-    }};
+    const auto& trees=gTreePositions;
     size_t treeLimit=gQuality==0?8:(gQuality==1?14:24);
     for(size_t i=0;i<treeLimit;++i) {
         float sway=std::sin(time*0.8f+static_cast<float>(i))*0.035f;
