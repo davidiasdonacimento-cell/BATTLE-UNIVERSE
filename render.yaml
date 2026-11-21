@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: battle-universe-accounts
+    runtime: docker
+    rootDir: server
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ISSUER
+        value: battle-universe-accounts
+      - key: ACCESS_TOKEN_MINUTES
+        value: "10080"
