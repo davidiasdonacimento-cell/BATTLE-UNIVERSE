@@ -27,26 +27,26 @@ public final class HudOverlay extends View {
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
         GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
-        "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
+        "COFRE","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
     private static final int[] NAV_PAGES={HOME,CHARACTERS,MODES_PAGE,MAPS_PAGE,INVENTORY,SETTINGS,PROFILE,SHOP,ROYALE,MISSIONS,WARDROBE,EVENTS,FRIENDS,MAIL,ACHIEVEMENTS};
     private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
         "CAMISA TÁTICA","CAMISA NEON","CAMISA FROST","CAMISA DESERTO",
         "BOTAS COMBATE","BOTAS NEON","BOTAS FROST","BOTAS DOURADAS",
         "CONJUNTO AURORA","CONJUNTO CAMPEÃO","CONJUNTO ORBITAL","CONJUNTO DESERTO",
-        "SKIN VULCÃO","SKIN NEBULAR","SKIN CERRADO"};
+        "SKIN VULCÃO","SKIN NEBULAR","SKIN CERRADO","BARBINHA DO VELHO","CALÇA ANGELICAL"};
     private static final String[] SHOP_KEYS={"shop_frame_neon","shop_emblem_bloob","shop_title_champion",
         "wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost","wear_shirt_desert",
         "wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
-        "wear_set_volcano","wear_set_nebula","wear_set_cerrado"};
+        "wear_set_volcano","wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical"};
     private static final long[] SHOP_PRICES={500L,1000L,1500L,650L,800L,750L,700L,
-        450L,600L,550L,700L,1800L,2200L,2500L,1900L,2900L,3200L,3500L};
+        450L,600L,550L,700L,1800L,2200L,2500L,1900L,2900L,3200L,3500L,900L,1500L};
     private static final int[] SHOP_COLORS={0xFF8D42D7,0xFF08A9D8,0xFFE0A62B,
         0xFF344C5C,0xFF8D42D7,0xFFB8DDE8,0xFFB87843,
         0xFF4B5058,0xFF2FAFC4,0xFFCBDCE4,0xFFE0AE38,
         0xFF55B7B8,0xFFE0AE38,0xFF6B83C4,0xFFB87843,
-        0xFFE64B24,0xFF3C70D8,0xFF5D9B39};
+        0xFFE64B24,0xFF3C70D8,0xFF5D9B39,0xFF9B806B,0xFF168BEA};
     private static final int[] ROYALE_LEVELS={2,4,6,8,10,12};
     private static final long[] ROYALE_REWARDS={40,60,80,100,120,150};
     private static final String[] MISSION_NAMES={"JOGUE UMA PARTIDA","ELIMINE 3 OPONENTES","COLETE 3 CRISTAIS"};
@@ -83,6 +83,10 @@ public final class HudOverlay extends View {
     private Runnable accountSyncAction, accountSignOutAction;
     private long toastUntil, lastTap;
     private int collectionPage=0;
+    private int cofreTab=0;
+    private int selectedPants;
+    private AlertDialog accountDialog;
+    private TextView accountDialogStatus;
     private int royaleRevealItem=-1;
     private long royaleRevealUntil=0L;
 
@@ -108,6 +112,7 @@ public final class HudOverlay extends View {
         selectedShirt=prefs.getInt("selected_shirt",1);
         selectedBoots=prefs.getInt("selected_boots",1);
         selectedSet=prefs.getInt("selected_set",0);
+        selectedPants=prefs.getInt("selected_pants",0);
         equippedBeard=prefs.getInt("equipped_beard",0);
         equippedHelmet=prefs.getInt("equipped_helmet",0);
         equippedBackpack=prefs.getInt("equipped_backpack",0);
@@ -115,6 +120,7 @@ public final class HudOverlay extends View {
         ensureDailyMissionWindow();
         game.setInvertCameraY(invertCameraY);
         game.setCharacter(character); game.setMap(map); game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
+        game.setPantsStyle(selectedPants);
         game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
         game.setMatchMode(mode); game.setQuality(quality);
         game.setLookSensitivity(generalSensitivity/100.0f,aimSensitivity/100.0f); game.setGameScreen(false);
@@ -416,50 +422,54 @@ public final class HudOverlay extends View {
         }
     }
     private void drawInventory(Canvas c){
-        eyebrow(c,270,175,"COLEÇÃO VISUAL • PRÉVIA INDIVIDUAL DOS ITENS");
-        title(c,"MINHA COLEÇÃO",270,224);
-        subtitle(c,"Lista de cosméticos e equipamentos. Cada cartão mostra o próprio item, sem personagens.",270,252);
-        panel(c,270,266,570,42,0xAE193040,0x335D8495,13);
+        eyebrow(c,270,175,"COFRE • CATEGORIAS EM LISTA COM PRÉVIAS INDIVIDUAIS");
+        title(c,"COFRE",270,224);
+        subtitle(c,"COLEÇÃO e MODA em seções empilhadas. Cada prévia mostra somente a peça.",270,252);
+        panel(c,270,266,570,40,0xAE193040,0x335D8495,13);
         text(c,"◆ "+formatDiamonds(profile.getDiamonds())+" DIAMANTES   •   ● "+formatDiamonds(profile.getCoins())+" MOEDAS",288,292,11,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        String[] extras={"BARBA SOMBRA","BARBA VIGOR","BARBA ORION",
-            "CAPACETE TÁTICO","CAPACETE FROST","CAPACETE VISOR",
-            "MOCHILA CAMPO","MOCHILA ORBITAL","MOCHILA MÉDICA",
-            "COLETE TÁTICO","COLETE PESADO","COLETE TECNO"};
-        int total=extras.length+SHOP_NAMES.length;
-        int start=collectionPage*18,end=Math.min(total,start+18);
-        for(int index=start;index<end;index++){
-            int local=index-start,col=local%2,row=local/2;
-            float x=270+col*290f,y=316+row*38f;
-            int type,variant,color;String name,state;boolean active=false,owned=true;
-            if(index<extras.length){
-                int group=index/3;variant=index%3+1;
-                type=group;color=new int[]{0xFF9B806B,0xFF65A9C4,0xFF58A68A,0xFFB18A55}[group];
-                name=extras[index];
-                int equipped=group==0?equippedBeard:group==1?equippedHelmet:group==2?equippedBackpack:equippedVest;
-                active=equipped==variant;
-                state=active?"EQUIPADO":"EQUIPÁVEL";
-            }else{
-                int item=index-extras.length;name=SHOP_NAMES[item];color=SHOP_COLORS[item];
-                type=item<3?7:item<7?4:item<11?5:6;variant=item;
-                owned=prefs.getBoolean(SHOP_KEYS[item],false);
-                if(item>=3&&item<=6)active=selectedSet==0&&selectedShirt==item-2;
-                else if(item>=7&&item<=10)active=selectedSet==0&&selectedBoots==item-6;
-                else if(item>=11)active=selectedSet==item-10;
-                state=active?"EQUIPADO":owned?"DESBLOQUEADO":"VER NA LOJA";
+        pill(c,270,312,150,29,cofreTab==0?"COLEÇÃO  ✓":"COLEÇÃO",cofreTab==0?0xFF176A75:0x553B6172,Color.WHITE);
+        pill(c,430,312,150,29,cofreTab==1?"MODA  ✓":"MODA",cofreTab==1?0xFF176A75:0x553B6172,Color.WHITE);
+        String[][] labels=cofreTab==0
+            ?new String[][]{{"SOMBRA","VIGOR","VELHO"},{"TÁTICO","FROST","VISOR"},{"CAMPO","ORBITAL","MÉDICA"},{"TÁTICO","PESADO","TECNO"}}
+            :new String[][]{{"PADRÃO","ANGELICAL"},{"TÁTICA","NEON","FROST","DESERTO"},{"COMBATE","NEON","FROST","DOURADAS"},{"AURORA","CAMPEÃO","ORBITAL","DESERTO"}};
+        String[] categories=cofreTab==0
+            ?new String[]{"BARBAS","CAPACETES","MOCHILAS","COLETES"}
+            :new String[]{"CALÇAS","CAMISAS","BOTAS","CONJUNTOS"};
+        int[] types=cofreTab==0?new int[]{0,1,2,3}:new int[]{8,4,5,6};
+        int[] colors=cofreTab==0?new int[]{0xFF9B806B,0xFF65A9C4,0xFF58A68A,0xFFB18A55}
+            :new int[]{0xFF168BEA,0xFF8D42D7,0xFF2FAFC4,0xFF55B7B8};
+        for(int section=0;section<4;section++){
+            float y=350+section*78f;
+            panel(c,270,y,570,70,0xA91A3040,0x335D8495,12);
+            text(c,categories[section],284,y+39,9,0xFF70DCE6,Typeface.create("sans-serif-black",Typeface.BOLD));
+            for(int item=0;item<labels[section].length;item++){
+                float x=390+item*110f;
+                boolean owned=true,active=false;int variant=item+1;String state="EQUIPAR";
+                if(cofreTab==0){
+                    if(section==0){owned=variant!=3||prefs.getBoolean("wear_beard_old",false);active=equippedBeard==variant;}
+                    else if(section==1)active=equippedHelmet==variant;
+                    else if(section==2)active=equippedBackpack==variant;
+                    else active=equippedVest==variant;
+                }else if(section==0){
+                    variant=item;owned=item==0||prefs.getBoolean("wear_pants_angelical",false);active=selectedPants==item;
+                }else if(section==1){
+                    owned=prefs.getBoolean(SHOP_KEYS[3+item],false);active=selectedSet==0&&selectedShirt==item+1;
+                }else if(section==2){
+                    owned=prefs.getBoolean(SHOP_KEYS[7+item],false);active=selectedSet==0&&selectedBoots==item+1;
+                }else{
+                    owned=prefs.getBoolean(SHOP_KEYS[11+item],false);active=selectedSet==item+1;
+                }
+                state=active?"EQUIPADO":owned?"EQUIPAR":"ROYALE";
+                panel(c,x,y+7,100,56,active?0xFF176A75:0x77304758,active?0xFF58DDE6:0x335D8495,8);
+                drawCollectionPreview(c,x+17,y+28,types[section],variant,colors[section]);
+                text(c,labels[section][item],x+31,y+29,6.5f,Color.WHITE,Typeface.DEFAULT_BOLD);
+                text(c,state,x+31,y+43,5.8f,owned?0xFF9ED8D5:0xFFFFC66F,Typeface.DEFAULT_BOLD);
             }
-            panel(c,x,y,278,34,active?0xB51A5964:owned?0xA91A3040:0x771A3040,
-                active?0xFF58DDE6:0x335D8495,9);
-            drawCollectionPreview(c,x+19,y+17,type,variant,color);
-            text(c,name,x+42,y+14,7.8f,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,state,x+42,y+27,6.8f,active?0xFF83DCD5:owned?0xFF9DB6C5:0xFFFFC66F,Typeface.DEFAULT_BOLD);
         }
-        pill(c,270,665,120,25,collectionPage==0?"PÁGINA 1 / 2":"VOLTAR À PÁG. 1",0x553B6172,Color.WHITE);
-        pill(c,710,665,130,25,collectionPage==0?"PRÓXIMA PÁGINA":"PÁGINA 2 / 2",0xFF176A75,Color.WHITE);
-        text(c,"Prévia de cada peça • sem miniaturas de personagens",430,682,7.5f,0xFF8FAAB8,Typeface.DEFAULT);
         String[] history=profile.getRecentLedgerEntries(1);
         if(history.length>0){
-            String recent=history[0].length()>92?history[0].substring(0,89)+"...":history[0];
-            text(c,"ÚLTIMA MOVIMENTAÇÃO • "+recent,270,705,7.0f,0xFF9CB4C1,Typeface.DEFAULT);
+            String recent=history[0].length()>78?history[0].substring(0,75)+"...":history[0];
+            text(c,"ÚLTIMA MOVIMENTAÇÃO • "+recent,270,674,7.0f,0xFF9CB4C1,Typeface.DEFAULT);
         }
     }
 
@@ -494,6 +504,13 @@ public final class HudOverlay extends View {
         }else if(type==6){
             Path set=new Path();set.moveTo(cx,cy-13);set.lineTo(cx+12,cy);set.lineTo(cx,cy+13);
             set.lineTo(cx-12,cy);set.close();c.drawPath(set,p);
+        }else if(type==8){
+            Path pants=new Path();pants.moveTo(cx-10,cy-12);pants.lineTo(cx+10,cy-12);
+            pants.lineTo(cx+8,cy+11);pants.lineTo(cx+2,cy+11);pants.lineTo(cx,cy+1);
+            pants.lineTo(cx-2,cy+11);pants.lineTo(cx-8,cy+11);pants.close();c.drawPath(pants,p);
+            p.setColor(0xFFEAF8FF);c.drawLine(cx,cy-10,cx,cy+2,p);
+            p.setColor(0xFF20D7F0);c.drawLine(cx-7,cy-5,cx-6,cy+8,p);
+            c.drawLine(cx+7,cy-5,cx+6,cy+8,p);
         }else{
             c.drawRoundRect(cx-10,cy-10,cx+10,cy+10,4,4,p);
             p.setColor(0xFFFFFFFF);c.drawCircle(cx,cy,4,p);
@@ -577,14 +594,14 @@ public final class HudOverlay extends View {
         panel(c,270,266,570,48,0xA91A3040,0x335D8495,14);
         text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds())+"   ● "+formatDiamonds(profile.getCoins()),292,297,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         for(int i=0;i<SHOP_NAMES.length;i++) {
-            int col=i%3,row=i/3;float x=270+col*192f,y=322+row*56f;
+            int col=i%3,row=i/3;float x=270+col*192f,y=320+row*47f;
             boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
-            panel(c,x,y,174,50,owned?0xB51A4650:0xA91A3040,
-                owned?0xFF4BD4C9:0x335D8495,12);
-            circle(c,x+24,y+24,14,SHOP_COLORS[i],0xFFB5D6E1);
-            text(c,SHOP_NAMES[i],x+44,y+20,8,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            panel(c,x,y,174,42,owned?0xB51A4650:0xA91A3040,
+                owned?0xFF4BD4C9:0x335D8495,10);
+            circle(c,x+21,y+21,12,SHOP_COLORS[i],0xFFB5D6E1);
+            text(c,SHOP_NAMES[i],x+39,y+17,7.2f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
             String priceLabel=i<3?"● "+SHOP_PRICES[i]+" MOEDAS":"◆ "+SHOP_PRICES[i]+" DIAMANTES";
-            text(c,owned?"JÁ ADQUIRIDO":priceLabel,x+44,y+36,7,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            text(c,owned?"JÁ ADQUIRIDO":priceLabel,x+39,y+32,6.5f,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         }
         text(c,"Itens cosméticos diretos • sem roleta paga ou prêmio aleatório.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
@@ -638,7 +655,7 @@ public final class HudOverlay extends View {
         subtitle(c,"Barbas, capacetes, mochilas e coletes acompanham o corpo no lobby e na partida.",270,252);
         pill(c,674,184,166,32,"VOLTAR ÀS ROUPAS",0x553B6172,0xFFD7E6ED);
         String[] names={"BARBAS 3D","CAPACETES","MOCHILAS","COLETES"};
-        String[][] options={{"SEM","SOMBRA","VIGOR","ORION"},{"SEM","TÁTICO","FROST","VISOR"},
+        String[][] options={{"SEM","SOMBRA","VIGOR","VELHO"},{"SEM","TÁTICO","FROST","VISOR"},
             {"SEM","CAMPO","ORBITAL","MÉDICO"},{"SEM","TÁTICO","PESADO","TECNO"}};
         int[] selected={equippedBeard,equippedHelmet,equippedBackpack,equippedVest};
         int[] accents={0xFF9B806B,0xFF65A9C4,0xFF58A68A,0xFFB18A55};
@@ -660,32 +677,28 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyalePage(Canvas c) {
-        eyebrow(c,270,175,"CENTRAL DE COLEÇÕES • BATTLE UNIVERSE");
+        eyebrow(c,270,175,"ROYALE • LOJA DE RECOMPENSAS");
         title(c,"MENU ROYALE",270,224);
-        subtitle(c,"Barbas, roupas, acessórios e itens visuais — sem seção de personagens.",270,252);
-        String[] names={"BARBAS 3D","ROUPAS E CONJUNTOS","MINHA COLEÇÃO",
-            "CATÁLOGO DE VISUAIS","EVENTOS TEMÁTICOS","ARQUIVO DE RELÍQUIAS"};
-        String[] hints={"Prévia das três barbas equipáveis","Vista camisas, botas e conjuntos",
-            "Lista com prévia individual de cada peça","Veja os itens disponíveis na loja",
-            "Explore os conteúdos ativos","Skins clássicas e itens raros"};
-        String[] marks={"01","02","03","04","05","06"};
-        int[] destinations={ACCESSORIES,WARDROBE,INVENTORY,SHOP,EVENTS,ROYALE_SPIN};
-        int owned=0;
-        for(String key:SHOP_KEYS)if(prefs.getBoolean(key,false))owned++;
-        panel(c,270,270,570,54,0xAE193040,0x557AA9BC,14);
-        text(c,"MINHA COLEÇÃO",290,293,9,0xFF71DDE5,Typeface.DEFAULT_BOLD);
-        text(c,owned+" ITENS DESBLOQUEADOS",290,313,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        subtitle(c,"Escolha a peça, confira a prévia e compre diretamente com diamantes.",270,252);
+        panel(c,270,266,570,48,0xAE193040,0x557AA9BC,14);
+        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds())+" DIAMANTES",290,296,12,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        String[] names={"BARBINHA DO VELHO","CALÇA ANGELICAL","COFRE","MODA","CATÁLOGO","EVENTOS"};
+        String[] hints={"900 diamantes • barba 3D","1.500 diamantes • calça azul","Ver itens e equipamentos","Camisas, botas e conjuntos","Todos os cosméticos","Conteúdo da temporada"};
+        int[] featured={18,19,-1,-1,-1,-1};
+        int owned=0;for(String key:SHOP_KEYS)if(prefs.getBoolean(key,false))owned++;
         for(int i=0;i<names.length;i++){
-            int col=i%3,row=i/3;float x=270+col*192f,y=340+row*151f;
-            panel(c,x,y,174,132,0xB51A3040,0x557AA9BC,14);
-            circle(c,x+29,y+31,17,i==1?0xFF8D42D7:i==3?0xFF2FAFC4:0xFF24677A,0xFF9BC9D2);
-            text(c,marks[i],x+20,y+35,9,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,names[i],x+13,y+68,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,hints[i],x+13,y+87,7.2f,0xFF9DB6C5,Typeface.DEFAULT);
-            pill(c,x+12,y+101,150,23,"ABRIR",0xFF176A75,Color.WHITE);
+            int col=i%3,row=i/3;float x=270+col*192f,y=326+row*151f;
+            boolean featuredItem=featured[i]>=0;
+            boolean ownedItem=featuredItem&&prefs.getBoolean(SHOP_KEYS[featured[i]],false);
+            panel(c,x,y,174,132,ownedItem?0xB51A4650:0xB51A3040,ownedItem?0xFF4BD4C9:0x557AA9BC,14);
+            if(featuredItem)drawCollectionPreview(c,x+34,y+39,featured[i]==18?0:8,featured[i]==18?3:1,SHOP_COLORS[featured[i]]);
+            else circle(c,x+34,y+39,19,i==2?0xFF24677A:i==3?0xFF8D42D7:0xFF2FAFC4,0xFF9BC9D2);
+            text(c,names[i],x+13,y+77,8.2f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,hints[i],x+13,y+94,7.0f,0xFF9DB6C5,Typeface.DEFAULT);
+            pill(c,x+12,y+101,150,23,featuredItem?(ownedItem?"ADQUIRIDO":"COMPRAR"):"ABRIR",
+                featuredItem?0xFF73501F:0xFF176A75,Color.WHITE);
         }
-        text(c,"Menu Royale é uma central de coleção e navegação — sem seção esportiva ou giro obrigatório.",
-            270,660,8,0xFF8FAAB8,Typeface.DEFAULT);
+        text(c,owned+" ITENS DESBLOQUEADOS • COMPRAS DIRETAS • ENTREGA NO COFRE",270,660,8,0xFF8FAAB8,Typeface.DEFAULT_BOLD);
     }
 
     private void drawRoyaleSpinPage(Canvas c) {
@@ -1428,45 +1441,55 @@ public final class HudOverlay extends View {
             if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
         }else if(page==INVENTORY){
-            if(hit(x,y,270,665,120,25)){collectionPage=0;return;}
-            if(hit(x,y,710,665,130,25)){collectionPage=collectionPage==0?1:0;return;}
-            String[] extras={"BARBA SOMBRA","BARBA VIGOR","BARBA ORION",
-                "CAPACETE TÁTICO","CAPACETE FROST","CAPACETE VISOR",
-                "MOCHILA CAMPO","MOCHILA ORBITAL","MOCHILA MÉDICA",
-                "COLETE TÁTICO","COLETE PESADO","COLETE TECNO"};
-            int start=collectionPage*18,end=Math.min(extras.length+SHOP_NAMES.length,start+18);
-            for(int index=start;index<end;index++){
-                int local=index-start,col=local%2,row=local/2;float ix=270+col*290f,iy=316+row*38f;
-                if(!hit(x,y,ix,iy,278,34))continue;
-                if(index<extras.length){
-                    int group=index/3,item=index%3+1;
-                    if(group==0)equippedBeard=item;else if(group==1)equippedHelmet=item;
-                    else if(group==2)equippedBackpack=item;else equippedVest=item;
-                    prefs.edit().putInt("equipped_beard",equippedBeard).putInt("equipped_helmet",equippedHelmet)
-                        .putInt("equipped_backpack",equippedBackpack).putInt("equipped_vest",equippedVest).apply();
-                    game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
-                    toast(extras[index]+" selecionada.");return;
-                }
-                int item=index-extras.length;
-                if(!prefs.getBoolean(SHOP_KEYS[item],false)){page=SHOP;toast("Item bloqueado. Consulte o catálogo da loja.");return;}
-                if(item>=3&&item<=6){
-                    selectedShirt=item-2;selectedSet=0;
-                    prefs.edit().putInt("selected_shirt",selectedShirt).putInt("selected_set",0).apply();
-                    game.setWardrobe(selectedShirt,selectedBoots,0);
-                }else if(item>=7&&item<=10){
-                    selectedBoots=item-6;selectedSet=0;
-                    prefs.edit().putInt("selected_boots",selectedBoots).putInt("selected_set",0).apply();
-                    game.setWardrobe(selectedShirt,selectedBoots,0);
-                }else if(item>=11){
-                    selectedSet=item-10;prefs.edit().putInt("selected_set",selectedSet).apply();
+            if(hit(x,y,270,312,150,29)){cofreTab=0;return;}
+            if(hit(x,y,430,312,150,29)){cofreTab=1;return;}
+            for(int section=0;section<4;section++){
+                float rowY=350+section*78f;
+                int count=cofreTab==0?3:(section==0?2:4);
+                for(int item=0;item<count;item++){
+                    float ix=390+item*110f;
+                    if(!hit(x,y,ix,rowY+7,100,56))continue;
+                    if(cofreTab==0){
+                        int value=item+1;
+                        if(section==0){
+                            if(value==3&&!prefs.getBoolean("wear_beard_old",false)){page=ROYALE;toast("A Barbinha do Velho pode ser comprada no Royale.");return;}
+                            equippedBeard=value;
+                        }else if(section==1)equippedHelmet=value;
+                        else if(section==2)equippedBackpack=value;
+                        else equippedVest=value;
+                        prefs.edit().putInt("equipped_beard",equippedBeard).putInt("equipped_helmet",equippedHelmet)
+                            .putInt("equipped_backpack",equippedBackpack).putInt("equipped_vest",equippedVest).apply();
+                        game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
+                        toast("Item equipado no Cofre.");return;
+                    }
+                    if(section==0){
+                        if(item==1&&!prefs.getBoolean("wear_pants_angelical",false)){page=SHOP;toast("Compre a Calça Angelical na loja.");return;}
+                        selectedPants=item;prefs.edit().putInt("selected_pants",selectedPants).apply();
+                        game.setPantsStyle(selectedPants);toast(item==1?"Calça Angelical equipada.":"Calça padrão equipada.");return;
+                    }
+                    if(section==1){
+                        int shopIndex=3+item;
+                        if(!prefs.getBoolean(SHOP_KEYS[shopIndex],false)){page=SHOP;toast("Camisa bloqueada. Consulte a loja.");return;}
+                        selectedShirt=item+1;selectedSet=0;
+                    }else if(section==2){
+                        int shopIndex=7+item;
+                        if(!prefs.getBoolean(SHOP_KEYS[shopIndex],false)){page=SHOP;toast("Bota bloqueada. Consulte a loja.");return;}
+                        selectedBoots=item+1;selectedSet=0;
+                    }else{
+                        int shopIndex=11+item;
+                        if(!prefs.getBoolean(SHOP_KEYS[shopIndex],false)){page=SHOP;toast("Conjunto bloqueado. Consulte a loja.");return;}
+                        selectedSet=item+1;
+                    }
+                    prefs.edit().putInt("selected_shirt",selectedShirt).putInt("selected_boots",selectedBoots)
+                        .putInt("selected_set",selectedSet).apply();
                     game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
+                    toast("Peça equipada no operador.");return;
                 }
-                toast(SHOP_NAMES[item]+" selecionado.");return;
             }
         }else if(page==SHOP){
             for(int i=0;i<SHOP_NAMES.length;i++){
-                float sx=270+(i%3)*192f,sy=322+(i/3)*56f;
-                if(hit(x,y,sx,sy,174,50)){purchaseShopItem(i);return;}
+                float sx=270+(i%3)*192f,sy=320+(i/3)*47f;
+                if(hit(x,y,sx,sy,174,42)){purchaseShopItem(i);return;}
             }
         }else if(page==WARDROBE){
             if(hit(x,y,690,260,150,25)){page=ACCESSORIES;return;}
@@ -1507,6 +1530,9 @@ public final class HudOverlay extends View {
                 int group=x<550?(y<450?0:2):(y<450?1:3);
                 float originX=(group%2==0?282f:574f);
                 int item=Math.max(0,Math.min(3,(int)((x-originX)/63f)));
+                if(group==0&&item==3&&!prefs.getBoolean("wear_beard_old",false)){
+                    page=ROYALE;toast("Compre a Barbinha do Velho no Royale.");return;
+                }
                 if(group==0)equippedBeard=item;
                 else if(group==1)equippedHelmet=item;
                 else if(group==2)equippedBackpack=item;
@@ -1522,11 +1548,23 @@ public final class HudOverlay extends View {
             }
         }else if(page==ROYALE){
             for(int i=0;i<6;i++){
-                float rx=270+(i%3)*192f,ry=340+(i/3)*151f;
-                if(hit(x,y,rx,ry,174,132)){
-                    int[] destinations={CHARACTERS,WARDROBE,INVENTORY,SHOP,EVENTS,ROYALE_SPIN};
-                    page=destinations[i];return;
+                float rx=270+(i%3)*192f,ry=326+(i/3)*151f;
+                if(!hit(x,y,rx,ry,174,132))continue;
+                if(i==0){
+                    if(purchaseShopItem(18)){
+                        equippedBeard=3;prefs.edit().putInt("equipped_beard",3).apply();
+                        game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
+                    }
+                }else if(i==1){
+                    if(purchaseShopItem(19)){
+                        selectedPants=1;prefs.edit().putInt("selected_pants",1).apply();
+                        game.setPantsStyle(1);
+                    }
+                }else{
+                    int[] destinations={-1,-1,INVENTORY,WARDROBE,SHOP,EVENTS};
+                    page=destinations[i];
                 }
+                return;
             }
         }else if(page==ROYALE_SPIN){
             if(hit(x,y,674,184,166,32)){page=ROYALE;return;}
@@ -1602,6 +1640,19 @@ public final class HudOverlay extends View {
         googleSignedIn=signedIn;
         googleEmail=username==null?"":username;
         googleMessage=message==null?"":message;
+        if(accountDialogStatus!=null){
+            accountDialogStatus.setText(googleMessage);
+            String lower=googleMessage.toLowerCase(Locale.ROOT);
+            accountDialogStatus.setTextColor(lower.contains("erro")||lower.contains("inválid")
+                ||lower.contains("não foi")||lower.contains("não configurado")?0xFFFF7777:0xFF168B70);
+        }
+        if(accountDialog!=null&&accountDialog.isShowing()){
+            String lower=googleMessage.toLowerCase(Locale.ROOT);
+            boolean busy=lower.contains("criando")||lower.contains("entrando");
+            if(accountDialog.getButton(AlertDialog.BUTTON_POSITIVE)!=null)accountDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(!busy);
+            if(accountDialog.getButton(AlertDialog.BUTTON_NEUTRAL)!=null)accountDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(!busy);
+            if(signedIn){accountDialog.dismiss();accountDialog=null;accountDialogStatus=null;}
+        }
         String feedback=googleMessage.toLowerCase(Locale.ROOT);
         boolean important=!googleMessage.equals(previous)&&(
             feedback.contains("criando")||feedback.contains("entrando")||
@@ -1612,10 +1663,7 @@ public final class HudOverlay extends View {
             feedback.contains("suspensa")||feedback.contains("falha")||
             feedback.contains("erro")||feedback.contains("não configurado")||
             feedback.contains("sessão"));
-        if(important){
-            Toast.makeText(getContext(),googleMessage,Toast.LENGTH_LONG).show();
-            toast(googleMessage);
-        }
+        if(important){Toast.makeText(getContext(),googleMessage,Toast.LENGTH_LONG).show();toast(googleMessage);}
         invalidate();
     }
     private void showUsernameAccountDialog() {
@@ -1631,32 +1679,43 @@ public final class HudOverlay extends View {
         password.setSingleLine(true);
         password.setHint("Senha (mínimo 8 caracteres)");
         password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        accountDialogStatus=new TextView(getContext());
+        accountDialogStatus.setText(googleMessage.isEmpty()?"Digite seus dados para continuar.":googleMessage);
+        accountDialogStatus.setTextSize(13);
+        accountDialogStatus.setPadding(0,pad/2,0,pad/2);
+        accountDialogStatus.setTextColor(0xFF168B70);
         TextView note=new TextView(getContext());
-        note.setText("Use letras sem acento, números ou _. Guarde sua senha: não há recuperação por e-mail nesta versão.");
+        note.setText("Nickname: 3 a 18 letras, números ou _. Senha: 8 a 72 caracteres. Guarde sua senha.");
         note.setTextSize(12);
-        form.addView(username);
-        form.addView(password);
-        form.addView(note);
+        form.addView(username);form.addView(password);form.addView(accountDialogStatus);form.addView(note);
         AlertDialog dialog=new AlertDialog.Builder(getContext())
-            .setTitle("CONTA BATTLE UNIVERSE")
-            .setView(form)
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("CRIAR CONTA",null)
-            .setNeutralButton("ENTRAR",null)
-            .create();
+            .setTitle("CONTA BATTLE UNIVERSE").setView(form)
+            .setNegativeButton("FECHAR",null).setPositiveButton("CRIAR CONTA",null)
+            .setNeutralButton("ENTRAR",null).create();
+        accountDialog=dialog;
+        dialog.setOnDismissListener(ignored->{if(accountDialog==dialog){accountDialog=null;accountDialogStatus=null;}});
         dialog.setOnShowListener(ignored->{
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-                if(usernameAccountAction!=null)usernameAccountAction.authenticate(
-                    username.getText().toString(),password.getText().toString(),true);
-                dialog.dismiss();
-            });
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
-                if(usernameAccountAction!=null)usernameAccountAction.authenticate(
-                    username.getText().toString(),password.getText().toString(),false);
-                dialog.dismiss();
-            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->submitAccountForm(dialog,username,password,true));
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->submitAccountForm(dialog,username,password,false));
         });
         dialog.show();
+    }
+    private void submitAccountForm(AlertDialog dialog,EditText username,EditText password,boolean create) {
+        String name=username.getText().toString().trim().toLowerCase(Locale.ROOT);
+        String secret=password.getText().toString();
+        String error="";
+        if(!googleConfigured)error="Servidor de contas não configurado neste APK.";
+        else if(!name.matches("[a-z0-9_]{3,18}"))error="Nickname inválido: use 3 a 18 letras, números ou _.";
+        else if(secret.length()<8||secret.length()>72)error="Senha inválida: use de 8 a 72 caracteres.";
+        else if(usernameAccountAction==null)error="Serviço de contas não conectado à tela.";
+        if(!error.isEmpty()){
+            if(accountDialogStatus!=null){accountDialogStatus.setText(error);accountDialogStatus.setTextColor(0xFFFF7777);}
+            Toast.makeText(getContext(),error,Toast.LENGTH_LONG).show();return;
+        }
+        if(accountDialogStatus!=null){accountDialogStatus.setText(create?"Criando conta no servidor...":"Entrando na conta...");accountDialogStatus.setTextColor(0xFF168B70);}
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(false);
+        usernameAccountAction.authenticate(name,secret,create);
     }
     private void toast(String s){toast=s;toastUntil=System.currentTimeMillis()+1800;invalidate();}
     @Override public boolean performClick(){super.performClick();return true;}
