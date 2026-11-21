@@ -211,3 +211,13 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - O giro e a carteira continuam locais/offline. Não são compras online nem saldo autoritativo de servidor. Não habilitar monetização real com este mecanismo.
 - O pacote ZIP da release antiga não foi apagado; permanece como rollback até o APK embutido ser compilado e validado. A existência do código no GitHub não comprova que o APK final foi produzido ou instalado.
 - Após build: confirmar APK contém os dois assets e comparar hash; validar ZIP interno e hashes de arquivos; medir tamanho real; verificar instalação/armazenamento; só então considerar retirar a distribuição separada antiga.
+
+
+## Carteira online e código 100K — código publicado em 2026-11-21 (deploy/build pendentes)
+- O código promocional 100K agora é validado pela API FastAPI e concede 100.000 diamantes à carteira PostgreSQL; cada conta pode resgatá-lo uma vez, com unicidade no banco e retorno do saldo confirmado pelo servidor.
+- O HUD chama o endpoint online e atualiza o saldo mostrado no cabeçalho com a carteira retornada. O resgate não concede diamantes localmente como fallback.
+- A API migra uma única vez os saldos antigos de moedas/diamantes do perfil para player_wallets, removendo os campos antigos do perfil. A migração também registra o antigo resgate local 100K encontrado no ledger para evitar duplicação.
+- coins e diamonds foram removidos da lista de campos que o cliente pode gravar no perfil; a carteira é consultada separadamente pelo endpoint /v1/accounts/me/wallet.
+- A recompensa diária já usa o servidor e a roleta online já debita/credita na carteira PostgreSQL.
+- Limite importante: recompensas de partidas, missões, passe, evento, correio, conquistas e compras que ainda usam PlayerProfileStore permanecem locais. O modo de partidas atual não possui servidor autoritativo capaz de validar resultados; não aceitar valores enviados pelo cliente como prova de partida online. Esses fluxos ainda precisam ser migrados com validação de servidor.
+- Estado: alterações publicadas no GitHub; deploy Render, testes automatizados, build Android e teste no aparelho ainda não confirmados. Não declarar saldo online corrigido até verificar o deploy e testar /wallet e /redeem com uma conta.
