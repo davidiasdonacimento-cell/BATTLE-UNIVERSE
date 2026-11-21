@@ -175,6 +175,7 @@ std::array<TrainingTarget,TARGET_COUNT> gTargets{{
 std::array<int,4> gWeaponAmmo{{0,0,0,0}};
 std::array<bool,4> gWeaponOwned{{false,false,false,false}};
 int gTrainingScore=0, gWeaponType=-1;
+int gDuelWeapon=1,gBotDuelWeapon=2;
 struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=false; bool ammoOnly=false; int kind=0; };
 std::array<GroundLoot,64> gGroundLoot{};
 int gPlayerHealth=100,gPlayerShield=0,gMedkits=0,gEliminations=0;
@@ -1299,9 +1300,14 @@ void updateStatus() {
         out<<(gParachuteOpen?"PARAQUEDAS ABERTO":"QUEDA LIVRE")
            <<"  •  MIRA E CÂMERA LIVRES  •  "<<weaponName();
     } else if(gSelectedMode==3) {
-        out<<"TREINAMENTO  •  "<<weaponName()<<"  CARGA "
-           <<(gSelectedMode==3?"INFINITA":(gWeaponType<0?"0":std::to_string(gWeaponAmmo[static_cast<size_t>(gWeaponType)])))
+        out<<"TREINAMENTO  •  "<<weaponName()<<"  CARGA INFINITA"
            <<"  •  MADEIRA "<<gWood<<"  •  PONTOS "<<gTrainingScore;
+    } else if(gSelectedMode==4) {
+        static const char* duelWeapons[]={"DESERT EAGLE","MINI UZI","XM8","UMP"};
+        out<<"GLADIADORES  •  PLACAR "<<gEliminations<<"/5  •  "<<weaponName()
+           <<"  •  IA: "<<duelWeapons[std::clamp(gBotDuelWeapon,0,3)];
+        if(gMatchFinished) out<<(gEliminations>=5?"  •  VITÓRIA":"  •  DERROTA");
+        else out<<"  •  VIDA "<<gPlayerHealth<<"%";
     } else {
         int remaining=0;
         for(int i=0;i<BOT_COUNT;++i) if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)]) ++remaining;
@@ -1340,6 +1346,16 @@ void resetBots() {
         gBots[static_cast<size_t>(i)]={gBotHomes[static_cast<size_t>(i)],{}, {},0,0,static_cast<float>(i)*1.3f};
         gBotAttackCooldown[static_cast<size_t>(i)]=0.45f+static_cast<float>(i%5)*0.16f;
     }
+    if(gSelectedMode==4) {
+        for(int i=1;i<BOT_COUNT;++i) gBotActive[static_cast<size_t>(i)]=false;
+        gBotHomes[0]={0.0f,0.55f,-16.0f};
+        gBots[0].pos=gBotHomes[0];
+        gBotHealth[0]=BOT_MAX_HEALTH;
+        gBotActive[0]=true;
+        gBotDowned[0]=false;
+        gBotRespawn[0]=0.0f;
+        gBotDuelWeapon=(gSelectedMap+gSelectedCharacter)%4;
+    }
 }
 void applyPlayerDamage(int amount,const char* reason);
 void spawnEliminationLoot(Vec3 position,int seed) {
@@ -1373,11 +1389,12 @@ void updateBots(float dt) {
         bot.targetPlayer=false;
 
         if(!gBotActive[static_cast<size_t>(i)]) {
-            if(gSelectedMode==3) {
+            if(gSelectedMode==3||gSelectedMode==4) {
                 gBotRespawn[static_cast<size_t>(i)]=std::max(0.0f,gBotRespawn[static_cast<size_t>(i)]-dt);
                 if(gBotRespawn[static_cast<size_t>(i)]<=0.0f) {
                     bot.pos=gBotHomes[static_cast<size_t>(i)];
                     bot.speed=0;gBotHealth[static_cast<size_t>(i)]=BOT_MAX_HEALTH;
+                    gBotDowned[static_cast<size_t>(i)]=false;
                     gBotActive[static_cast<size_t>(i)]=true;
                 } else continue;
             } else continue;
@@ -1517,7 +1534,8 @@ void updateBots(float dt) {
                 bot.projectileEnd=enemy;
                 bot.projectileEnd.y+=1.25f+(targetPlayer?gJumpHeight:0.0f);
                 if(targetPlayer) {
-                    applyPlayerDamage(1,"ELIMINADO • FIM DA PARTIDA");
+                    const int duelDamage=(gSelectedMode==4&&(gBotDuelWeapon==0||gBotDuelWeapon==2))?2:1;
+                    applyPlayerDamage(duelDamage,"ELIMINADO • FIM DO DUELO");
                 } else if(targetBot>=0 && gBotActive[static_cast<size_t>(targetBot)]) {
                     const size_t victim=static_cast<size_t>(targetBot);
                     gBotHealth[victim]=std::max(0,gBotHealth[victim]-1);
@@ -1687,7 +1705,17 @@ void firePulse() {
         { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/"<<BOT_MAX_HEALTH; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
-            if((gSelectedMode==1||gSelectedMode==2)&&!gBotDowned[static_cast<size_t>(hitBot)]) {
+            if(gSelectedMode==4) {
+                gBotActive[static_cast<size_t>(hitBot)]=false;
+                ++gEliminations;
+                if(gEliminations>=5) {
+                    gMatchFinished=true;
+                    setStatus("GLADIADORES • VITÓRIA • 5/5 ELIMINAÇÕES");
+                } else {
+                    gBotRespawn[static_cast<size_t>(hitBot)]=2.5f;
+                    setStatus("GLADIADORES • PONTO "+std::to_string(gEliminations)+"/5 • PRÓXIMO DUELO EM 2s");
+                }
+            } else if((gSelectedMode==1||gSelectedMode==2)&&!gBotDowned[static_cast<size_t>(hitBot)]) {
                 gBotDowned[static_cast<size_t>(hitBot)]=true;gBotDownedTimer[static_cast<size_t>(hitBot)]=25.0f;
                 gBotReviveProgress[static_cast<size_t>(hitBot)]=0.0f;
                 setStatus("ALIADO DERRUBADO • APROXIME-SE E TOQUE USAR PARA REVIVER");
@@ -1704,11 +1732,11 @@ void firePulse() {
             int remaining=0;
             for(int i=0;i<BOT_COUNT;++i)
                 if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])++remaining;
-            if(gSelectedMode!=3&&remaining==0) {
+            if(gSelectedMode!=3&&gSelectedMode!=4&&remaining==0) {
                 gMatchFinished=true;
                 setStatus("VITÓRIA • TODOS OS OPONENTES ELIMINADOS");
             } else if(gSelectedMode==3) setStatus("ALVO BOT DESATIVADO • +150 PONTOS");
-            else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining)); }
+            else if(gSelectedMode!=4) setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining)); }
         }
     }
     if(hitTarget<0&&hitBot<0) {
@@ -1868,14 +1896,21 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gPlayerDowned=false;gCrouched=false;gBuildPreview=false;gDownedTimer=0;gReviveProgress=0;
     gPlayerReviveTarget=-1;gPlayerReviveProgress=0;
         resetGroundLoot();
-        if(gSelectedMode==3) {
+        if(gSelectedMode==3||gSelectedMode==4) {
             gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);
             gDropState=3;gDropTimer=0;gPlaneExteriorView=false;gParachuteOpen=false;
-            gWeaponOwned.fill(true);gWeaponAmmo.fill(999);gWeaponType=1;
-            gGroundLoot[0]={{-3.0f,0.55f,-2.0f},0,240,true,false};
-            gGroundLoot[1]={{3.0f,0.55f,-2.0f},1,240,true,false};
-            gGroundLoot[2]={{-3.0f,0.55f,3.0f},2,240,true,false};
-            gGroundLoot[3]={{3.0f,0.55f,3.0f},3,240,true,false};
+            if(gSelectedMode==3) {
+                gWeaponOwned.fill(true);gWeaponAmmo.fill(999);gWeaponType=1;
+                gGroundLoot[0]={{-3.0f,0.55f,-2.0f},0,240,true,false};
+                gGroundLoot[1]={{3.0f,0.55f,-2.0f},1,240,true,false};
+                gGroundLoot[2]={{-3.0f,0.55f,3.0f},2,240,true,false};
+                gGroundLoot[3]={{3.0f,0.55f,3.0f},3,240,true,false};
+            } else {
+                gWeaponOwned.fill(false);gWeaponAmmo.fill(0);
+                gWeaponType=gDuelWeapon;
+                gWeaponOwned[static_cast<size_t>(gDuelWeapon)]=true;
+                gWeaponAmmo[static_cast<size_t>(gDuelWeapon)]=999;
+            }
         } else {
             gDropState=1;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;
         }
@@ -1902,8 +1937,22 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetMap(JNIEnv*,jclass,jint id
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint id) {
-    gSelectedMode=std::clamp(static_cast<int>(id),0,3);
+    gSelectedMode=std::clamp(static_cast<int>(id),0,4);
     if(gSelectedMode!=3)gTrainingGodMode=false;
+    if(gSelectedMode==4) {
+        gWeaponType=gDuelWeapon;
+        gBotDuelWeapon=(gSelectedMap+gSelectedCharacter)%4;
+    }
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetDuelWeapon(JNIEnv*,jclass,jint id) {
+    gDuelWeapon=std::clamp(static_cast<int>(id),0,3);
+    if(gSelectedMode==4&&gScreenMode==1) {
+        gWeaponOwned.fill(false);gWeaponAmmo.fill(0);
+        gWeaponType=gDuelWeapon;
+        gWeaponOwned[static_cast<size_t>(gDuelWeapon)]=true;
+        gWeaponAmmo[static_cast<size_t>(gDuelWeapon)]=999;
+    }
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetGodMode(JNIEnv*,jclass,jboolean enabled) {
@@ -2267,7 +2316,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
                 }
             }
         }
-        if(gSelectedMode!=3&&!gMatchFinished&&!gPlayerDowned) {
+        if(gSelectedMode!=3&&gSelectedMode!=4&&!gMatchFinished&&!gPlayerDowned) {
             gZoneDamageTimer=std::max(0.0f,gZoneDamageTimer-dt);
             const float fromCenter=std::sqrt(gPlayer.x*gPlayer.x+gPlayer.z*gPlayer.z);
             if(fromCenter>gZoneRadius&&gZoneDamageTimer<=0.0f) {
@@ -2385,7 +2434,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     // ESP final quando restarem cinco participantes no total, contando o jogador.
     int remainingPlayers=1;
     for(int i=0;i<BOT_COUNT;++i) if(gBotActive[static_cast<size_t>(i)]) ++remainingPlayers;
-    if(gSelectedMode!=3 && remainingPlayers<=5) {
+    if(gSelectedMode!=3 && gSelectedMode!=4 && remainingPlayers<=5) {
         glDisable(GL_DEPTH_TEST);
         for(int i=0;i<BOT_COUNT;++i) {
             if(isAllyBot(i)||!gBotActive[static_cast<size_t>(i)]) continue;
