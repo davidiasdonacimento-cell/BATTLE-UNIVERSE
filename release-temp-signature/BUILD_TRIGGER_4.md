@@ -1,0 +1,1 @@
+Executar novamente a validação após correção dos caminhos do Android SDK.
