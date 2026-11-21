@@ -199,3 +199,11 @@ A fase permanece em desenvolvimento até build Android, testes automatizados, te
 - Operações de conta e alterações de configuração são auditadas. Exclusão é lógica, com bloqueio imediato de login e preservação mínima de auditoria.
 - As configurações de nome do jogo e nomes de personagens ficam persistidas no PostgreSQL. O cliente do jogo ainda precisa consumir essas configurações antes de serem visíveis no lobby.
 - Antes de produção: migrar o esquema para Alembic, adicionar limitação de tentativas/login administrativo, configurar backups/restauração e testar endpoints em banco PostgreSQL real; validar APK admin e jogo em dispositivos Android.
+
+
+## Cosméticos modulares — extensão de 2026-11-21
+- Slots de barba, capacete, mochila e colete têm IDs independentes e opção none. A engine desenha os anexos no espaço local do operador; SharedPreferences persiste seleção local e API de perfil sincroniza seleção.
+- VULCÃO, NEBULAR e CERRADO são três coleções de skin originais com variações de materiais e detalhes geométricos.
+- A tela de oficina permite selecionar/remover cada peça e o guarda-roupa mostra as sete skins completas.
+- Critério para fase de alta fidelidade: trocar os anexos procedurais por meshes otimizadas e UV/texturas/rig compatíveis, validar encaixe em todos os operadores e testar animação de corrida, salto, agachamento, mira e queda.
+- Endpoint autenticado `GET /v1/game/settings` distribui configurações globais; cliente salva a última configuração válida localmente para funcionamento offline.
