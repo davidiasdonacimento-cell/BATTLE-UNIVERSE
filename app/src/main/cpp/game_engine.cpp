@@ -1230,12 +1230,15 @@ void drawGroundLoot(float time) {
     for(size_t i=0;i<gGroundLoot.size();++i) {
         const GroundLoot& loot=gGroundLoot[i];if(!loot.active)continue;
         const float bob=std::sin(time*2.6f+static_cast<float>(i))*0.12f;
-        const Vec3 color=loot.kind==2?Vec3{0.18f,0.88f,0.48f}:
-            (loot.kind==3?Vec3{0.35f,0.72f,1.0f}:
-            (loot.ammoOnly?Vec3{0.92f,0.68f,0.20f}:
-            (loot.weaponType==0?Vec3{0.12f,0.86f,0.94f}:
-             (loot.weaponType==1?Vec3{0.28f,0.58f,1.0f}:(loot.weaponType==2?Vec3{0.94f,0.48f,0.20f}:
-             (loot.weaponType==4?Vec3{0.72f,0.62f,0.38f}:(loot.weaponType==5?Vec3{0.52f,0.46f,0.34f}:Vec3{0.20f,0.92f,0.56f}))))));
+        Vec3 color{0.20f,0.92f,0.56f};
+        if(loot.kind==2) color={0.18f,0.88f,0.48f};
+        else if(loot.kind==3) color={0.35f,0.72f,1.0f};
+        else if(loot.ammoOnly) color={0.92f,0.68f,0.20f};
+        else if(loot.weaponType==0) color={0.12f,0.86f,0.94f};
+        else if(loot.weaponType==1) color={0.28f,0.58f,1.0f};
+        else if(loot.weaponType==2) color={0.94f,0.48f,0.20f};
+        else if(loot.weaponType==4) color={0.72f,0.62f,0.38f};
+        else if(loot.weaponType==5) color={0.52f,0.46f,0.34f};
         drawCube({loot.pos.x,loot.pos.y+0.34f+bob,loot.pos.z},{0.82f,0.52f,0.62f},color);
         drawCube({loot.pos.x,loot.pos.y+0.63f+bob,loot.pos.z},{0.54f,0.12f,0.66f},{0.12f,0.17f,0.22f});
         if(loot.kind==2) {
