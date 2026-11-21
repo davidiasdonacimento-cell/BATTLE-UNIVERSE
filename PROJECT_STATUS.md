@@ -221,3 +221,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - A recompensa diária já usa o servidor e a roleta online já debita/credita na carteira PostgreSQL.
 - Limite importante: recompensas de partidas, missões, passe, evento, correio, conquistas e compras que ainda usam PlayerProfileStore permanecem locais. O modo de partidas atual não possui servidor autoritativo capaz de validar resultados; não aceitar valores enviados pelo cliente como prova de partida online. Esses fluxos ainda precisam ser migrados com validação de servidor.
 - Estado: alterações publicadas no GitHub; deploy Render, testes automatizados, build Android e teste no aparelho ainda não confirmados. Não declarar saldo online corrigido até verificar o deploy e testar /wallet e /redeem com uma conta.
+
+
+## MODMENU2 e correção da sincronização — 2026-11-21 (build pendente)
+- Causa encontrada na sincronização: o debounce e o botão `syncNow()` chamavam `saveProfile()` diretamente no thread principal do Android, embora `saveProfile()` faça HTTP síncrono. Isso provocava `NetworkOnMainThreadException`, capturada como “Falha ao sincronizar. Dados locais preservados”.
+- Corrigido: todos os salvamentos disparados pelo botão e pelo listener de SharedPreferences agora são enfileirados no executor de rede. Falhas transitórias de rede recebem nova tentativa após 15 segundos e mostram o tipo/motivo da exceção, sem apagar SharedPreferences.
+- Na restauração da conta, contadores de progresso são mesclados pelo maior valor, flags de desbloqueio/recompensa usam união lógica e históricos locais/remotos são unidos sem duplicatas (com limites de linhas), evitando substituir progresso local por um perfil remoto menor.
+- Adicionado `MODMENU2` nas Configurações. O God Mode é restrito ao modo Treinamento offline; não altera partidas online. Não há aimbot nem edição de carteira pelo cliente. Moedas e diamantes permanecem controlados pela API autenticada.
+- Estado: commits no GitHub; workflow de validação DEBUG está em execução. APK ainda não foi compilado nem testado no aparelho.
