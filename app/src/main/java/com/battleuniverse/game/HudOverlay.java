@@ -446,7 +446,7 @@ public final class HudOverlay extends View {
                 float x=390+item*110f;
                 boolean owned=true,active=false;int variant=item+1;String state="EQUIPAR";
                 if(cofreTab==0){
-                    if(section==0){owned=variant!=3||prefs.getBoolean("wear_beard_old",false);active=equippedBeard==variant;}
+                    if(section==0){owned=variant!=4||prefs.getBoolean("wear_beard_old",false);active=equippedBeard==variant;}
                     else if(section==1)active=equippedHelmet==variant;
                     else if(section==2)active=equippedBackpack==variant;
                     else active=equippedVest==variant;
