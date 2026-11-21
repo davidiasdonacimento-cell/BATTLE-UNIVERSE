@@ -548,12 +548,12 @@ public final class HudOverlay extends View {
         title(c,"MENU ROYALE",270,224);
         subtitle(c,"Explore e organize os visuais, operadores e itens do seu universo.",270,252);
         String[] names={"OPERADORES","ROUPAS E CONJUNTOS","ITENS DA COLEÇÃO",
-            "CATÁLOGO DE VISUAIS","EVENTOS TEMÁTICOS","PERFIL DO OPERADOR"};
+            "CATÁLOGO DE VISUAIS","EVENTOS TEMÁTICOS","ARQUIVO DE RELÍQUIAS"};
         String[] hints={"Escolha seu personagem","Vista camisas, botas e conjuntos",
             "Consulte o que já desbloqueou","Veja os itens disponíveis na loja",
-            "Explore os conteúdos ativos","Veja seu progresso e estatísticas"};
+            "Explore os conteúdos ativos","Skins clássicas e itens raros"};
         String[] marks={"01","02","03","04","05","06"};
-        int[] destinations={CHARACTERS,WARDROBE,INVENTORY,SHOP,EVENTS,PROFILE};
+        int[] destinations={CHARACTERS,WARDROBE,INVENTORY,SHOP,EVENTS,ROYALE_SPIN};
         int owned=0;
         for(String key:SHOP_KEYS)if(prefs.getBoolean(key,false))owned++;
         panel(c,270,270,570,54,0xAE193040,0x557AA9BC,14);
@@ -573,31 +573,29 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyaleSpinPage(Canvas c) {
-        eyebrow(c,270,175,"RECOMPENSAS ALEATÓRIAS • SOMENTE DIAMANTES VIRTUAIS");
-        title(c,"GIRO ROYALE",270,224);
-        pill(c,674,184,166,32,"VOLTAR AO PASSE",0x553B6172,0xFFD7E6ED);
+        eyebrow(c,270,175,"ARQUIVO DE RELÍQUIAS • ITENS CLÁSSICOS");
+        title(c,"COLEÇÃO RARA",270,224);
+        pill(c,674,184,166,32,"VOLTAR À COLEÇÃO",0x553B6172,0xFFD7E6ED);
         panel(c,270,264,570,48,0xA91A3040,0x557AA9BC,14);
-        text(c,"CUSTO  ◆ 100 DIAMANTES",292,294,14,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds()),590,294,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-        String[] prizes={"50 DIAMANTES","100 DIAMANTES","CAMISA NEON","BOTAS FROST","CONJUNTO ORBITAL"};
-        String[] chances={"40%","30%","20%","9%","1%"};
-        int[] colors={0xFFB77B36,0xFFD69D42,0xFF8D42D7,0xFFB8DDE8,0xFF6B83C4};
-        for(int i=0;i<prizes.length;i++) {
-            int col=i%3,row=i/3;float x=270+col*192f,y=326+row*94f;
-            panel(c,x,y,174,82,0xB51A3040,0x557AA9BC,13);
-            circle(c,x+25,y+28,15,colors[i],0xFFB5D6E1);
-            text(c,prizes[i],x+48,y+27,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,"CHANCE DE GANHAR",x+14,y+54,7,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-            text(c,chances[i],x+14,y+72,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds()),292,294,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"ESCOLHA O ITEM • PREÇO FIXO • SEM SORTEIO",520,294,9,Color.WHITE,Typeface.DEFAULT_BOLD);
+        int[] items={4,9,13};
+        String[] rarity={"CLÁSSICA • RARA","LEGADO • ÉPICA","RELÍQUIA • LENDÁRIA"};
+        int[] colors={0xFF8D42D7,0xFFB8DDE8,0xFFFFC66F};
+        for(int i=0;i<items.length;i++) {
+            int item=items[i];float x=270+i*192f,y=340;
+            boolean owned=prefs.getBoolean(SHOP_KEYS[item],false);
+            panel(c,x,y,174,196,owned?0xB51A4650:0xB51A3040,owned?0xFF4BD4C9:0x557AA9BC,14);
+            circle(c,x+87,y+45,28,colors[i],0xFFB5D6E1);
+            text(c,rarity[i],x+15,y+91,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            text(c,SHOP_NAMES[item],x+15,y+119,9,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,owned?"JÁ DESBLOQUEADO":"◆ "+SHOP_PRICES[item]+" DIAMANTES",x+15,y+146,8,owned?0xFF83DCD5:0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            pill(c,x+12,y+158,150,27,owned?"ADQUIRIDO":"COMPRAR ITEM",owned?0xFF176A75:0xFF73501F,Color.WHITE);
         }
-        panel(c,270,520,570,126,0xA91A3040,0x557AA9BC,16);
-        gradientButton(c,288,546,220,68,"GIRAR • 100 ◆","USAR DIAMANTES VIRTUAIS",0xFF9A6527,0xFFE1A848);
-        String last=prefs.getString("royale_last_reward","NENHUM GIRO REALIZADO");
-        if(last.length()>38)last=last.substring(0,35)+"...";
-        text(c,"ÚLTIMO PRÊMIO",530,559,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
-        text(c,last,530,587,13,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"GIROS REGISTRADOS: "+prefs.getInt("royale_spin_count",0),530,612,9,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-        text(c,"As probabilidades somam 100%. Itens repetidos geram compensação virtual.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
+        panel(c,270,560,570,86,0xA91A3040,0x557AA9BC,14);
+        text(c,"PRÉVIA DO COSMÉTICO",290,586,10,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+        text(c,"Escolha uma peça e veja exatamente o item antes de confirmar a compra.",290,610,9,0xFFBBD0D9,Typeface.DEFAULT);
+        text(c,"Sem roleta paga, chances ocultas ou prêmio aleatório.",290,630,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
     private void performRoyaleSpin() {
@@ -1357,16 +1355,16 @@ public final class HudOverlay extends View {
             for(int i=0;i<6;i++){
                 float rx=270+(i%3)*192f,ry=340+(i/3)*151f;
                 if(hit(x,y,rx,ry,174,132)){
-                    int[] destinations={CHARACTERS,WARDROBE,INVENTORY,SHOP,EVENTS,PROFILE};
+                    int[] destinations={CHARACTERS,WARDROBE,INVENTORY,SHOP,EVENTS,ROYALE_SPIN};
                     page=destinations[i];return;
                 }
             }
         }else if(page==ROYALE_SPIN){
             if(hit(x,y,674,184,166,32)){page=ROYALE;return;}
-            if(hit(x,y,288,546,220,68)){performRoyaleSpin();return;}
-            for(int i=0;i<ROYALE_LEVELS.length;i++){
-                float rx=270+(i%3)*192f,ry=476+(i/3)*88f;
-                if(hit(x,y,rx,ry,174,78)){claimRoyaleTier(i);return;}
+            int[] items={4,9,13};
+            for(int i=0;i<items.length;i++){
+                float rx=270+i*192f,ry=340;
+                if(hit(x,y,rx,ry,174,196)){purchaseShopItem(items[i]);return;}
             }
         }else if(page==MISSIONS){
             for(int i=0;i<MISSION_NAMES.length;i++){
