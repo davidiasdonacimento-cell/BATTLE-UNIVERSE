@@ -43,14 +43,13 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Novas telas de eventos e correio oferecem resgate local de recompensas únicas; conquistas liberam recompensas conforme XP; amigos permite salvar um nome de contato apenas no aparelho. Essas ações não sincronizam entre usuários e não são funcionalidades online.
 - A navegação foi compactada para caber no layout paisagem 1280x720; é necessário validar visualmente no Redmi 12.
 
-## Conta BATTLE UNIVERSE com nome e senha — implementação publicada
-- Perfil possui fluxo de criar conta e entrar usando nome de usuário (3–18 caracteres: a-z, 0-9 e _) e senha (8–72 caracteres); não exige login Google.
-- Firebase Authentication é usado como backend de identidade com um identificador interno derivado do nome de usuário; a senha não é gravada em SharedPreferences nem enviada ao Firestore.
-- Firebase UID identifica o documento privado em Firestore: players/{uid}. O arquivo firestore.rules restringe leitura e gravação ao próprio UID autenticado.
-- O salvamento em nuvem inclui nickname, XP, diamantes virtuais, modo/mapa/personagem, configurações, roupas/equipamentos, eventos, correio e conquistas selecionadas.
-- A sessão Firebase é restaurada pelo SDK; o progresso local continua como cache offline.
-- Limitação importante: o identificador interno não é um e-mail real. Não existe recuperação de senha por e-mail neste fluxo. O jogador precisa guardar a senha. O Firebase/Firestore precisa estar configurado no projeto e as regras firestore.rules precisam estar publicadas no console Firebase.
-- A conta só recupera dados de APKs que usem o mesmo projeto Firebase, o mesmo applicationId e o mesmo esquema de dados. Build compilado não comprova sincronização real; testar criação, login, gravação, logout e restauração em instalação separada.
+## Conta BATTLE UNIVERSE — arquitetura oficial sem Firebase
+- Firebase está removido da arquitetura-alvo e não deve ser adicionado como dependência nova.
+- Identidade, cadastro, login, sessões, perfis e sincronização online serão atendidos pela API própria FastAPI + PostgreSQL.
+- O cliente Android manterá cache local e fila offline; a API será a fonte de verdade dos dados online, com operações idempotentes e validação no servidor.
+- Senhas devem ser armazenadas somente como hash seguro no backend (Argon2 ou algoritmo equivalente), nunca em SharedPreferences ou logs. Tokens devem ser protegidos no armazenamento privado do Android.
+- Recuperação de conta, troca de senha e validação de sessão precisam ser implementadas pela API própria, sem depender de provedores Firebase.
+- Status: arquitetura definida; remoção de SDKs, arquivos de configuração, regras, chamadas e migração dos dados existentes depende da auditoria técnica e dos testes de compatibilidade. Não declarar a remoção do código concluída antes dessa verificação.
  
 ## Mundo 3D — expansão de marcos por mapa (código publicado, build pendente)
 - A engine OpenGL ES recebeu conjuntos geométricos próprios para os oito destinos: marina e cabanas costeiras (Ilha Tropical); skyline, fachadas luminosas e via elevada (Neon City); mesas, ravinas e arcos de pedra (Desert Storm); espigões de gelo e estação polar (Frozen Front); tanques, tubulações e pórticos (Industrial Zone); rio, pontes e colinas (Green Valley); plataformas de lançamento e hangares (Orbital Base); muros colapsados, torres partidas e campos de destroços (Abandoned Sector).
@@ -153,7 +152,7 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Giro Royale registra débito, prêmio, item/compensação por repetição, contador e histórico numa única gravação; o resultado só é mostrado após confirmação do commit.
 - Recompensas de partida incluem moedas virtuais e identificador de sessão para evitar reaplicação da mesma recompensa local.
 - Lobby superior, perfil, loja, inventário e painel de progresso consultam a mesma carteira; inventário apresenta as duas movimentações mais recentes. O painel de progresso abre a central de missões.
-- `AccountSyncManager` inclui moedas, ledger, configurações de sensibilidade, missões e marcos Royale no salvamento/restauração Firestore. O ledger também detecta transações repetidas após restauração em outro aparelho.
+- `AccountSyncManager` deverá sincronizar moedas, ledger, configurações de sensibilidade, missões e marcos Royale pela API própria FastAPI; o ledger deverá detectar transações repetidas após restauração em outro aparelho.
 - Limites: a carteira continua local/offline até existir servidor autoritativo; não é saldo online seguro. A loja atual ainda usa diamantes para os itens catalogados; catálogo de compras com moedas permanece pendente. O ledger guarda as 60 movimentações mais recentes. Ainda faltam testes automatizados de concorrência/migração, compilação Android e teste no Redmi 12.
 - Arquivos: `PlayerProfileStore.java`, `HudOverlay.java`, `AccountSyncManager.java`. Não distribuir APK antes do workflow confirmar a compilação deste conjunto.
 
@@ -162,13 +161,13 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - A carteira local agora tem moedas virtuais e diamantes separados. Perfis existentes recebem 1.000 moedas iniciais uma única vez, sem sobrescrever saldo já inicializado.
 - Na loja, os três cosméticos de perfil (moldura neon, emblema Bloob e título Campeão) usam moedas; os itens de roupa continuam com preços em diamantes. As compras verificam saldo, registram propriedade e histórico na mesma gravação.
 - Moldura, emblema e título adquiridos passam a aparecer no cabeçalho do perfil. Moedas também são concedidas por recompensas locais de partida, missões, evento, correio, passe e conquistas.
-- O inventário apresenta as duas últimas movimentações da carteira. A sincronização Firestore inclui o saldo de moedas e o histórico.
+- O inventário apresenta as duas últimas movimentações da carteira. A sincronização pela API própria deverá incluir o saldo de moedas e o histórico.
 - Validação realizada até agora: a classe `PlayerProfileStore.java` compilou isoladamente com `javac` usando uma interface `SharedPreferences` de teste. Isso valida sintaxe dessa classe, mas NÃO substitui a compilação Gradle/Android. GitHub Actions ainda precisa confirmar o APK completo; não houve teste físico no Redmi 12.
 
 
 ## Estatísticas de carreira e histórico de partidas — código publicado em 2026-11-21 (build pendente)
 - O perfil registra partidas concluídas, vitórias, eliminações, dano causado e recursos coletados; cada partida usa um ID de sessão para evitar contagem duplicada.
-- O histórico local mantém as 30 partidas mais recentes e é incluído na sincronização da conta Firestore.
+- O histórico local mantém as 30 partidas mais recentes e deverá ser incluído na sincronização da conta pela API própria.
 - Perfil e painel do lobby exibem partidas, vitórias e eliminações a partir da mesma fonte compartilhada.
 - O registro de estatísticas é idempotente e pode ser repetido após uma falha sem somar novamente a mesma partida.
 - Limite: estatísticas atuais vêm do modo local existente; ainda não representam partidas online, temporadas ranqueadas ou placares de servidor. Build Android completa e teste físico permanecem pendentes.
