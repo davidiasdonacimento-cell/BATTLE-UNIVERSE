@@ -352,6 +352,8 @@ def player_game_settings(db: Session = Depends(db_session), player: Player = Dep
             "character_names": values.get("character_names", {}),
             "account_character_name": (player.profile or {}).get("character_display_name", "")}
 
+PROMO_CODES = {"100K": {"id": "WELCOME_100K", "diamonds": 100000}}
+
 ROYALE_PRIZES = [
     {"id": "shirt_tactical", "name": "CAMISA TÁTICA", "weight": 40, "profile_key": "wear_shirt_tactical"},
     {"id": "boots_combat", "name": "BOTAS COMBATE", "weight": 30, "profile_key": "wear_boots_combat"},
@@ -495,9 +497,11 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
 def redeem_promo_code(body: PromoCodeBody, db: Session = Depends(db_session),
                       player: Player = Depends(current_player)):
     code = body.code.strip().upper()
-    if code != "100K":
+    promo = PROMO_CODES.get(code)
+    if promo is None:
         raise HTTPException(400, "Código promocional inválido.")
-    code_id = "WELCOME_100K"
+    code_id = promo["id"]
+    reward_diamonds = promo["diamonds"]
     existing = db.scalar(select(PromoCodeRedemption).where(
         PromoCodeRedemption.player_id == player.id,
         PromoCodeRedemption.code_id == code_id))
@@ -511,9 +515,9 @@ def redeem_promo_code(body: PromoCodeBody, db: Session = Depends(db_session),
         db.add(wallet)
         db.flush()
     migrate_legacy_wallet_once(db, player, wallet)
-    wallet.diamonds += 100000
+    wallet.diamonds += reward_diamonds
     redemption = PromoCodeRedemption(player_id=player.id, code_id=code_id,
-                                     diamonds=100000, created_at=datetime.now(timezone.utc))
+                                     diamonds=reward_diamonds, created_at=datetime.now(timezone.utc))
     db.add(redemption)
     try:
         db.commit()
@@ -527,7 +531,7 @@ def redeem_promo_code(body: PromoCodeBody, db: Session = Depends(db_session),
         if existing is not None:
             raise HTTPException(409, f"Código já resgatado. Saldo online: {wallet.diamonds if wallet else 0} diamantes.")
         raise HTTPException(503, "Não foi possível confirmar o resgate. Tente sincronizar a carteira.")
-    return {"claimed": True, "code": code_id, "diamonds_added": 100000,
+    return {"claimed": True, "code": code_id, "diamonds_added": reward_diamonds,
             "wallet": {"coins": wallet.coins, "diamonds": wallet.diamonds},
             "authority": "server"}
 
