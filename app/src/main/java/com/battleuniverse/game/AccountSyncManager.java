@@ -305,6 +305,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                     || "quality".equals(key) || "look_sensitivity".equals(key)
                     || "selected_shirt".equals(key) || "selected_boots".equals(key)
                     || "selected_set".equals(key) || "profile_schema_version".equals(key)
+                    || "sensitivity_general".equals(key) || "sensitivity_aim".equals(key)
                     || "mission_matches".equals(key) || "mission_eliminations".equals(key)
                     || "mission_crystals".equals(key) || "royale_spin_count".equals(key)) {
                 if (value instanceof Number) editor.putInt(key, ((Number) value).intValue());
