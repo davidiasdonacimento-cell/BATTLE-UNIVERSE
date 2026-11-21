@@ -1607,7 +1607,7 @@ void applyPlayerDamage(int amount,const char* reason) {
             ++gDuelBotScore;
             if(gDuelBotScore>=5) {
                 gMatchFinished=true;gPlayerDowned=false;gDuelPlayerPendingRespawn=false;
-                setStatus("GLADIADORES • DERROTA • IA 5/5");
+                setStatus("GLADIADORES • ELIMINADO • IA 5/5");
             } else {
                 gPlayerDowned=true;gDuelPlayerPendingRespawn=true;gDuelPlayerRespawn=2.5f;
                 gBotHealth[0]=BOT_MAX_HEALTH;gBotActive[0]=true;gBotDowned[0]=false;
@@ -1928,6 +1928,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
                 gGroundLoot[2]={{-3.0f,0.55f,3.0f},2,240,true,false};
                 gGroundLoot[3]={{3.0f,0.55f,3.0f},3,240,true,false};
             } else {
+                gGroundLoot.fill(GroundLoot{});
                 gWeaponOwned.fill(false);gWeaponAmmo.fill(0);
                 gWeaponType=gDuelWeapon;
                 gWeaponOwned[static_cast<size_t>(gDuelWeapon)]=true;
@@ -2282,14 +2283,14 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
             setStatus("RECURSO COLETADO  •  +20 MADEIRA");
         } else setStatus("NADA PRÓXIMO • PROCURE ARMAS, MUNIÇÃO OU CRISTAIS");
     }
-    if(kitPressed&&gDropState==3&&!gPlayerDowned) {
+    if(kitPressed&&gDropState==3&&!gPlayerDowned&&gSelectedMode!=4) {
         if(gMedkits>0&&gPlayerHealth<100) {
             --gMedkits;gPlayerHealth=std::min(100,gPlayerHealth+35);
             setStatus("KIT MÉDICO UTILIZADO • VIDA "+std::to_string(gPlayerHealth)+"%");
         } else if(gMedkits<=0) setStatus("SEM KIT MÉDICO • PROCURE CAIXAS DE SUPRIMENTO");
         else setStatus("VIDA COMPLETA • KIT MÉDICO NÃO NECESSÁRIO");
     }
-    if(buildPressed&&gDropState==3&&!gPlayerDowned) {
+    if(buildPressed&&gDropState==3&&!gPlayerDowned&&gSelectedMode!=4) {
         if(!gBuildPreview){gBuildPreview=true;setStatus("PRÉVIA DE GELO • TOQUE CONSTRUIR NOVAMENTE PARA CONFIRMAR");}
         else {placeBuildPiece();gBuildPreview=false;gBuildCooldown=0.14f;}
     }
