@@ -172,8 +172,8 @@ struct TrainingTarget { Vec3 pos; int energy=3; bool active=true; };
 std::array<TrainingTarget,TARGET_COUNT> gTargets{{
     {{-12,1.25f,-13},3,true}, {{13,1.25f,-12},3,true}, {{2,1.25f,18},3,true}
 }};
-std::array<int,4> gWeaponAmmo{{0,0,0,0}};
-std::array<bool,4> gWeaponOwned{{false,false,false,false}};
+std::array<int,6> gWeaponAmmo{{0,0,0,0,0,0}};
+std::array<bool,6> gWeaponOwned{{false,false,false,false,false,false}};
 int gTrainingScore=0, gWeaponType=-1;
 struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=false; bool ammoOnly=false; int kind=0; };
 std::array<GroundLoot,64> gGroundLoot{};
@@ -186,6 +186,7 @@ float gDownedTimer=0.0f,gReviveProgress=0.0f;
 int gPlayerReviveTarget=-1;
 float gPlayerReviveProgress=0.0f;
 float gPulseCooldown=0, gPulseFlash=0, gDropTimer=0;
+constexpr float PLAYER_PROJECTILE_DURATION=0.18f;
 float gZoneDamageTimer=0,gLookSensitivity=1.0f,gAimSensitivity=1.0f;
 constexpr float PLANE_COUNTDOWN_SECONDS=7.0f;
 constexpr float WORLD_LIMIT=148.0f;
@@ -1170,14 +1171,28 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.075f,0.09f,0.07f},skin,yaw);
 
     if(bot||gWeaponType>=0) {
+        const bool xm8=!bot&&gWeaponType==4;
+        const bool carapina=!bot&&gWeaponType==5;
+        const Vec3 receiver=xm8?Vec3{0.42f,0.34f,0.20f}:
+            (carapina?Vec3{0.32f,0.29f,0.23f}:Vec3{0.045f,0.075f,0.085f});
+        const Vec3 barrel=xm8?Vec3{0.25f,0.24f,0.18f}:
+            (carapina?Vec3{0.20f,0.19f,0.16f}:Vec3{0.12f,0.20f,0.22f});
+        const float length=xm8?0.66f:(carapina?0.82f:0.42f);
         drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),
-            {0.16f,0.13f,0.42f},{0.045f,0.075f,0.085f},yaw);
+            {xm8?0.19f:(carapina?0.15f:0.16f),0.13f,length},receiver,yaw);
         drawCube(localPoint(p,0,1.40f+bob,-0.77f+recoil,yaw),
-            {0.10f,0.045f,0.23f},{0.18f,0.30f,0.30f},yaw);
+            {xm8?0.13f:0.10f,0.045f,xm8?0.28f:(carapina?0.36f:0.23f)},barrel,yaw);
         drawCube(localPoint(p,0,1.31f+bob,-1.03f+recoil,yaw),
-            {0.07f,0.075f,0.22f},{0.12f,0.20f,0.22f},yaw);
-        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.22f+recoil,yaw),
-            {0.13f,0.13f,0.13f},{0.45f,0.98f,1.0f},yaw);
+            {0.07f,0.075f,carapina?0.34f:0.22f},barrel,yaw);
+        if(xm8) {
+            drawCube(localPoint(p,0,1.49f+bob,-0.86f+recoil,yaw),{0.12f,0.10f,0.20f},{0.15f,0.20f,0.18f},yaw);
+            drawCube(localPoint(p,0,1.22f+bob,-0.67f+recoil,yaw),{0.11f,0.22f,0.14f},{0.20f,0.17f,0.12f},yaw);
+        } else if(carapina) {
+            drawCube(localPoint(p,0,1.48f+bob,-0.91f+recoil,yaw),{0.075f,0.075f,0.34f},{0.12f,0.13f,0.12f},yaw);
+            drawCube(localPoint(p,0,1.20f+bob,-0.68f+recoil,yaw),{0.12f,0.24f,0.13f},{0.18f,0.15f,0.12f},yaw);
+        }
+        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.22f-recoil,yaw),
+            {0.13f,0.13f,0.13f},{1.0f,0.72f,0.24f},yaw);
     }
     gCharacterPoseScale=1.0f;
 }
@@ -1242,8 +1257,8 @@ void drawSafeZone() {
     }
 }
 const char* weaponName() {
-    static const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI"};
-    if(gWeaponType<0||gWeaponType>3)return "SEM ARMA";
+    static const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI","XM8 DESERT","CARAPINA"};
+    if(gWeaponType<0||gWeaponType>=6)return "SEM ARMA";
     return names[gWeaponType];
 }
 void updateStatus() {
@@ -1602,20 +1617,20 @@ void drawBuildPieces() {
     }
 }
 void firePulse() {
-    if(gWeaponType<0||gWeaponType>3||!gWeaponOwned[static_cast<size_t>(gWeaponType)]) {
+    if(gWeaponType<0||gWeaponType>=6||!gWeaponOwned[static_cast<size_t>(gWeaponType)]) {
         setStatus("SEM ARMA • PROCURE UM EQUIPAMENTO NO CHÃO");return;
     }
     int& ammo=gWeaponAmmo[static_cast<size_t>(gWeaponType)];
     const bool infiniteTrainingAmmo=(gSelectedMode==3);
     if(!infiniteTrainingAmmo&&ammo<=0){setStatus("SEM MUNIÇÃO • PEGUE CAIXAS DE CARGA");return;}
     if(!infiniteTrainingAmmo)--ammo;
-    gPulseFlash=0.18f;
+    gPulseFlash=PLAYER_PROJECTILE_DURATION;
     gPlayerYaw=gCameraYaw;
     gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gCameraYaw);
     const float fx=-std::sin(gCameraYaw),fz=-std::cos(gCameraYaw);
-    const float range=gWeaponType==2?42.0f:56.0f;
-    const float tolerance=gWeaponType==1?2.7f:2.0f;
-    const int damage=gWeaponType==2?3:(gWeaponType==1?2:1);
+    const float range=gWeaponType==5?76.0f:(gWeaponType==4?64.0f:(gWeaponType==2?42.0f:56.0f));
+    const float tolerance=(gWeaponType==5?1.35f:(gWeaponType==4?1.85f:(gWeaponType==1?2.7f:2.0f)));
+    const int damage=(gWeaponType==5?3:(gWeaponType==4?2:(gWeaponType==2?3:(gWeaponType==1?2:1))));
     float best=range;
     int hitTarget=-1,hitBot=-1;
     if(gSelectedMode==3) {
@@ -1683,8 +1698,8 @@ void firePulse() {
         }
     }
     if(hitTarget<0&&hitBot<0) {
-        const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI"};
-        std::ostringstream out;out<<names[std::clamp(gWeaponType,0,3)]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
+        const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI","XM8 DESERT","CARAPINA"};
+        std::ostringstream out;out<<names[std::clamp(gWeaponType,0,5)]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
         setStatus(out.str());
     }
 }
@@ -1703,11 +1718,18 @@ void drawTargets(float time) {
         }
     }
     if(gPulseFlash>0.0f) {
-        Vec3 boltColor=gWeaponType==2?Vec3{0.92f,0.46f,0.16f}:
-            (gWeaponType==1?Vec3{0.38f,0.75f,1.0f}:Vec3{0.25f,0.96f,1.0f});
-        drawSegment({0,0,0},0.0f,gPulseStartPosition,gPulseHitPosition,
-            gWeaponType==2?0.19f:0.10f,boltColor);
-        drawSphere(gPulseHitPosition,{0.33f,0.33f,0.33f},boltColor);
+        const float progress=std::clamp(1.0f-gPulseFlash/PLAYER_PROJECTILE_DURATION,0.0f,1.0f);
+        const Vec3 delta{gPulseHitPosition.x-gPulseStartPosition.x,
+            gPulseHitPosition.y-gPulseStartPosition.y,gPulseHitPosition.z-gPulseStartPosition.z};
+        const float magnitude=std::sqrt(delta.x*delta.x+delta.y*delta.y+delta.z*delta.z);
+        const Vec3 bullet{gPulseStartPosition.x+delta.x*progress,
+            gPulseStartPosition.y+delta.y*progress,gPulseStartPosition.z+delta.z*progress};
+        const Vec3 tail{bullet.x-(magnitude>0.001f?delta.x/magnitude:0.0f)*0.42f,
+            bullet.y-(magnitude>0.001f?delta.y/magnitude:0.0f)*0.42f,
+            bullet.z-(magnitude>0.001f?delta.z/magnitude:0.0f)*0.42f};
+        drawSphere(bullet,{0.075f,0.075f,0.15f},{1.0f,0.72f,0.30f});
+        drawSegment({0,0,0},0.0f,tail,bullet,0.025f,{0.96f,0.80f,0.48f});
+        if(progress>0.94f)drawSphere(gPulseHitPosition,{0.18f,0.18f,0.18f},{1.0f,0.78f,0.38f});
     }
 }
 void drawTransportPlaneCabin(Vec3 pos,float time) {
@@ -1835,11 +1857,13 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         if(gSelectedMode==3) {
             gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);
             gDropState=3;gDropTimer=0;gPlaneExteriorView=false;gParachuteOpen=false;
-            gWeaponOwned.fill(true);gWeaponAmmo.fill(999);gWeaponType=3;
+            gWeaponOwned.fill(true);gWeaponAmmo.fill(999);gWeaponType=5;
             gGroundLoot[0]={{-3.0f,0.55f,-2.0f},0,240,true,false};
             gGroundLoot[1]={{3.0f,0.55f,-2.0f},1,240,true,false};
             gGroundLoot[2]={{-3.0f,0.55f,3.0f},2,240,true,false};
             gGroundLoot[3]={{3.0f,0.55f,3.0f},3,240,true,false};
+            gGroundLoot[4]={{-6.0f,0.55f,0.0f},4,240,true,false};
+            gGroundLoot[5]={{6.0f,0.55f,0.0f},5,240,true,false};
         } else {
             gDropState=1;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;
         }
@@ -2119,8 +2143,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(aimHeld&&gDropState>=2) gPlayerYaw=gCameraYaw;
     if(swapPressed&&gDropState==3) {
         int next=-1;
-        for(int step=1;step<=4;++step) {
-            const int candidate=(gWeaponType+step+4)%4;
+        for(int step=1;step<=6;++step) {
+            const int candidate=(gWeaponType+step+6)%6;
             if(gWeaponOwned[static_cast<size_t>(candidate)]){next=candidate;break;}
         }
         if(next>=0){gWeaponType=next;setStatus(std::string("EQUIPADO: ")+weaponName());}
@@ -2181,7 +2205,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     }
     // Segurar DISPARAR mantém o disparo automático; um toque rápido dispara uma vez.
     if(pulseHeld&&gDropState==3&&!gPlayerDowned&&gPulseCooldown<=0.0f) {
-        firePulse();gPulseCooldown=(gWeaponType==3?0.10f:(gWeaponType==2?0.55f:0.24f));
+        firePulse();gPulseCooldown=(gWeaponType==3?0.10f:(gWeaponType==5?0.62f:(gWeaponType==4?0.20f:(gWeaponType==2?0.55f:0.24f))));
     }
 
     if(gDropState==3) {
