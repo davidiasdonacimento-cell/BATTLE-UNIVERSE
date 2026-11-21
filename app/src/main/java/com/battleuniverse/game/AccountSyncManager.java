@@ -32,6 +32,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         default void onRecoveryCode(String recoveryCode) {}
     }
     public interface WalletListener { void onWallet(long coins,long diamonds,String message); }
+    public interface PromoCodeListener { void onResult(boolean success,long diamonds,String message); }
     public interface RoyaleListener {
         void onResult(boolean success,String prizeId,String prizeName,boolean duplicate,long balance,String message);
     }
@@ -39,7 +40,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         void onResult(boolean claimed,long coins,long diamonds,String message);
     }
     private static final Set<String> LONG_PROFILE_KEYS=new HashSet<>(Arrays.asList(
-        "xp","coins","diamonds","missions_day","match_reward_session_id",
+        "xp","missions_day","match_reward_session_id",
         "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
     ));
     private static final String[] PROFILE_KEYS={
@@ -50,7 +51,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
         "wear_set_volcano","wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical",
         "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name",
-        "nickname","xp","coins","diamonds","profile_schema_version","coins_wallet_initialized",
+        "nickname","xp","profile_schema_version","coins_wallet_initialized",
         "matches_played","match_wins","match_kills","match_damage","match_resources",
         "last_match_kills","last_match_damage","last_match_resources","last_match_result","match_history",
         "economy_ledger","royale_history","royale_spin_count",
@@ -123,6 +124,28 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 if(callback!=null)main.post(()->{if(!closed)callback.onWallet(coins,diamonds,"Carteira online atualizada.");});
             } catch(Exception e) {
                 if(callback!=null)main.post(()->{if(!closed)callback.onWallet(0,0,"Não foi possível atualizar a carteira online.");});
+            }
+        });
+    }
+
+    public void redeemPromoCode(String rawCode,PromoCodeListener callback) {
+        if(!isSignedIn()){
+            if(callback!=null)main.post(()->callback.onResult(false,0,"Entre na conta para resgatar o código online."));
+            return;
+        }
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();body.put("code",rawCode==null?"":rawCode.trim());
+                JSONObject result=request("POST","/v1/game/rewards/redeem",body,session.getToken());
+                JSONObject wallet=result.optJSONObject("wallet");
+                long diamonds=wallet==null?0:wallet.optLong("diamonds",0);
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(true,diamonds,
+                    "Código resgatado no servidor: +100.000 diamantes. Carteira online atualizada.");});
+            } catch(ApiException e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,e.getMessage());});
+            } catch(Exception e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,
+                    "Não foi possível confirmar o código no servidor. Tente novamente.");});
             }
         });
     }
