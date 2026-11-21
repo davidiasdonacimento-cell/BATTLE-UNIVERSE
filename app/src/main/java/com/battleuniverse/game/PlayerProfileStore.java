@@ -122,10 +122,10 @@ public final class PlayerProfileStore {
         int start = Math.max(0, rows.length - (MAX_LEDGER_ENTRIES - 1));
         for (int i = start; i < rows.length; i++) {
             if (rows[i].isEmpty()) continue;
-            if (next.length() > 0) next.append('\\n');
+            if (next.length() > 0) next.append('\n');
             next.append(rows[i]);
         }
-        if (next.length() > 0) next.append('\\n');
+        if (next.length() > 0) next.append('\n');
         next.append(line);
         edit.putString("economy_ledger", next.toString());
     }
