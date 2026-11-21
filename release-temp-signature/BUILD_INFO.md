@@ -1,0 +1,1 @@
+Build temporário isolado. Não altera a Release oficial nem a chave permanente. O APK gerado usa assinatura temporária descartável; o pacote Season 02 é distribuído separadamente.
