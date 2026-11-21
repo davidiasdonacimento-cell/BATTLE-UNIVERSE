@@ -1,234 +1,217 @@
 package com.battleuniverse.admin;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.os.Bundle;
 import android.graphics.Color;
-import android.view.View;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.*;
-import org.json.JSONArray;
+import android.content.SharedPreferences;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import org.json.JSONObject;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.security.KeyStore;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import android.util.Base64;
 
-/** Native Android administration client. All privileged decisions are enforced by the API. */
+/** Owner-only game settings client. No account-management or admin username/password UI. */
 public final class AdminActivity extends Activity {
-    private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private static final String API = "https://battle-universe-accounts.onrender.com";
+    private static final String PREFS = "bu_owner_secure";
+    private static final String TOKEN_KEY = "owner_token";
+    private static final String ANDROID_KEY_ALIAS = "battle_universe_owner_v1";
     private String token = "";
-    private LinearLayout root, content;
+    private LinearLayout root;
     private TextView status;
-    private EditText search, gameName, characterJson;
-    private String api;
+    private EditText gameName, characterJson, pairingCode;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        api = BuildConfig.ADMIN_API_BASE_URL == null ? "" : BuildConfig.ADMIN_API_BASE_URL.trim();
-        while (api.endsWith("/")) api = api.substring(0, api.length()-1);
-        if (!api.startsWith("https://")) api = "";
-        showLogin();
+        token = readToken();
+        if (token.isEmpty()) showPairing(); else showSettings();
     }
 
     private void base(String title) {
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(20, 24, 20, 28); root.setBackgroundColor(Color.rgb(10,16,30));
+        root.setPadding(22, 26, 22, 30); root.setBackgroundColor(Color.rgb(10,16,30));
         scroll.addView(root);
         TextView heading = new TextView(this); heading.setText(title);
-        heading.setTextColor(Color.WHITE); heading.setTextSize(25); heading.setGravity(Gravity.CENTER);
+        heading.setTextColor(Color.WHITE); heading.setTextSize(24); heading.setGravity(Gravity.CENTER);
         heading.setPadding(0, 12, 0, 22); root.addView(heading);
         status = new TextView(this); status.setTextColor(Color.rgb(170,195,220));
-        status.setTextSize(13); status.setPadding(4,8,4,12); root.addView(status);
+        status.setTextSize(14); status.setPadding(4,8,4,14); root.addView(status);
         setContentView(scroll);
     }
 
-    private EditText field(String hint, boolean secret) {
-        EditText e = new EditText(this); e.setSingleLine(!hint.toLowerCase().contains("json"));
-        e.setHint(hint); e.setTextColor(Color.WHITE); e.setHintTextColor(Color.GRAY);
-        e.setPadding(14,10,14,10);
-        if (secret) e.setInputType(129);
-        root.addView(e, new LinearLayout.LayoutParams(-1,-2));
-        return e;
+    private EditText field(String hint, boolean multiline) {
+        EditText e = new EditText(this); e.setSingleLine(!multiline); e.setHint(hint);
+        e.setTextColor(Color.WHITE); e.setHintTextColor(Color.GRAY); e.setPadding(14,10,14,10);
+        root.addView(e, new LinearLayout.LayoutParams(-1,-2)); return e;
     }
 
-    private Button button(String label, Runnable action) {
-        Button b = new Button(this); b.setText(label); b.setAllCaps(false);
+    private Button button(String text, Runnable action) {
+        Button b = new Button(this); b.setText(text); b.setAllCaps(false);
         root.addView(b, new LinearLayout.LayoutParams(-1,-2));
         b.setOnClickListener(v -> action.run()); return b;
     }
 
     private void message(String text) { runOnUiThread(() -> status.setText(text)); }
-    @FunctionalInterface
-    private interface Work { void run() throws Exception; }
 
-    private void work(String label, Work job) {
-        message(label);
-        io.execute(() -> { try { job.run(); } catch (Exception e) { message("Erro: " + safe(e.getMessage())); } });
-    }
-    private String safe(String s) { return s == null ? "falha de comunicação" : s; }
-
-    private void showLogin() {
+    private void showPairing() {
         base("BATTLE UNIVERSE ADMIN");
-        EditText serverUrl = field("URL HTTPS da API (ex.: https://seu-servidor.onrender.com)", false);
-        serverUrl.setText(api);
-        EditText user = field("Usuário administrativo", false);
-        EditText pass = field("Senha administrativa", true);
-        button("ENTRAR NO PAINEL", () -> {
-            api = serverUrl.getText().toString().trim();
-            while (api.endsWith("/")) api = api.substring(0, api.length()-1);
-            if (!api.startsWith("https://")) { status.setText("Informe uma URL HTTPS válida do servidor."); return; }
-            work("Validando administrador...", () -> {
-            JSONObject body = new JSONObject(); body.put("username", user.getText().toString().trim());
-            body.put("password", pass.getText().toString());
-            JSONObject result = request("POST", "/v1/admin/login", body);
-            token = result.getString("access_token");
-            runOnUiThread(this::showDashboard);
-            });
-        });
-        status.setText("Acesso restrito. Credenciais são verificadas pelo servidor; não existe senha mestra no APK.");
+        TextView note = new TextView(this);
+        note.setText("Central privada de configurações do jogo. Digite o código de ativação fornecido pelo proprietário do servidor. Ele será usado somente nesta ativação e não será salvo.");
+        note.setTextColor(Color.LTGRAY); note.setTextSize(15); root.addView(note);
+        pairingCode = field("Código privado de ativação", false);
+        pairingCode.setInputType(129);
+        button("ATIVAR ESTE APARELHO", () -> pair(pairingCode.getText().toString()));
+        status.setText("Acesso protegido. Sem código válido, nenhuma configuração pode ser alterada.");
     }
 
-    private void showDashboard() {
-        base("CENTRAL ADMINISTRATIVA");
-        button("ATUALIZAR RESUMO", this::loadOverview);
-        search = field("Pesquisar nickname", false);
-        button("PESQUISAR CONTAS", () -> loadAccounts(search.getText().toString()));
-        button("LISTAR CONTAS", () -> loadAccounts(""));
-        TextView section = label("CONFIGURAÇÕES GLOBAIS");
+    private void pair(String code) {
+        if (code == null || code.trim().length() < 32) {
+            status.setText("Código inválido. Confira o código privado.");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject(); body.put("pairing_code", code.trim());
+                JSONObject result = request("POST", "/v1/owner/pair", body, "");
+                String received = result.getString("access_token");
+                saveToken(received);
+                token = received;
+                runOnUiThread(this::showSettings);
+            } catch (Exception e) {
+                message("Não foi possível ativar: " + safe(e.getMessage()));
+            }
+        }).start();
+    }
+
+    private void showSettings() {
+        base("CENTRAL DE CONFIGURAÇÕES");
+        TextView info = new TextView(this);
+        info.setText("Aparelho autorizado • alterações protegidas pelo servidor");
+        info.setTextColor(Color.rgb(80,190,255)); info.setTextSize(13); root.addView(info);
         gameName = field("Nome exibido do jogo", false);
-        characterJson = field("Nomes por ID em JSON (ex.: {\"caio\":\"Caio\"})", false);
+        characterJson = field("Nomes dos personagens por ID — JSON", true);
+        characterJson.setMinLines(5);
         button("CARREGAR CONFIGURAÇÕES", this::loadSettings);
-        button("SALVAR NOME DO JOGO E PERSONAGENS", this::saveSettings);
-        button("VER AUDITORIA", this::loadAudit);
-        button("SAIR DO ADMIN", () -> { token = ""; showLogin(); });
-        loadOverview(); loadSettings();
-    }
-
-    private TextView label(String text) {
-        TextView t = new TextView(this); t.setText(text); t.setTextColor(Color.rgb(80,190,255));
-        t.setTextSize(17); t.setPadding(0,18,0,8); root.addView(t); return t;
-    }
-
-    private void loadOverview() {
-        work("Consultando servidor...", () -> {
-            JSONObject r=request("GET","/v1/admin/overview",null);
-            message("Contas: "+r.optInt("accounts_total")+" | Suspensas: "+r.optInt("accounts_suspended")+
-                    " | Encerradas: "+r.optInt("accounts_deleted")+" | Admin: "+r.optString("admin"));
-        });
+        button("SALVAR CONFIGURAÇÕES", this::saveSettings);
+        button("BLOQUEAR ESTE APARELHO", this::lockDevice);
+        status.setText("Conectando ao servidor...");
+        loadSettings();
     }
 
     private void loadSettings() {
-        work("Carregando configurações...", () -> {
-            JSONObject r=request("GET","/v1/admin/settings",null);
-            JSONObject names=r.optJSONObject("character_names"); if(names==null) names=new JSONObject();
-            JSONObject finalNames=names;
-            runOnUiThread(() -> { gameName.setText(r.optString("game_name","BATTLE UNIVERSE"));
-                characterJson.setText(finalNames.toString()); });
-            message("Configurações carregadas.");
-        });
+        new Thread(() -> {
+            try {
+                JSONObject r = request("GET", "/v1/owner/settings", null, token);
+                JSONObject names = r.optJSONObject("character_names");
+                if (names == null) names = new JSONObject();
+                final String game = r.optString("game_name", "BATTLE UNIVERSE");
+                final String json = names.toString(2);
+                runOnUiThread(() -> {
+                    gameName.setText(game); characterJson.setText(json);
+                    status.setText("Configurações carregadas do PostgreSQL. 🟢");
+                });
+            } catch (Exception e) {
+                String error = safe(e.getMessage());
+                if (error.contains("401") || error.contains("403")) {
+                    clearToken(); token = "";
+                    runOnUiThread(this::showPairing);
+                } else message("Erro ao carregar: " + error);
+            }
+        }).start();
     }
 
     private void saveSettings() {
-        work("Salvando configurações...", () -> {
-            JSONObject names=new JSONObject(characterJson.getText().toString());
-            JSONObject body=new JSONObject(); body.put("game_name",gameName.getText().toString().trim());
-            body.put("character_names",names);
-            request("PUT","/v1/admin/settings",body); message("Configurações salvas no PostgreSQL.");
-        });
-    }
-
-    private void loadAccounts(String term) {
-        work("Buscando contas...", () -> {
-            String path="/v1/admin/accounts?limit=60&offset=0";
-            if(term!=null&&!term.trim().isEmpty()) path+="&search="+URLEncoder.encode(term.trim(),"UTF-8");
-            JSONObject r=request("GET",path,null); JSONArray rows=r.optJSONArray("accounts");
-            runOnUiThread(() -> renderAccounts(rows==null?new JSONArray():rows));
-            message("Contas carregadas: "+(rows==null?0:rows.length()));
-        });
-    }
-
-    private void renderAccounts(JSONArray rows) {
-        if(content!=null) root.removeView(content);
-        content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        root.addView(content, new LinearLayout.LayoutParams(-1,-2));
-        for(int i=0;i<rows.length();i++) {
-            JSONObject a=rows.optJSONObject(i); if(a==null) continue;
-            int id=a.optInt("id"); String username=a.optString("username");
-            String state=a.optString("state"); String character=a.optString("character_name");
-            TextView item=new TextView(this); item.setText("#"+id+"  "+username+"\nPersonagem: "+character+"\nEstado: "+state);
-            item.setTextColor(Color.WHITE); item.setTextSize(15); item.setPadding(12,14,12,8);
-            content.addView(item);
-            Button edit=new Button(this); edit.setText("EDITAR NICKNAME / PERSONAGEM"); edit.setAllCaps(false);
-            content.addView(edit); edit.setOnClickListener(v->editAccount(id,username,character));
-            Button stateButton=new Button(this); stateButton.setText(state.equals("suspended")?"REATIVAR CONTA":"SUSPENDER CONTA");
-            stateButton.setAllCaps(false); content.addView(stateButton);
-            stateButton.setOnClickListener(v->setState(id,state.equals("suspended")?"active":"suspended"));
-            Button delete=new Button(this); delete.setText("EXCLUIR CONTA"); delete.setAllCaps(false); content.addView(delete);
-            delete.setOnClickListener(v->confirmDelete(id,username));
-            View divider=new View(this); divider.setBackgroundColor(Color.DKGRAY);
-            content.addView(divider,new LinearLayout.LayoutParams(-1,2));
+        final String name = gameName.getText().toString().trim();
+        final String namesText = characterJson.getText().toString().trim();
+        if (name.length() < 2 || name.length() > 40) {
+            status.setText("O nome do jogo precisa ter de 2 a 40 caracteres."); return;
         }
+        new Thread(() -> {
+            try {
+                JSONObject names = new JSONObject(namesText.isEmpty() ? "{}" : namesText);
+                JSONObject body = new JSONObject(); body.put("game_name", name); body.put("character_names", names);
+                JSONObject result = request("PUT", "/v1/owner/settings", body, token);
+                if (!result.optBoolean("saved", false)) throw new IOException("O servidor não confirmou o salvamento.");
+                message("Configurações salvas no PostgreSQL. 🟢 VERDE");
+            } catch (Exception e) { message("Erro ao salvar: " + safe(e.getMessage())); }
+        }).start();
     }
 
-    private void editAccount(int id,String oldUser,String oldCharacter) {
-        LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(18,4,18,4);
-        EditText nick=new EditText(this); nick.setHint("Novo nickname"); nick.setText(oldUser); box.addView(nick);
-        EditText character=new EditText(this); character.setHint("Nome de exibição do personagem"); character.setText(oldCharacter); box.addView(character);
-        new AlertDialog.Builder(this).setTitle("Editar conta #"+id).setView(box)
-            .setNegativeButton("Cancelar",null).setPositiveButton("Salvar",(d,w)->work("Atualizando conta...",()->{
-                JSONObject body=new JSONObject(); body.put("username",nick.getText().toString().trim());
-                body.put("character_name",character.getText().toString().trim());
-                request("PATCH","/v1/admin/accounts/"+id,body); message("Conta atualizada."); loadAccounts(search.getText().toString());
-            })).show();
+    private void lockDevice() {
+        clearToken(); token = ""; showPairing();
     }
 
-    private void setState(int id,String state) {
-        work("Atualizando estado...",()->{
-            JSONObject body=new JSONObject(); body.put("state",state);
-            body.put("reason",state.equals("suspended")?"Suspensão administrativa":"Reativada pelo administrador");
-            request("PATCH","/v1/admin/accounts/"+id,body); message("Estado atualizado."); loadAccounts(search.getText().toString());
-        });
-    }
-
-    private void confirmDelete(int id,String username) {
-        new AlertDialog.Builder(this).setTitle("Excluir "+username+"?")
-            .setMessage("A conta será encerrada, o acesso bloqueado e o perfil limpo. O registro mínimo fica preservado na auditoria.")
-            .setNegativeButton("Cancelar",null).setPositiveButton("EXCLUIR",(d,w)->work("Encerrando conta...",()->{
-                request("DELETE","/v1/admin/accounts/"+id,null); message("Conta encerrada."); loadAccounts(search.getText().toString());
-            })).show();
-    }
-
-    private void loadAudit() {
-        work("Consultando auditoria...",()->{
-            JSONObject r=request("GET","/v1/admin/audit?limit=50",null);
-            JSONArray events=r.optJSONArray("events"); StringBuilder out=new StringBuilder("ÚLTIMAS OPERAÇÕES\n");
-            if(events!=null) for(int i=0;i<events.length();i++) { JSONObject e=events.optJSONObject(i);
-                out.append("#").append(e.optInt("id")).append("  ").append(e.optString("action"))
-                   .append("  alvo=").append(e.optString("target")).append("\n"); }
-            String text=out.toString(); runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Auditoria").setMessage(text).setPositiveButton("Fechar",null).show());
-            message("Auditoria carregada.");
-        });
-    }
-
-    private JSONObject request(String method,String path,JSONObject body)throws Exception {
-        HttpURLConnection c=(HttpURLConnection)new URL(api+path).openConnection();
+    private JSONObject request(String method, String path, JSONObject body, String auth) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(API + path).openConnection();
         c.setRequestMethod(method); c.setConnectTimeout(12000); c.setReadTimeout(15000);
-        c.setRequestProperty("Accept","application/json");
-        if(!token.isEmpty()) c.setRequestProperty("Authorization","Bearer "+token);
-        if(body!=null) { c.setDoOutput(true); c.setRequestProperty("Content-Type","application/json; charset=utf-8");
-            try(OutputStream out=c.getOutputStream()){out.write(body.toString().getBytes(StandardCharsets.UTF_8));} }
+        c.setRequestProperty("Accept", "application/json");
+        if (auth != null && !auth.isEmpty()) c.setRequestProperty("Authorization", "Bearer " + auth);
+        if (body != null) {
+            c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            try (OutputStream out = c.getOutputStream()) { out.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
+        }
         try {
-            int code=c.getResponseCode(); InputStream in=code>=200&&code<300?c.getInputStream():c.getErrorStream();
-            ByteArrayOutputStream bytes=new ByteArrayOutputStream();
-            if(in!=null) try(InputStream stream=in){byte[] b=new byte[4096];int n;while((n=stream.read(b))!=-1)bytes.write(b,0,n);}
-            String text=bytes.toString(StandardCharsets.UTF_8.name()); JSONObject result=text.isEmpty()?new JSONObject():new JSONObject(text);
-            if(code<200||code>=300) throw new IOException(result.optString("detail","HTTP "+code));
+            int code = c.getResponseCode();
+            InputStream in = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            if (in != null) try (InputStream stream = in) {
+                byte[] buffer = new byte[4096]; int n;
+                while ((n = stream.read(buffer)) != -1) bytes.write(buffer, 0, n);
+            }
+            String raw = bytes.toString(StandardCharsets.UTF_8.name());
+            JSONObject result = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
+            if (code < 200 || code >= 300)
+                throw new IOException("HTTP " + code + ": " + result.optString("detail", "falha na API"));
             return result;
         } finally { c.disconnect(); }
     }
 
-    @Override protected void onDestroy() { super.onDestroy(); io.shutdownNow(); }
+    private String safe(String value) { return value == null ? "falha de comunicação" : value; }
+
+    private SecretKey getKey() throws Exception {
+        KeyStore ks = KeyStore.getInstance("AndroidKeyStore"); ks.load(null);
+        if (ks.containsAlias(ANDROID_KEY_ALIAS)) return ((KeyStore.SecretKeyEntry) ks.getEntry(ANDROID_KEY_ALIAS, null)).getSecretKey();
+        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        generator.init(new KeyGenParameterSpec.Builder(ANDROID_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true).build());
+        return generator.generateKey();
+    }
+
+    private void saveToken(String value) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, getKey());
+        byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
+        String packed = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + ":" +
+                Base64.encodeToString(encrypted, Base64.NO_WRAP);
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(TOKEN_KEY, packed).apply();
+    }
+
+    private String readToken() {
+        try {
+            String packed = getSharedPreferences(PREFS, MODE_PRIVATE).getString(TOKEN_KEY, "");
+            if (packed.isEmpty()) return "";
+            String[] parts = packed.split(":", 2);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, getKey(), new GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)));
+            return new String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), StandardCharsets.UTF_8);
+        } catch (Exception e) { clearToken(); return ""; }
+    }
+
+    private void clearToken() {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(TOKEN_KEY).apply();
+    }
 }
