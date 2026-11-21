@@ -66,7 +66,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     public void setWardrobe(int shirt,int boots,int set) {
         shirtStyle=Math.max(0,Math.min(4,shirt));
         bootStyle=Math.max(0,Math.min(4,boots));
-        setStyle=Math.max(0,Math.min(4,set));
+        setStyle=Math.max(0,Math.min(7,set));
         queueEvent(()->nativeSetWardrobe(shirtStyle,bootStyle,setStyle));
     }
     public void setEquipment(int beard,int helmet,int backpack,int vest) {
