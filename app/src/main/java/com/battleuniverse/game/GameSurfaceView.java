@@ -8,7 +8,8 @@ import java.util.Arrays;
 public final class GameSurfaceView extends GLSurfaceView {
     private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64, CROUCH=128;
     private volatile float moveX,moveY,lookDX,lookDY;
-    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1,lookSensitivity=1;
+    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1;
+    private volatile float lookSensitivity=1.0f,aimSensitivity=1.0f;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile int shirtStyle,bootStyle,setStyle;
     private volatile boolean contentPackReady=false;
@@ -55,9 +56,10 @@ public final class GameSurfaceView extends GLSurfaceView {
         quality=Math.max(0,Math.min(2,value));
         queueEvent(()->nativeSetQuality(quality));
     }
-    public void setLookSensitivity(int value) {
-        lookSensitivity=Math.max(0,Math.min(2,value));
-        queueEvent(()->nativeSetLookSensitivity(lookSensitivity));
+    public void setLookSensitivity(float general,float aiming) {
+        lookSensitivity=Math.max(0.25f,Math.min(2.0f,general));
+        aimSensitivity=Math.max(0.25f,Math.min(2.0f,aiming));
+        queueEvent(()->nativeSetLookSensitivity(lookSensitivity,aimSensitivity));
     }
     public void setInvertCameraY(boolean enabled) { invertCameraY=enabled; }
     public void setWardrobe(int shirt,int boots,int set) {
@@ -231,7 +233,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetMap(int id);
     private static native void nativeSetMode(int id);
     private static native void nativeSetQuality(int value);
-    private static native void nativeSetLookSensitivity(int value);
+    private static native void nativeSetLookSensitivity(float general,float aiming);
     private static native void nativeSetWardrobe(int shirt,int boots,int set);
     private static native void nativeSetContentData(int buildLimit,int resourceCount);
     private static native String nativeGetStatus();
@@ -249,7 +251,7 @@ public final class GameSurfaceView extends GLSurfaceView {
                 javax.microedition.khronos.egl.EGLConfig config) {
             nativeInit();
             nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
-            nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity);
+            nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
             nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
             nativeSetScreen(screenMode);
