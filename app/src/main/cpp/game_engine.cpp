@@ -1221,7 +1221,9 @@ void resetGroundLoot() {
         {{112.0f,0.55f,110.0f},2,36,true,true},
         {{-126.0f,0.55f,62.0f},0,36,true,true},
         {{6.0f,0.55f,132.0f},1,30,true,true},
-        {{-44.0f,0.55f,128.0f},2,30,true,true}
+        {{-44.0f,0.55f,128.0f},2,30,true,true},
+        {{-18.0f,0.55f,-104.0f},4,30,true,false},
+        {{104.0f,0.55f,18.0f},5,24,true,false}
     }};
 }
 void drawGroundLoot(float time) {
@@ -1232,7 +1234,8 @@ void drawGroundLoot(float time) {
             (loot.kind==3?Vec3{0.35f,0.72f,1.0f}:
             (loot.ammoOnly?Vec3{0.92f,0.68f,0.20f}:
             (loot.weaponType==0?Vec3{0.12f,0.86f,0.94f}:
-             (loot.weaponType==1?Vec3{0.28f,0.58f,1.0f}:(loot.weaponType==2?Vec3{0.94f,0.48f,0.20f}:Vec3{0.20f,0.92f,0.56f})))));
+             (loot.weaponType==1?Vec3{0.28f,0.58f,1.0f}:(loot.weaponType==2?Vec3{0.94f,0.48f,0.20f}:
+             (loot.weaponType==4?Vec3{0.72f,0.62f,0.38f}:(loot.weaponType==5?Vec3{0.52f,0.46f,0.34f}:Vec3{0.20f,0.92f,0.56f}))))));
         drawCube({loot.pos.x,loot.pos.y+0.34f+bob,loot.pos.z},{0.82f,0.52f,0.62f},color);
         drawCube({loot.pos.x,loot.pos.y+0.63f+bob,loot.pos.z},{0.54f,0.12f,0.66f},{0.12f,0.17f,0.22f});
         if(loot.kind==2) {
@@ -2170,7 +2173,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         if(lootIndex>=0) {
             GroundLoot& loot=gGroundLoot[static_cast<size_t>(lootIndex)];
-            const size_t type=static_cast<size_t>(std::clamp(loot.weaponType,0,3));
+            const size_t type=static_cast<size_t>(std::clamp(loot.weaponType,0,5));
             if(loot.kind==2) {
                 if(gMedkits>=3)setStatus("LIMITE DE KITS MÉDICOS ATINGIDO");
                 else {++gMedkits;setStatus("KIT MÉDICO COLETADO • "+std::to_string(gMedkits)+" DISPONÍVEIS");loot.active=false;}
