@@ -36,11 +36,25 @@ O Android só aceita atualização sobre o APK existente se o package name e o c
 
 A chave de assinatura precisa ser a mesma que assinou o APK que está instalado no aparelho. Se os APKs anteriores foram assinados por chaves temporárias diferentes do GitHub Actions, não será possível atualizá-los por cima; será necessário instalar uma build assinada pela chave estável uma vez. Não desinstale o APK atual até confirmar a assinatura compatível.
 
+## Carteira online e códigos promocionais
+
+- GET /v1/accounts/me/wallet retorna a carteira autoritativa player_wallets.
+- POST /v1/game/rewards/redeem recebe { "code": "100K" } e concede 100.000 diamantes virtuais uma única vez por conta. O banco registra a chave do código por jogador; repetir o pedido não concede novamente.
+- O saldo antigo de moedas/diamantes salvo no perfil é migrado uma única vez para a carteira na primeira consulta. O ledger antigo é usado para preservar o estado de resgate anterior do código 100K.
+- coins e diamonds não podem mais ser enviados pelo cliente em PATCH /v1/accounts/me/profile. A carteira é lida e alterada por endpoints próprios.
+- POST /v1/game/rewards/daily concede a recompensa diária pelo servidor. POST /v1/royale/spin debita e registra giros no servidor.
+
+## Limites atuais da economia
+
+- Recompensas de partida, missões, passe, evento, correio, conquistas e compras que ainda chamam PlayerProfileStore são locais e não aumentam a carteira online.
+- O modo de partida atual ainda não tem um serviço de partidas autoritativo. Não é seguro conceder diamantes online com base apenas em kills/vitória informados pelo APK; esses dados podem ser falsificados.
+- A migração da economia restante exige endpoints e critérios de validação do servidor de partidas, além de idempotência e auditoria.
+
 ## Segurança
 
 - Nicknames exclusivos no PostgreSQL, normalizados em minúsculas.
 - Senhas protegidas com Argon2; nunca em texto puro.
 - Token JWT com validade máxima de 30 dias, guardado no Android Keystore.
-- O endpoint de perfil aceita apenas configurações e cosméticos não econômicos.
-- Diamantes, moedas, XP, recompensas, inventário competitivo e resultados de partidas não são aceitos do cliente como autoridade.
+- O perfil aceita apenas configurações e cosméticos não econômicos.
+- Diamantes e moedas não são aceitos como valores enviados pelo cliente para o perfil.
 - Ainda não existe recuperação de senha nem revogação remota individual de sessão.
