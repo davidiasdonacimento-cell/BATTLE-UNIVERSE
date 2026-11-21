@@ -27,7 +27,7 @@ import java.util.UUID;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18;
+        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18, DEV_MENU=19;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "COFRE","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
@@ -292,6 +292,7 @@ public final class HudOverlay extends View {
         else if(page==MAIL)drawMailPage(c);
         else if(page==ACHIEVEMENTS)drawAchievementsPage(c);
         else if(page==PREMATCH)drawPreMatch(c);
+        else if(page==DEV_MENU)drawDevMenu(c);
     }
     private void drawHome(Canvas c){
         // Lobby de partida em tela cheia: operador em destaque, ações rápidas e início claro.
@@ -442,6 +443,7 @@ public final class HudOverlay extends View {
             .putLong("match_reward_session_id",System.currentTimeMillis()).apply();
         resultSpectating=false;game.setSpectatorMode(false);
         game.setCharacter(character);game.setMap(map);game.setMatchMode(mode);
+        game.setTrainingGodMode(prefs.getBoolean("modmenu2_god_mode",false)&&mode==3&&!onlineMode);
         game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
         game.setGameScreen(true);page=GAME;
     }
@@ -588,7 +590,30 @@ public final class HudOverlay extends View {
         pill(c,675,609,75,30,showMinimap?"ON":"OFF",showMinimap?0xFF176A75:0x553B6172,Color.WHITE);
         text(c,"HÁPTICA",765,625,9,Color.WHITE,Typeface.DEFAULT_BOLD);
         pill(c,790,609,42,30,hapticsEnabled?"ON":"OFF",hapticsEnabled?0xFF176A75:0x553B6172,Color.WHITE);
-        text(c,"ÁUDIO/MIXAGEM: ainda não disponível; sem controles falsos nesta tela.",272,682,8,0xFFFFD27A,Typeface.DEFAULT);
+        pill(c,270,660,180,28,"ABRIR MODMENU2",0xFF176A75,0xFFFFFFFF);
+    }
+
+    private void drawDevMenu(Canvas c) {
+        eyebrow(c,270,175,"FERRAMENTAS DE DESENVOLVIMENTO • MODMENU2");
+        title(c,"MODMENU2",270,224);
+        subtitle(c,"Recursos de teste isolados do modo online e da carteira da conta.",270,252);
+        panel(c,270,278,570,118,0xAE193040,0x557AA9BC,16);
+        eyebrow(c,292,307,"GOD MODE • SOMENTE TREINAMENTO OFFLINE");
+        boolean enabled=prefs.getBoolean("modmenu2_god_mode",false);
+        text(c,"Imunidade a dano e vida restaurada durante o Treinamento.",292,337,10,0xFFB3C8D4,Typeface.DEFAULT);
+        pill(c,650,316,160,42,enabled?"GOD MODE: ON":"GOD MODE: OFF",
+            enabled?0xFF176A75:0x553B6172,Color.WHITE);
+        panel(c,270,414,570,116,0xAE193040,0x557AA9BC,16);
+        eyebrow(c,292,444,"CARTEIRA ONLINE");
+        text(c,"Diamantes e moedas são controlados pelo servidor; este menu não altera saldos.",292,472,10,0xFFB3C8D4,Typeface.DEFAULT);
+        text(c,"Para ajustes administrativos, use a API autenticada de administração.",292,493,9,0xFF8EDFD4,Typeface.DEFAULT);
+        if(mode!=3||onlineMode) {
+            panel(c,270,552,570,58,0xAA5A3428,0xFFFFB45E,13);
+            text(c,"Selecione TREINAMENTO e OFFLINE para ativar o God Mode.",292,587,10,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        } else {
+            panel(c,270,552,570,58,0xAA176A75,0xFF58DDE6,13);
+            text(c,"AMBIENTE DE TESTE LIBERADO • SEM EFEITO EM PARTIDAS ONLINE",292,587,9,Color.WHITE,Typeface.DEFAULT_BOLD);
+        }
     }
 
     private void drawProfilePage(Canvas c) {
@@ -1795,6 +1820,7 @@ public final class HudOverlay extends View {
                 if(hit(x,y,ax,292,174,190)){claimAchievement(i);return;}
             }
         }else if(page==SETTINGS){
+            if(hit(x,y,270,657,180,34)){page=DEV_MENU;return;}
             if(hit(x,y,515,329,300,36)){
                 generalSensitivity=Math.max(25,Math.min(200,Math.round((x-520)/37f+1)*25));
                 game.setLookSensitivity(generalSensitivity/100.0f,aimSensitivity/100.0f);
@@ -1822,6 +1848,18 @@ public final class HudOverlay extends View {
             if(hit(x,y,790,605,42,38)){
                 hapticsEnabled=!hapticsEnabled;prefs.edit().putBoolean("haptics",hapticsEnabled).apply();
                 toast(hapticsEnabled?"Vibração ativada":"Vibração desativada");return;
+            }
+        }else if(page==DEV_MENU){
+            if(hit(x,y,650,316,160,42)){
+                if(mode!=3||onlineMode){
+                    toast("GOD MODE DISPONÍVEL SOMENTE EM TREINAMENTO OFFLINE.");
+                    return;
+                }
+                boolean enabled=!prefs.getBoolean("modmenu2_god_mode",false);
+                prefs.edit().putBoolean("modmenu2_god_mode",enabled).apply();
+                game.setTrainingGodMode(enabled);
+                toast(enabled?"MODMENU2 • GOD MODE ATIVADO NO TREINAMENTO.":"MODMENU2 • GOD MODE DESATIVADO.");
+                return;
             }
         }
     }
