@@ -20,6 +20,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.DocumentReference;
@@ -160,7 +161,22 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private void finishUsernameAuth(com.google.android.gms.tasks.Task<AuthResult> task, String username) {
         if (closed) return;
         if (!task.isSuccessful()) {
-            publish(true, "", "Não foi possível entrar/criar. Confira o nome, a senha e a conexão.");
+            String code="";
+            Exception failure=task.getException();
+            if(failure instanceof FirebaseAuthException)code=((FirebaseAuthException)failure).getErrorCode();
+            String message;
+            if("ERROR_EMAIL_ALREADY_IN_USE".equals(code))
+                message="Esse nome já está cadastrado. Use ENTRAR para acessar.";
+            else if("ERROR_OPERATION_NOT_ALLOWED".equals(code))
+                message="Login por e-mail/senha está desativado no Firebase. Ative Email/Password.";
+            else if("ERROR_INVALID_CREDENTIAL".equals(code)||"ERROR_USER_NOT_FOUND".equals(code)||"ERROR_WRONG_PASSWORD".equals(code))
+                message="Nome ou senha incorretos. Confira os dados e tente novamente.";
+            else if("ERROR_TOO_MANY_REQUESTS".equals(code))
+                message="Muitas tentativas. Aguarde um pouco antes de tentar novamente.";
+            else if("ERROR_NETWORK_REQUEST_FAILED".equals(code))
+                message="Sem conexão com o servidor. Verifique a internet.";
+            else message="Falha na conta. Confira a configuração Firebase, a conexão e os dados.";
+            publish(true, "", message);
             return;
         }
         prefs.edit().putString("account_username", username).apply();
