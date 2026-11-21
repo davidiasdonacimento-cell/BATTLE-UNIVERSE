@@ -57,18 +57,18 @@ A execução do GitHub Actions 44534495237 terminou com sucesso, incluindo teste
 - USAR: coleta recursos próximos.
 
 ## Conteúdo da Temporada 02
-O instalador na primeira abertura baixa automaticamente um pacote de conteúdo expandido de aproximadamente 409 MiB (tamanho exato mostrado na tela). O arquivo inclui:
+O pacote da Temporada 02 é preparado dentro do APK pelo workflow Android. Na primeira abertura, a tela THE VISION configura os recursos já integrados, sem solicitar um ZIP separado ou baixar o pacote pela rede. O instalador valida o SHA-256 do pacote e os hashes individuais antes de ativar o conteúdo. O pacote inclui:
 - Modelo OBJ do avião de transporte, operador, emissor de energia, peças de construção e objetos de cenário.
 - Cinco conjuntos de materiais PBR com texturas 4K de albedo, normal e roughness e mapas AO 2K.
 - Oito arquivos de configuração de mapa.
 - Roster, missões, metadados das armas fictícias, shaders OpenGL ES 3.0 e quatro ambientes de áudio.
 
-O instalador valida o SHA-256 do ZIP e os hashes individuais dos arquivos, verifica caminhos antes da extração, limita o tamanho extraído, confere espaço livre e instala em uma pasta temporária antes de ativar. Se a conexão falhar, o usuário pode tentar novamente ou abrir o jogo-base.
+O instalador valida o SHA-256 do ZIP embutido e os hashes individuais dos arquivos, verifica caminhos antes da extração, limita o tamanho extraído, confere espaço livre e instala em uma pasta temporária antes de ativar. A extração inicial exige espaço livre adicional no armazenamento interno do aparelho.
 
 ## Build e testes
 Workflow: `.github/workflows/android.yml`.
 - Configura Python, JDK 17, Android SDK, NDK 27 e CMake.
-- Gera o pacote de conteúdo e publica a release `data-pack-v2`.
+- Gera o pacote de conteúdo, incorpora o ZIP e o manifesto aos assets do APK e valida o conteúdo embutido. A release antiga `data-pack-v2` é mantida temporariamente como rollback até a validação do APK único.
 - Executa os testes Android disponíveis e compila APK debug.
 - Verifica `classes.dex`, libs ARM64/ARMv7 e integridade ZIP do APK.
 - Publica APK e pacote 4K como artefatos.
@@ -89,3 +89,9 @@ A arquitetura atual usa FastAPI + PostgreSQL para contas por nickname/senha, com
 O painel permite pesquisar contas, alterar nickname e nome de exibição do personagem, suspender/reativar, encerrar conta, atualizar o nome global do jogo e nomes de personagens, além de consultar auditoria. O acesso administrativo é provisionado no servidor por variáveis privadas; não existe senha administrativa embutida no APK.
 
 Leia `ADMIN_SERVER_GUIDE.md` antes de implantar. O backend precisa de PostgreSQL e variáveis privadas no Render. O cliente do jogo ainda precisa consumir as configurações globais e passar por teste de integração. A compilação dos dois APKs é acompanhada no GitHub Actions.
+
+
+## Atualização THE VISION / Royale
+- Primeira entrada: tela original THE VISION com mascote animado e configuração local do conteúdo Season 02 já incluído no APK.
+- Royale: roleta animada por 100 diamantes virtuais, chances visíveis de 40/30/20/9/1, prévia/teste temporário de cosméticos e histórico local.
+- O código foi publicado; o tamanho final, a compilação, a integridade do APK e o teste físico ainda dependem do workflow e da validação no Android.
