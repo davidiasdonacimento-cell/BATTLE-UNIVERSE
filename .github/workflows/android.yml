@@ -12,31 +12,36 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    name: Native Android build and content pack
+    name: Native Android RELEASE build and content pack
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Configure stable APK signing (optional)
+      - name: Configure required stable RELEASE signing
         env:
           BATTLE_UNIVERSE_KEYSTORE_BASE64: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_BASE64 }}
           BATTLE_UNIVERSE_KEYSTORE_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_PASSWORD }}
           BATTLE_UNIVERSE_KEY_ALIAS: ${{ secrets.BATTLE_UNIVERSE_KEY_ALIAS }}
           BATTLE_UNIVERSE_KEY_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEY_PASSWORD }}
         run: |
-          if [ -n "$BATTLE_UNIVERSE_KEYSTORE_BASE64" ]; then
-            printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/battle-universe.jks"
-            {
-              echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/battle-universe.jks"
-              echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
-              echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
-              echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
-            } >> "$GITHUB_ENV"
-            echo "Stable APK signing key loaded."
-          else
-            echo "No stable signing key: GitHub's temporary debug key will be used."
-          fi
+          set -euo pipefail
+          for name in BATTLE_UNIVERSE_KEYSTORE_BASE64 BATTLE_UNIVERSE_KEYSTORE_PASSWORD BATTLE_UNIVERSE_KEY_ALIAS BATTLE_UNIVERSE_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $name. RELEASE APK will not be built or published."
+              exit 1
+            fi
+          done
+          printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/battle-universe.jks"
+          test -s "$RUNNER_TEMP/battle-universe.jks"
+          {
+            echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/battle-universe.jks"
+            echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
+            echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
+            echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+          keytool -list -keystore "$RUNNER_TEMP/battle-universe.jks" -storepass "$BATTLE_UNIVERSE_KEYSTORE_PASSWORD" -alias "$BATTLE_UNIVERSE_KEY_ALIAS" >/dev/null
+          echo "Stable RELEASE signing key loaded and alias verified."
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -86,60 +91,69 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Compile game and administration APKs
+      - name: Compile game RELEASE and administration APK
         env:
           ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
           ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :admin:assembleDebug
-      - name: Verify game and administration APKs
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleRelease :admin:assembleDebug
+      - name: Verify signed non-debuggable RELEASE APK and content
         run: |
+          set -euo pipefail
+          GAME="app/build/outputs/apk/release/app-release.apk"
+          test -s "$GAME"
+          apksigner verify --verbose "$GAME"
+          DEBUGGABLE="$(apkanalyzer manifest debuggable "$GAME")"
+          if [ "$DEBUGGABLE" != "false" ]; then
+            echo "::error::APK RELEASE is debuggable ($DEBUGGABLE)"
+            exit 1
+          fi
+          APPLICATION_ID="$(apkanalyzer manifest application-id "$GAME")"
+          test "$APPLICATION_ID" = "com.battleuniverse.game"
           python - <<'PY'
           from zipfile import ZipFile
           from pathlib import Path
-          from shutil import copy2
-          game = Path("app/build/outputs/apk/debug/app-debug.apk")
-          admin_candidates = sorted(Path("admin/build/outputs/apk").rglob("*.apk"))
-          assert game.is_file() and game.stat().st_size > 300_000, "APK do jogo ausente ou pequeno"
-          assert admin_candidates, "Gradle não gerou APK administrativo"
-          admin_source = admin_candidates[0]
-          assert admin_source.stat().st_size > 0, f"APK administrativo vazio: {admin_source}"
-          admin = Path("build/admin-debug.apk")
-          copy2(admin_source, admin)
+          game = Path("app/build/outputs/apk/release/app-release.apk")
           with ZipFile(game) as z:
               names = set(z.namelist())
               assert "classes.dex" in names, "DEX do jogo ausente"
               assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Biblioteca ARM64 ausente"
               assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Biblioteca ARMv7 ausente"
-              assert "assets/season02.zip" not in names, "APK ainda contém o ZIP pesado da Season 02"
-              assert "assets/season02-manifest.json" not in names, "APK ainda contém manifesto do pacote externo"
-              assert game.stat().st_size < 300_000_000, "APK excessivamente grande: verificar conteúdo embutido"
-              assert z.testzip() is None, "APK do jogo corrompido"
+              assert "assets/season02.zip" not in names, "APK contém o pacote pesado Season 02"
+              assert "assets/season02-manifest.json" not in names, "APK contém manifesto do pacote externo"
+              assert game.stat().st_size < 300_000_000, "APK excessivamente grande"
+              assert z.testzip() is None, "APK corrompido"
+          print(f"RELEASE APK validado: {game.stat().st_size} bytes")
+          PY
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          admin_candidates = sorted(Path("admin/build/outputs/apk").rglob("*.apk"))
+          assert admin_candidates, "Gradle não gerou APK administrativo"
+          admin = admin_candidates[0]
           with ZipFile(admin) as z:
               assert "classes.dex" in z.namelist(), "DEX do admin ausente"
               assert z.testzip() is None, "APK administrativo corrompido"
-          print(f"APK do jogo validado: {game.stat().st_size} bytes; Admin compilado e validado: {admin.stat().st_size} bytes")
+          print(f"Admin compilado e validado internamente: {admin.stat().st_size} bytes")
           PY
-          ls -lh app/build/outputs/apk/debug/app-debug.apk build/admin-debug.apk
-          ls -lh build/battle-universe-season-02-pack.zip
+          ls -lh "$GAME" build/battle-universe-season-02-pack.zip
           test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 1073741824
           test $(stat -c%s build/battle-universe-season-02-pack.zip) -le 5368709120
-      - name: Publish APK and verified Season 02 data pack as direct release assets
+      - name: Publish signed RELEASE APK and verified Season 02 data pack
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: data-pack-v3
-          name: Battle Universe — APK + Conteúdo Expandido 4K
+          name: Battle Universe — APK RELEASE + Conteúdo Expandido 4K
           body: |
             Arquivos oficiais de distribuição do Battle Universe.
-            - app-debug.apk: APK do jogo, disponível diretamente, sem ZIP externo do Actions.
-            - battle-universe-season-02-pack.zip: pacote de conteúdo Season 02 separado (1–5 GiB).
+            - app-release.apk: APK RELEASE assinado, sem debuggable.
+            - battle-universe-season-02-pack.zip: pacote Season 02 separado (1–5 GiB).
             - content-pack-manifest.json: manifesto e verificação SHA-256.
-            O APK não inclui o pacote pesado da Season 02.
-            O aplicativo valida o SHA-256 do pacote e de cada arquivo antes da instalação.
+            A assinatura RELEASE usa a chave estável configurada nos segredos do GitHub.
           prerelease: true
           files: |
-            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
             build/battle-universe-season-02-pack.zip
             build/content-pack-manifest.json
           overwrite_files: true
