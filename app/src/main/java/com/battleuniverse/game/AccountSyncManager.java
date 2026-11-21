@@ -48,13 +48,21 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private static final String COLLECTION = "players";
     private static final String USERNAME_DOMAIN = "@accounts.battleuniverse.app";
     private static final String[] PROFILE_KEYS = {
-        "nickname", "xp", "diamonds", "daily_reward_day", "code_100k_redeemed",
+        "nickname", "xp", "diamonds", "coins", "coins_wallet_initialized",
+        "profile_schema_version", "economy_ledger", "daily_reward_day", "code_100k_redeemed",
         "mode", "map", "character", "quality", "music", "effects",
-        "look_sensitivity", "shop_frame_neon", "shop_emblem_bloob",
+        "look_sensitivity", "sensitivity_general", "sensitivity_aim",
+        "shop_frame_neon", "shop_emblem_bloob",
         "shop_title_champion", "selected_shirt", "selected_boots", "selected_set",
         "invert_camera_y", "show_minimap", "haptics", "online_mode",
         "local_friend_1", "event_season_claimed", "mail_welcome_claimed",
         "achievement_500", "achievement_1500", "achievement_3000",
+        "missions_day", "mission_matches", "mission_eliminations", "mission_crystals",
+        "mission_claimed_0", "mission_claimed_1", "mission_claimed_2",
+        "royale_tier_claimed_0", "royale_tier_claimed_1", "royale_tier_claimed_2",
+        "royale_tier_claimed_3", "royale_tier_claimed_4", "royale_tier_claimed_5",
+        "royale_spin_count", "royale_last_reward",
+        "last_match_reward_coins", "last_match_reward_diamonds", "last_match_reward_xp",
         "wear_shirt_tactical", "wear_shirt_neon", "wear_shirt_frost", "wear_shirt_desert",
         "wear_boots_combat", "wear_boots_neon", "wear_boots_frost", "wear_boots_gold",
         "wear_set_aurora", "wear_set_champion", "wear_set_orbit", "wear_set_desert"
@@ -287,14 +295,18 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
 
             if (value instanceof String) {
                 editor.putString(key, (String) value);
-            } else if ("xp".equals(key) || "diamonds".equals(key)
-                    || "daily_reward_day".equals(key) || "match_wins".equals(key)
-                    || "match_kills".equals(key) || "matches_played".equals(key)) {
+            } else if ("xp".equals(key) || "diamonds".equals(key) || "coins".equals(key)
+                    || "daily_reward_day".equals(key) || "missions_day".equals(key)
+                    || "match_wins".equals(key) || "match_kills".equals(key)
+                    || "matches_played".equals(key) || "last_match_reward_coins".equals(key)
+                    || "last_match_reward_diamonds".equals(key) || "last_match_reward_xp".equals(key)) {
                 if (value instanceof Number) editor.putLong(key, ((Number) value).longValue());
             } else if ("mode".equals(key) || "map".equals(key) || "character".equals(key)
                     || "quality".equals(key) || "look_sensitivity".equals(key)
                     || "selected_shirt".equals(key) || "selected_boots".equals(key)
-                    || "selected_set".equals(key)) {
+                    || "selected_set".equals(key) || "profile_schema_version".equals(key)
+                    || "mission_matches".equals(key) || "mission_eliminations".equals(key)
+                    || "mission_crystals".equals(key) || "royale_spin_count".equals(key)) {
                 if (value instanceof Number) editor.putInt(key, ((Number) value).intValue());
             } else if (value instanceof Boolean) {
                 editor.putBoolean(key, (Boolean) value);
