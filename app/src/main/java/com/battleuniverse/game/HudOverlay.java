@@ -430,7 +430,7 @@ public final class HudOverlay extends View {
         pill(c,270,312,150,29,cofreTab==0?"COLEÇÃO  ✓":"COLEÇÃO",cofreTab==0?0xFF176A75:0x553B6172,Color.WHITE);
         pill(c,430,312,150,29,cofreTab==1?"MODA  ✓":"MODA",cofreTab==1?0xFF176A75:0x553B6172,Color.WHITE);
         String[][] labels=cofreTab==0
-            ?new String[][]{{"SOMBRA","VIGOR","VELHO"},{"TÁTICO","FROST","VISOR"},{"CAMPO","ORBITAL","MÉDICA"},{"TÁTICO","PESADO","TECNO"}}
+            ?new String[][]{{"SOMBRA","VIGOR","ORION","VELHO"},{"TÁTICO","FROST","VISOR"},{"CAMPO","ORBITAL","MÉDICA"},{"TÁTICO","PESADO","TECNO"}}
             :new String[][]{{"PADRÃO","ANGELICAL"},{"TÁTICA","NEON","FROST","DESERTO"},{"COMBATE","NEON","FROST","DOURADAS"},{"AURORA","CAMPEÃO","ORBITAL","DESERTO"}};
         String[] categories=cofreTab==0
             ?new String[]{"BARBAS","CAPACETES","MOCHILAS","COLETES"}
@@ -655,7 +655,7 @@ public final class HudOverlay extends View {
         subtitle(c,"Barbas, capacetes, mochilas e coletes acompanham o corpo no lobby e na partida.",270,252);
         pill(c,674,184,166,32,"VOLTAR ÀS ROUPAS",0x553B6172,0xFFD7E6ED);
         String[] names={"BARBAS 3D","CAPACETES","MOCHILAS","COLETES"};
-        String[][] options={{"SEM","SOMBRA","VIGOR","VELHO"},{"SEM","TÁTICO","FROST","VISOR"},
+        String[][] options={{"SEM","SOMBRA","VIGOR","ORION","VELHO"},{"SEM","TÁTICO","FROST","VISOR"},
             {"SEM","CAMPO","ORBITAL","MÉDICO"},{"SEM","TÁTICO","PESADO","TECNO"}};
         int[] selected={equippedBeard,equippedHelmet,equippedBackpack,equippedVest};
         int[] accents={0xFF9B806B,0xFF65A9C4,0xFF58A68A,0xFFB18A55};
@@ -664,13 +664,15 @@ public final class HudOverlay extends View {
             panel(c,x,y,272,158,0xB51A3040,0x557AA9BC,14);
             eyebrow(c,x+16,y+25,names[group]);
             text(c,"GEOMETRIA 3D • ENCAIXE NO CORPO",x+16,y+47,7.5f,0xFF9DB6C5,Typeface.DEFAULT);
-            for(int item=0;item<4;item++) {
-                float bx=x+12+item*63f,by=y+77;
+            int optionCount=group==0?5:4;
+            float step=group==0?49f:63f,cardWidth=group==0?45f:58f;
+            for(int item=0;item<optionCount;item++) {
+                float bx=x+12+item*step,by=y+77;
                 boolean active=selected[group]==item;
-                panel(c,bx,by,58,52,active?0xFF176A75:0x77304758,
+                panel(c,bx,by,bx+cardWidth,by+52,active?0xFF176A75:0x77304758,
                     active?0xFF58E0E8:0x335D8495,8);
-                circle(c,bx+29,by+15,7,item==0?0xFF526775:accents[group],0xFFB5D6E1);
-                text(c,options[group][item],bx+29,by+39,6.5f,Color.WHITE,Typeface.DEFAULT_BOLD);
+                circle(c,bx+cardWidth/2f,by+15,7,item==0?0xFF526775:accents[group],0xFFB5D6E1);
+                text(c,options[group][item],bx+cardWidth/2f,by+39,group==0?5.4f:6.5f,Color.WHITE,Typeface.DEFAULT_BOLD);
             }
         }
         text(c,"Cada peça pode ser removida sem alterar as outras categorias.",270,650,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
@@ -691,7 +693,7 @@ public final class HudOverlay extends View {
             boolean featuredItem=featured[i]>=0;
             boolean ownedItem=featuredItem&&prefs.getBoolean(SHOP_KEYS[featured[i]],false);
             panel(c,x,y,174,132,ownedItem?0xB51A4650:0xB51A3040,ownedItem?0xFF4BD4C9:0x557AA9BC,14);
-            if(featuredItem)drawCollectionPreview(c,x+34,y+39,featured[i]==18?0:8,featured[i]==18?3:1,SHOP_COLORS[featured[i]]);
+            if(featuredItem)drawCollectionPreview(c,x+34,y+39,featured[i]==18?0:8,featured[i]==18?4:1,SHOP_COLORS[featured[i]]);
             else circle(c,x+34,y+39,19,i==2?0xFF24677A:i==3?0xFF8D42D7:0xFF2FAFC4,0xFF9BC9D2);
             text(c,names[i],x+13,y+77,8.2f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
             text(c,hints[i],x+13,y+94,7.0f,0xFF9DB6C5,Typeface.DEFAULT);
@@ -1445,14 +1447,14 @@ public final class HudOverlay extends View {
             if(hit(x,y,430,312,150,29)){cofreTab=1;return;}
             for(int section=0;section<4;section++){
                 float rowY=350+section*78f;
-                int count=cofreTab==0?3:(section==0?2:4);
+                int count=cofreTab==0?(section==0?4:3):(section==0?2:4);
                 for(int item=0;item<count;item++){
                     float ix=390+item*110f;
                     if(!hit(x,y,ix,rowY+7,100,56))continue;
                     if(cofreTab==0){
                         int value=item+1;
                         if(section==0){
-                            if(value==3&&!prefs.getBoolean("wear_beard_old",false)){page=ROYALE;toast("A Barbinha do Velho pode ser comprada no Royale.");return;}
+                            if(value==4&&!prefs.getBoolean("wear_beard_old",false)){page=ROYALE;toast("A Barbinha do Velho pode ser comprada no Royale.");return;}
                             equippedBeard=value;
                         }else if(section==1)equippedHelmet=value;
                         else if(section==2)equippedBackpack=value;
@@ -1529,8 +1531,9 @@ public final class HudOverlay extends View {
                     ||hit(x,y,270,458,272,158)||hit(x,y,562,458,272,158)) {
                 int group=x<550?(y<450?0:2):(y<450?1:3);
                 float originX=(group%2==0?282f:574f);
-                int item=Math.max(0,Math.min(3,(int)((x-originX)/63f)));
-                if(group==0&&item==3&&!prefs.getBoolean("wear_beard_old",false)){
+                float itemStep=group==0?49f:63f;
+                int item=Math.max(0,Math.min(group==0?4:3,(int)((x-originX)/itemStep)));
+                if(group==0&&item==4&&!prefs.getBoolean("wear_beard_old",false)){
                     page=ROYALE;toast("Compre a Barbinha do Velho no Royale.");return;
                 }
                 if(group==0)equippedBeard=item;
@@ -1552,7 +1555,7 @@ public final class HudOverlay extends View {
                 if(!hit(x,y,rx,ry,174,132))continue;
                 if(i==0){
                     if(purchaseShopItem(18)){
-                        equippedBeard=3;prefs.edit().putInt("equipped_beard",3).apply();
+                        equippedBeard=4;prefs.edit().putInt("equipped_beard",4).apply();
                         game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
                     }
                 }else if(i==1){
