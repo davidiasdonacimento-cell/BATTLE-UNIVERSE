@@ -255,6 +255,89 @@ MeshBuffer buildSphere() {
     }
     return makeMesh(v);
 }
+float terrainHeightForMap(int map,float x,float z) {
+    auto gaussian=[&](float cx,float cz,float sx,float sz) {
+        const float dx=(x-cx)/sx,dz=(z-cz)/sz;
+        return std::exp(-0.5f*(dx*dx+dz*dz));
+    };
+    const float edge=std::clamp((78.0f-std::sqrt(x*x+z*z))/15.0f,0.0f,1.0f);
+    const float coast=edge*edge*(3.0f-2.0f*edge);
+    float h=0.0f;
+    switch(map) {
+        case 0: // Tropical: cristas centrais e morros em ferradura.
+            h=1.55f*gaussian(-31,-24,17,24)+1.35f*gaussian(34,-19,19,23)
+             +1.20f*gaussian(-28,34,18,17)+1.05f*gaussian(36,34,17,18)
+             +0.18f*std::sin(x*0.10f+z*0.035f)*std::cos(z*0.075f);
+            break;
+        case 1: { // Neon: plataformas urbanas em terraços, com ruas rebaixadas.
+            auto terrace=[&](float cx,float cz) {
+                float d=std::max(std::fabs(x-cx)/17.0f,std::fabs(z-cz)/15.0f);
+                float t=std::clamp((1.18f-d)*5.0f,0.0f,1.0f);
+                return t*t*(3.0f-2.0f*t);
+            };
+            h=1.05f*(terrace(-43,-39)+terrace(43,-39)+terrace(-43,40)+terrace(43,40));
+            h+=0.08f*std::sin(x*0.22f)*std::sin(z*0.18f);
+            break;
+        }
+        case 2: // Desert: ondas de dunas longas e mesas isoladas.
+            h=0.58f+0.42f*std::sin(x*0.075f+z*0.025f)
+             +0.25f*std::sin(z*0.13f-x*0.035f)
+             +1.05f*gaussian(-43,-42,16,18)+0.95f*gaussian(39,38,19,17);
+            break;
+        case 3: // Frozen: cristas glaciais paralelas e picos.
+            h=0.28f+0.52f*std::fabs(std::sin(x*0.075f+z*0.018f))
+             +1.10f*gaussian(-38,-39,15,25)+1.25f*gaussian(34,36,17,23)
+             +0.75f*gaussian(38,-35,14,19);
+            break;
+        case 4: // Industrial: depressões de escavação e taludes em anel.
+            h=0.18f+0.82f*std::fabs(std::sin(x*0.095f)*std::cos(z*0.07f))
+             +0.65f*gaussian(-42,38,20,15)+0.65f*gaussian(42,-38,20,15);
+            break;
+        case 5: // Green Valley: colinas suaves, vale fluvial e lombas.
+            h=0.34f+0.42f*std::sin(x*0.055f+z*0.028f)
+             +0.32f*std::cos(z*0.095f)
+             -0.42f*gaussian(-35,0,8,58)
+             +0.50f*gaussian(38,-36,20,18)+0.48f*gaussian(35,38,22,19);
+            break;
+        case 6: // Orbital: crateras com bordas elevadas.
+        case 7: { // Ruínas: crateras irregulares e montes de destroços.
+            const float craterCenters[4][2]={{-42,-38},{35,-36},{-36,38},{42,36}};
+            for(int i=0;i<4;++i) {
+                float dx=x-craterCenters[i][0],dz=z-craterCenters[i][1];
+                float r=std::sqrt(dx*dx+dz*dz);
+                float bowl=std::exp(-0.5f*(r/10.0f)*(r/10.0f));
+                float rim=std::exp(-0.5f*((r-14.0f)/3.8f)*((r-14.0f)/3.8f));
+                h+=map==6?(-0.30f*bowl+0.82f*rim):(-0.16f*bowl+0.52f*rim);
+            }
+            h+=map==7?0.18f*std::sin(x*0.19f+z*0.11f):0.05f*std::sin(x*0.12f);
+            break;
+        }
+    }
+    return 0.48f+std::max(-0.20f,h)*coast;
+}
+MeshBuffer buildMapTerrain(int map) {
+    std::vector<float> vertices;
+    constexpr int segments=64;
+    constexpr float extent=78.0f;
+    vertices.reserve(segments*segments*6*18);
+    auto point=[&](int ix,int iz) {
+        const float x=-extent+2.0f*extent*static_cast<float>(ix)/segments;
+        const float z=-extent+2.0f*extent*static_cast<float>(iz)/segments;
+        return Vec3{x,terrainHeightForMap(map,x,z),z};
+    };
+    auto normalAt=[&](int ix,int iz) {
+        Vec3 l=point(std::max(0,ix-1),iz),r=point(std::min(segments,ix+1),iz);
+        Vec3 d=point(ix,std::max(0,iz-1)),u=point(ix,std::min(segments,iz+1));
+        return normalize({-(r.y-l.y),2.0f,-(u.y-d.y)});
+    };
+    for(int z=0;z<segments;++z) for(int x=0;x<segments;++x) {
+        Vec3 a=point(x,z),b=point(x+1,z),c=point(x+1,z+1),d=point(x,z+1);
+        Vec3 na=normalAt(x,z),nb=normalAt(x+1,z),nc=normalAt(x+1,z+1),nd=normalAt(x,z+1);
+        appendTriangle(vertices,a,b,c,na,nb,nc);
+        appendTriangle(vertices,a,c,d,na,nc,nd);
+    }
+    return makeMesh(vertices);
+}
 MeshBuffer buildCylinder() {
     std::vector<float> v;
     constexpr int n=24;
@@ -287,6 +370,8 @@ MeshBuffer buildCone() {
     return makeMesh(v);
 }
 MeshBuffer gSphereMesh, gCylinderMesh, gConeMesh;
+std::array<MeshBuffer,8> gMapTerrainMeshes{};
+
 void createCube() {
     std::vector<float> v; v.reserve(36*6);
     constexpr float n=-0.5f,p=0.5f;
@@ -331,6 +416,7 @@ bool initializeGraphics() {
     gColorLocation=glGetUniformLocation(gProgram,"uColor");
     createCube();
     gSphereMesh=buildSphere(); gCylinderMesh=buildCylinder(); gConeMesh=buildCone();
+    for(int map=0;map<8;++map) gMapTerrainMeshes[static_cast<size_t>(map)]=buildMapTerrain(map);
     gSphereVbo=gSphereMesh.vbo; gSphereCount=gSphereMesh.count;
     gCylinderVbo=gCylinderMesh.vbo; gCylinderCount=gCylinderMesh.count;
     gConeVbo=gConeMesh.vbo; gConeCount=gConeMesh.count;
@@ -568,6 +654,12 @@ void drawWorld(float time) {
     const Vec3 beach=beachColors[mapStyle],land=landColors[mapStyle],road=roadColors[mapStyle];
     drawSphere({0,-0.02f,0},{174,0.62f,174},beach);
     drawSphere({0,0.31f,0},{158,0.31f,158},land);
+    const std::array<Vec3,8> terrainTints{{
+        {0.30f,0.48f,0.25f},{0.25f,0.31f,0.39f},{0.68f,0.48f,0.29f},{0.68f,0.80f,0.88f},
+        {0.35f,0.40f,0.39f},{0.26f,0.49f,0.27f},{0.31f,0.40f,0.54f},{0.34f,0.30f,0.24f}
+    }};
+    const MeshBuffer& terrainMesh=gMapTerrainMeshes[mapStyle];
+    drawMesh(terrainMesh.vbo,terrainMesh.count,{0,0,0},{1,1,1},terrainTints[mapStyle]);
     drawMapTerrain();
 
     // Long roads create readable navigation across the larger play space.
