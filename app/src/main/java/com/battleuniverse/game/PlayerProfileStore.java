@@ -185,10 +185,10 @@ public final class PlayerProfileStore {
             int historyStart = Math.max(0, historyRows.length - 19);
             for (int i = historyStart; i < historyRows.length; i++) {
                 if (historyRows[i].isEmpty()) continue;
-                if (history.length() > 0) history.append('\\n');
+                if (history.length() > 0) history.append('\n');
                 history.append(historyRows[i]);
             }
-            if (history.length() > 0) history.append('\\n');
+            if (history.length() > 0) history.append('\n');
             history.append(nextSpin).append('|').append(System.currentTimeMillis()).append('|').append(result);
             edit.putString("royale_history", history.toString());
             appendLedger(edit, "royale_spin_" + nextSpin, "ROYALE", 0L, credit - cost, 0L);
