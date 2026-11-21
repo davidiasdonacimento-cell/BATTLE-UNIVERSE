@@ -758,3 +758,6 @@ def owner_put_settings(body: GameSettingsBody, db: Session = Depends(db_session)
     db.commit()
     return {"settings": values, "saved": True}
 
+# Multiplayer is a separate API subsystem; identity remains owned by this service.
+from multiplayer import build_router as build_multiplayer_router
+app.include_router(build_multiplayer_router(Base, db_session, current_player))
