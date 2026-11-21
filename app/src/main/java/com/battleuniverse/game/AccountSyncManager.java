@@ -63,6 +63,9 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "royale_tier_claimed_3", "royale_tier_claimed_4", "royale_tier_claimed_5",
         "royale_spin_count", "royale_last_reward",
         "last_match_reward_coins", "last_match_reward_diamonds", "last_match_reward_xp",
+        "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
+        "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result",
+        "match_history",
         "wear_shirt_tactical", "wear_shirt_neon", "wear_shirt_frost", "wear_shirt_desert",
         "wear_boots_combat", "wear_boots_neon", "wear_boots_frost", "wear_boots_gold",
         "wear_set_aurora", "wear_set_champion", "wear_set_orbit", "wear_set_desert"
@@ -307,7 +310,11 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                     || "selected_set".equals(key) || "profile_schema_version".equals(key)
                     || "sensitivity_general".equals(key) || "sensitivity_aim".equals(key)
                     || "mission_matches".equals(key) || "mission_eliminations".equals(key)
-                    || "mission_crystals".equals(key) || "royale_spin_count".equals(key)) {
+                    || "mission_crystals".equals(key) || "royale_spin_count".equals(key)
+                    || "matches_played".equals(key) || "match_wins".equals(key)
+                    || "match_kills".equals(key) || "match_damage".equals(key)
+                    || "match_resources".equals(key) || "last_match_kills".equals(key)
+                    || "last_match_damage".equals(key) || "last_match_resources".equals(key)) {
                 if (value instanceof Number) editor.putInt(key, ((Number) value).intValue());
             } else if (value instanceof Boolean) {
                 editor.putBoolean(key, (Boolean) value);
