@@ -181,3 +181,12 @@ A fase 2 (fundação de dados e serviços) está **em desenvolvimento**, não co
 - `AccountSyncManager`: persistência/restauração de moedas, ledger, sensibilidades, missões e marcos do passe no Firestore.
 - A base ainda é local/offline e não substitui validação autoritativa no servidor. Não habilitar multiplayer, compras online ou saldos seguros até construir o serviço autoritativo.
 - Critérios restantes antes de promover esta fase: build Gradle/NDK, testes automatizados de migração/idempotência/conflitos, verificação de sincronização em duas instalações e teste físico no Redmi 12.
+
+
+### Fundação compartilhada — atualização de implementação
+A fase 2 agora inclui, além do contrato de perfil/carteiras:
+- estatísticas persistentes de partidas e histórico local limitado;
+- ID de sessão e proteção contra contagem repetida;
+- sincronização Firestore dos contadores, histórico e carteiras;
+- apresentação de estatísticas no lobby e perfil.
+A fase permanece em desenvolvimento até build Android, testes automatizados, teste de sincronização entre instalações e validação física.
