@@ -11,7 +11,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1;
     private volatile float lookSensitivity=1.0f,aimSensitivity=1.0f;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
-    private volatile int shirtStyle,bootStyle,setStyle;
+    private volatile int shirtStyle,bootStyle,setStyle,pantsStyle;
     private volatile int beardStyle,helmetStyle,backpackStyle,vestStyle;
     private volatile boolean contentPackReady=false;
     private volatile boolean invertCameraY=false;
@@ -68,6 +68,10 @@ public final class GameSurfaceView extends GLSurfaceView {
         bootStyle=Math.max(0,Math.min(4,boots));
         setStyle=Math.max(0,Math.min(7,set));
         queueEvent(()->nativeSetWardrobe(shirtStyle,bootStyle,setStyle));
+    }
+    public void setPantsStyle(int value) {
+        pantsStyle=Math.max(0,Math.min(1,value));
+        queueEvent(()->nativeSetPantsStyle(pantsStyle));
     }
     public void setEquipment(int beard,int helmet,int backpack,int vest) {
         beardStyle=Math.max(0,Math.min(3,beard));
@@ -247,6 +251,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetQuality(int value);
     private static native void nativeSetLookSensitivity(float general,float aiming);
     private static native void nativeSetWardrobe(int shirt,int boots,int set);
+    private static native void nativeSetPantsStyle(int pants);
     private static native void nativeSetEquipment(int beard,int helmet,int backpack,int vest);
     private static native void nativeSetContentData(int buildLimit,int resourceCount);
     private static native String nativeGetStatus();
@@ -267,6 +272,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
             nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
             nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
+            nativeSetPantsStyle(pantsStyle);
             nativeSetEquipment(beardStyle,helmetStyle,backpackStyle,vestStyle);
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
             nativeSetScreen(screenMode);
