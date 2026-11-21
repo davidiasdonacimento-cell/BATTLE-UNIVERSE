@@ -106,6 +106,12 @@ class ProfileBody(BaseModel):
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
 
+class AccountEditBody(BaseModel):
+    username: str | None = Field(default=None, min_length=3, max_length=18, pattern=r"^[A-Za-z0-9_]+$")
+    character_name: str | None = Field(default=None, min_length=1, max_length=32)
+    state: str | None = Field(default=None, pattern=r"^(active|suspended)$")
+    reason: str | None = Field(default=None, max_length=240)
+
 class GameSettingsBody(BaseModel):
     game_name: str = Field(min_length=2, max_length=40)
     character_names: dict[str, str] = Field(default_factory=dict)
@@ -257,6 +263,86 @@ def owner_pair(body: OwnerPairBody) -> dict[str, Any]:
         raise HTTPException(401, "Código de ativação inválido.")
     return {"access_token": issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES),
             "token_type": "bearer", "expires_in": OWNER_TOKEN_MINUTES * 60}
+
+@app.get("/v1/owner/overview")
+def admin_overview(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    total = db.scalar(select(func.count(Player.id))) or 0
+    suspended = db.scalar(select(func.count(AccountControl.player_id)).where(AccountControl.state == "suspended")) or 0
+    deleted = db.scalar(select(func.count(AccountControl.player_id)).where(AccountControl.state == "deleted")) or 0
+    return {"accounts_total": total, "accounts_suspended": suspended, "accounts_deleted": deleted,
+            "admin": owner}
+
+@app.get("/v1/owner/accounts")
+def admin_accounts(search: str = Query(default="", max_length=40), limit: int = Query(default=50, ge=1, le=100),
+                   offset: int = Query(default=0, ge=0), db: Session = Depends(db_session),
+                   owner: str = Depends(current_owner)):
+    stmt = select(Player).order_by(Player.id.desc()).limit(limit).offset(offset)
+    if search.strip():
+        stmt = select(Player).where(Player.username.ilike(f"%{search.strip()}%")).order_by(Player.id.desc()).limit(limit).offset(offset)
+    players = db.scalars(stmt).all()
+    rows = []
+    for p in players:
+        ctl = db.get(AccountControl, p.id)
+        rows.append({"id": p.id, "username": p.username, "character_name": (p.profile or {}).get("character_display_name", ""),
+                     "state": ctl.state if ctl else "active", "created_at": p.created_at.isoformat()})
+    return {"accounts": rows, "limit": limit, "offset": offset}
+
+@app.patch("/v1/owner/accounts/{player_id}")
+def admin_edit_account(player_id: int, body: AccountEditBody, db: Session = Depends(db_session),
+                       owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    changes = {}
+    if body.username is not None:
+        new_name = body.username.lower()
+        conflict = db.scalar(select(Player.id).where(Player.username == new_name, Player.id != player_id))
+        if conflict:
+            raise HTTPException(409, "Esse nickname já está em uso.")
+        changes["username"] = {"from": player.username, "to": new_name}
+        player.username = new_name
+    if body.character_name is not None:
+        profile = dict(player.profile or {})
+        profile["character_display_name"] = body.character_name.strip()
+        player.profile = profile
+        changes["character_name"] = body.character_name.strip()
+    if body.state is not None:
+        control = db.get(AccountControl, player_id) or AccountControl(player_id=player_id)
+        control.state = body.state
+        control.reason = (body.reason or "").strip()
+        control.changed_at = datetime.now(timezone.utc)
+        db.add(control)
+        changes["state"] = body.state
+    player.updated_at = datetime.now(timezone.utc)
+    audit(db, owner, "account_update", str(player_id), changes)
+    db.add(player); db.commit(); db.refresh(player)
+    return {"account": {"id": player.id, "username": player.username,
+                        "character_name": (player.profile or {}).get("character_display_name", ""),
+                        "state": body.state or "active"}, "updated": changes}
+
+@app.delete("/v1/owner/accounts/{player_id}")
+def admin_delete_account(player_id: int, db: Session = Depends(db_session),
+                         owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    control = db.get(AccountControl, player_id) or AccountControl(player_id=player_id)
+    control.state = "deleted"
+    control.reason = "Encerrada pelo administrador"
+    control.changed_at = datetime.now(timezone.utc)
+    player.password_hash = password_hash.hash(secrets.token_urlsafe(48))
+    player.profile = {}
+    audit(db, owner, "account_deleted", str(player_id), {"soft_delete": True})
+    db.add(control); db.add(player); db.commit()
+    return {"deleted": True, "player_id": player_id, "mode": "soft_delete"}
+
+@app.get("/v1/owner/audit")
+def admin_audit(limit: int = Query(default=50, ge=1, le=100), db: Session = Depends(db_session),
+                owner: str = Depends(current_owner)):
+    rows = db.scalars(select(AdminAudit).order_by(AdminAudit.id.desc()).limit(limit)).all()
+    return {"events": [{"id": r.id, "admin": r.admin_username, "action": r.action,
+                        "target": r.target, "details": r.details, "created_at": r.created_at.isoformat()}
+                       for r in rows]}
 
 @app.get("/v1/owner/settings")
 def owner_get_settings(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
