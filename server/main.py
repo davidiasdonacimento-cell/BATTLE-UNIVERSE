@@ -47,6 +47,15 @@ PROFILE_FIELDS = {
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
     "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
     "wear_set_cerrado", "wear_beard_old", "wear_pants_angelical", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
+    "nickname", "xp", "coins", "diamonds", "profile_schema_version", "coins_wallet_initialized",
+    "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
+    "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result", "match_history",
+    "economy_ledger", "royale_history", "royale_spin_count",
+    "mission_matches", "mission_eliminations", "mission_crystals", "missions_day",
+    "mission_claimed_0", "mission_claimed_1", "mission_claimed_2", "wardrobe_starter_v2_granted",
+    "shop_frame_neon", "shop_emblem_bloob", "shop_title_champion",
+    "match_reward_session_id", "match_reward_recorded",
+    "last_match_reward_diamonds", "last_match_reward_xp", "last_match_reward_coins",
 }
 
 class Base(DeclarativeBase):
@@ -313,7 +322,8 @@ def update_profile(body: ProfileBody, db: Session = Depends(db_session),
     clean: dict[str, Any] = {}
     for key, value in body.profile.items():
         if key in PROFILE_FIELDS and (isinstance(value, (str, bool, int, float)) or value is None):
-            if isinstance(value, str) and len(value) > 256:
+            max_length = 4096 if key in {"match_history", "economy_ledger", "royale_history"} else 256
+            if isinstance(value, str) and len(value) > max_length:
                 raise HTTPException(422, f"Valor muito longo: {key}")
             clean[key] = value
     player.profile = {**(player.profile or {}), **clean}
