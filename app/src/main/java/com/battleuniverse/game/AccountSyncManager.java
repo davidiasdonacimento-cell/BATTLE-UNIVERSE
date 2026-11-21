@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -42,6 +43,18 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private static final Set<String> LONG_PROFILE_KEYS=new HashSet<>(Arrays.asList(
         "xp","missions_day","match_reward_session_id",
         "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
+    ));
+    private static final Set<String> MAX_PROFILE_COUNTERS=new HashSet<>(Arrays.asList(
+        "xp","matches_played","match_wins","match_kills","match_damage","match_resources",
+        "mission_matches","mission_eliminations","mission_crystals","royale_spin_count"
+    ));
+    private static final Set<String> TRUE_WINS_PROFILE_FLAGS=new HashSet<>(Arrays.asList(
+        "coins_wallet_initialized","wardrobe_starter_v2_granted","shop_frame_neon","shop_emblem_bloob",
+        "shop_title_champion","wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost",
+        "wear_shirt_desert","wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
+        "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert","wear_set_volcano",
+        "wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical",
+        "match_reward_recorded","mission_claimed_0","mission_claimed_1","mission_claimed_2"
     ));
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
@@ -311,15 +324,48 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         return out;
     }
     private void applyProfile(JSONObject profile){
-        if(profile==null||closed)return;applying=true;SharedPreferences.Editor ed=prefs.edit();Map<String,?> old=prefs.getAll();
-        for(String key:PROFILE_KEYS){if(!profile.has(key)||profile.isNull(key))continue;Object v=profile.opt(key),prior=old.get(key);
-            if(v instanceof Boolean)ed.putBoolean(key,(Boolean)v);
-            else if(v instanceof Number) {
-                if(LONG_PROFILE_KEYS.contains(key)||prior instanceof Long)ed.putLong(key,((Number)v).longValue());
-                else ed.putInt(key,((Number)v).intValue());
+        if(profile==null||closed)return;
+        applying=true;
+        SharedPreferences.Editor ed=prefs.edit();
+        Map<String,?> old=prefs.getAll();
+        for(String key:PROFILE_KEYS){
+            if(!profile.has(key)||profile.isNull(key))continue;
+            Object value=profile.opt(key),prior=old.get(key);
+            if(prior!=null){
+                if(MAX_PROFILE_COUNTERS.contains(key)&&value instanceof Number&&prior instanceof Number)
+                    value=Math.max(((Number)value).longValue(),((Number)prior).longValue());
+                else if(TRUE_WINS_PROFILE_FLAGS.contains(key)&&value instanceof Boolean&&prior instanceof Boolean)
+                    value=(Boolean)value||(Boolean)prior;
+                else if(("economy_ledger".equals(key)||"match_history".equals(key)||"royale_history".equals(key))
+                        &&value instanceof String&&prior instanceof String)
+                    value=mergeHistory((String)prior,(String)value,
+                        "economy_ledger".equals(key)?60:("match_history".equals(key)?30:20));
             }
-            else if(v instanceof String&&(prior==null||prior instanceof String))ed.putString(key,(String)v);}
-        ed.commit();applying=false;
+            if(value instanceof Boolean)ed.putBoolean(key,(Boolean)value);
+            else if(value instanceof Number) {
+                if(LONG_PROFILE_KEYS.contains(key)||prior instanceof Long)ed.putLong(key,((Number)value).longValue());
+                else ed.putInt(key,((Number)value).intValue());
+            }
+            else if(value instanceof String&&(prior==null||prior instanceof String))ed.putString(key,(String)value);
+        }
+        ed.commit();
+        applying=false;
+    }
+
+    private static String mergeHistory(String local,String remote,int limit){
+        LinkedHashSet<String> rows=new LinkedHashSet<>();
+        for(String source:new String[]{remote,local}){
+            if(source==null||source.isEmpty())continue;
+            for(String row:source.split("\\n"))if(!row.isEmpty())rows.add(row);
+        }
+        StringBuilder merged=new StringBuilder();
+        int skip=Math.max(0,rows.size()-limit),index=0;
+        for(String row:rows){
+            if(index++<skip)continue;
+            if(merged.length()>0)merged.append('\\n');
+            merged.append(row);
+        }
+        return merged.toString();
     }
     private void saveProfile(){
         if(closed||!isSignedIn())return;try{JSONObject body=new JSONObject();body.put("profile",collectProfile());
