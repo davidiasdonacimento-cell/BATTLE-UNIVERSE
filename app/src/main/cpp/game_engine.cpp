@@ -172,8 +172,8 @@ struct TrainingTarget { Vec3 pos; int energy=3; bool active=true; };
 std::array<TrainingTarget,TARGET_COUNT> gTargets{{
     {{-12,1.25f,-13},3,true}, {{13,1.25f,-12},3,true}, {{2,1.25f,18},3,true}
 }};
-std::array<int,7> gWeaponAmmo{{0,0,0,0,0,0,0}};
-std::array<bool,7> gWeaponOwned{{false,false,false,false,false,false,false}};
+std::array<int,4> gWeaponAmmo{{0,0,0,0}};
+std::array<bool,4> gWeaponOwned{{false,false,false,false}};
 int gTrainingScore=0, gWeaponType=-1;
 struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=false; bool ammoOnly=false; int kind=0; };
 std::array<GroundLoot,64> gGroundLoot{};
@@ -1171,33 +1171,31 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.075f,0.09f,0.07f},skin,yaw);
 
     if(bot||gWeaponType>=0) {
-        const bool xm8=!bot&&gWeaponType==4;
-        const bool carapina=!bot&&gWeaponType==5;
-        const bool ump=!bot&&gWeaponType==6;
-        const Vec3 receiver=xm8?Vec3{0.42f,0.34f,0.20f}:
-            (carapina?Vec3{0.32f,0.29f,0.23f}:(ump?Vec3{0.12f,0.15f,0.16f}:Vec3{0.045f,0.075f,0.085f}));
-        const Vec3 barrel=xm8?Vec3{0.25f,0.24f,0.18f}:
-            (carapina?Vec3{0.20f,0.19f,0.16f}:(ump?Vec3{0.10f,0.12f,0.13f}:Vec3{0.12f,0.20f,0.22f}));
-        const float length=xm8?0.66f:(carapina?0.82f:(ump?0.48f:0.42f));
-        drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),
-            {xm8?0.19f:(carapina?0.15f:(ump?0.17f:0.16f)),0.13f,length},receiver,yaw);
-        drawCube(localPoint(p,0,1.40f+bob,-0.77f+recoil,yaw),
-            {xm8?0.13f:(ump?0.11f:0.10f),0.045f,xm8?0.28f:(carapina?0.36f:(ump?0.22f:0.23f))},barrel,yaw);
-        drawCube(localPoint(p,0,1.31f+bob,-1.03f+recoil,yaw),
-            {0.07f,0.075f,carapina?0.34f:0.22f},barrel,yaw);
+        const bool desert=!bot&&gWeaponType==0;
+        const bool miniUzi=!bot&&gWeaponType==1;
+        const bool xm8=!bot&&gWeaponType==2;
+        const bool ump=!bot&&gWeaponType==3;
+        const Vec3 receiver=xm8?Vec3{0.42f,0.34f,0.20f}:(ump?Vec3{0.12f,0.15f,0.16f}:(desert?Vec3{0.16f,0.12f,0.10f}:Vec3{0.045f,0.075f,0.085f}));
+        const Vec3 barrel=xm8?Vec3{0.25f,0.24f,0.18f}:(ump?Vec3{0.10f,0.12f,0.13f}:(desert?Vec3{0.22f,0.18f,0.13f}:Vec3{0.12f,0.20f,0.22f}));
+        const float length=xm8?0.66f:(ump?0.48f:(desert?0.30f:(miniUzi?0.36f:0.42f)));
+        drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),{xm8?0.19f:(ump?0.17f:(desert?0.18f:(miniUzi?0.13f:0.16f))),0.13f,length},receiver,yaw);
+        drawCube(localPoint(p,0,1.40f+bob,-0.77f+recoil,yaw),{xm8?0.13f:(ump?0.11f:(desert?0.13f:0.10f)),0.045f,xm8?0.28f:(ump?0.22f:(desert?0.17f:0.23f))},barrel,yaw);
+        drawCube(localPoint(p,0,1.31f+bob,-1.03f+recoil,yaw),{0.07f,0.075f,xm8?0.22f:(ump?0.22f:(desert?0.12f:0.18f))},barrel,yaw);
         if(xm8) {
             drawCube(localPoint(p,0,1.49f+bob,-0.86f+recoil,yaw),{0.12f,0.10f,0.20f},{0.15f,0.20f,0.18f},yaw);
             drawCube(localPoint(p,0,1.22f+bob,-0.67f+recoil,yaw),{0.11f,0.22f,0.14f},{0.20f,0.17f,0.12f},yaw);
-        } else if(carapina) {
-            drawCube(localPoint(p,0,1.48f+bob,-0.91f+recoil,yaw),{0.075f,0.075f,0.34f},{0.12f,0.13f,0.12f},yaw);
-            drawCube(localPoint(p,0,1.20f+bob,-0.68f+recoil,yaw),{0.12f,0.24f,0.13f},{0.18f,0.15f,0.12f},yaw);
         } else if(ump) {
             drawCube(localPoint(p,0,1.47f+bob,-0.78f+recoil,yaw),{0.11f,0.07f,0.20f},{0.20f,0.24f,0.25f},yaw);
             drawCube(localPoint(p,0,1.17f+bob,-0.70f+recoil,yaw),{0.13f,0.24f,0.12f},{0.08f,0.10f,0.11f},yaw);
             drawCube(localPoint(p,0,1.16f+bob,-0.91f+recoil,yaw),{0.12f,0.28f,0.10f},{0.12f,0.15f,0.16f},yaw);
+        } else if(desert) {
+            drawCube(localPoint(p,0,1.19f+bob,-0.68f+recoil,yaw),{0.12f,0.22f,0.12f},{0.20f,0.16f,0.12f},yaw);
+            drawCube(localPoint(p,0,1.47f+bob,-0.82f+recoil,yaw),{0.13f,0.06f,0.16f},{0.24f,0.20f,0.14f},yaw);
+        } else if(miniUzi) {
+            drawCube(localPoint(p,0,1.17f+bob,-0.70f+recoil,yaw),{0.10f,0.22f,0.10f},{0.08f,0.10f,0.11f},yaw);
+            drawCube(localPoint(p,0,1.47f+bob,-0.80f+recoil,yaw),{0.08f,0.07f,0.16f},{0.12f,0.15f,0.16f},yaw);
         }
-        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.22f-recoil,yaw),
-            {0.13f,0.13f,0.13f},{1.0f,0.72f,0.24f},yaw);
+        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.22f-recoil,yaw),{0.13f,0.13f,0.13f},{1.0f,0.72f,0.24f},yaw);
     }
     gCharacterPoseScale=1.0f;
 }
@@ -1209,27 +1207,27 @@ void drawCrystal(Vec3 p,float time,int index) {
 }
 void resetGroundLoot() {
     gGroundLoot={{
-        {{-3.0f,0.55f,-2.0f},0,30,true,false},
-        {{3.0f,0.55f,-2.0f},1,24,true,false},
-        {{-3.0f,0.55f,3.0f},2,18,true,false},
-        {{3.0f,0.55f,3.0f},3,240,true,false},
-        {{64.0f,0.55f,69.0f},1,24,true,false},
-        {{-91.0f,0.55f,79.0f},2,18,true,false},
-        {{-72.0f,0.55f,32.0f},0,20,true,false},
-        {{91.0f,0.55f,-82.0f},1,20,true,false},
-        {{-128.0f,0.55f,-116.0f},2,22,true,false},
-        {{-84.0f,0.55f,-126.0f},0,24,true,false},
-        {{126.0f,0.55f,-106.0f},1,22,true,false},
-        {{130.0f,0.55f,61.0f},2,24,true,false},
+        {{-3.0f,0.55f,-2.0f},0,18,true,false},
+        {{3.0f,0.55f,-2.0f},1,42,true,false},
+        {{-3.0f,0.55f,3.0f},2,30,true,false},
+        {{3.0f,0.55f,3.0f},3,36,true,false},
+        {{64.0f,0.55f,69.0f},1,42,true,false},
+        {{-91.0f,0.55f,79.0f},2,30,true,false},
+        {{-72.0f,0.55f,32.0f},0,18,true,false},
+        {{91.0f,0.55f,-82.0f},3,36,true,false},
+        {{-128.0f,0.55f,-116.0f},2,30,true,false},
+        {{-84.0f,0.55f,-126.0f},0,18,true,false},
+        {{126.0f,0.55f,-106.0f},1,42,true,false},
+        {{130.0f,0.55f,61.0f},3,36,true,false},
         {{-104.0f,0.55f,118.0f},0,36,true,true},
-        {{30.0f,0.55f,-116.0f},1,36,true,true},
+        {{30.0f,0.55f,-116.0f},1,48,true,true},
         {{112.0f,0.55f,110.0f},2,36,true,true},
-        {{-126.0f,0.55f,62.0f},0,36,true,true},
-        {{6.0f,0.55f,132.0f},1,30,true,true},
-        {{-44.0f,0.55f,128.0f},2,30,true,true},
-        {{-18.0f,0.55f,-104.0f},4,30,true,false},
-        {{104.0f,0.55f,18.0f},5,24,true,false},
-        {{-118.0f,0.55f,-8.0f},6,42,true,false}
+        {{-126.0f,0.55f,62.0f},3,42,true,true},
+        {{6.0f,0.55f,132.0f},0,36,true,true},
+        {{-44.0f,0.55f,128.0f},1,48,true,true},
+        {{-18.0f,0.55f,-104.0f},2,36,true,false},
+        {{104.0f,0.55f,18.0f},3,42,true,false},
+        {{-118.0f,0.55f,-8.0f},0,24,true,false}
     }};
 }
 void drawGroundLoot(float time) {
@@ -1240,12 +1238,10 @@ void drawGroundLoot(float time) {
         if(loot.kind==2) color={0.18f,0.88f,0.48f};
         else if(loot.kind==3) color={0.35f,0.72f,1.0f};
         else if(loot.ammoOnly) color={0.92f,0.68f,0.20f};
-        else if(loot.weaponType==0) color={0.12f,0.86f,0.94f};
-        else if(loot.weaponType==1) color={0.28f,0.58f,1.0f};
-        else if(loot.weaponType==2) color={0.94f,0.48f,0.20f};
-        else if(loot.weaponType==4) color={0.72f,0.62f,0.38f};
-        else if(loot.weaponType==5) color={0.52f,0.46f,0.34f};
-        else if(loot.weaponType==6) color={0.22f,0.30f,0.34f};
+        else if(loot.weaponType==0) color={0.72f,0.62f,0.38f};
+        else if(loot.weaponType==1) color={0.12f,0.86f,0.94f};
+        else if(loot.weaponType==2) color={0.52f,0.46f,0.34f};
+        else if(loot.weaponType==3) color={0.22f,0.30f,0.34f};
         drawCube({loot.pos.x,loot.pos.y+0.34f+bob,loot.pos.z},{0.82f,0.52f,0.62f},color);
         drawCube({loot.pos.x,loot.pos.y+0.63f+bob,loot.pos.z},{0.54f,0.12f,0.66f},{0.12f,0.17f,0.22f});
         if(loot.kind==2) {
@@ -1270,8 +1266,8 @@ void drawSafeZone() {
     }
 }
 const char* weaponName() {
-    static const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI","XM8 DESERT","CARAPINA","UMP"};
-    if(gWeaponType<0||gWeaponType>=7)return "SEM ARMA";
+    static const char* names[]={"DESERT EAGLE","MINI UZI","XM8","UMP"};
+    if(gWeaponType<0||gWeaponType>=4)return "SEM ARMA";
     return names[gWeaponType];
 }
 void updateStatus() {
@@ -1633,7 +1629,7 @@ void drawBuildPieces() {
     }
 }
 void firePulse() {
-    if(gWeaponType<0||gWeaponType>=7||!gWeaponOwned[static_cast<size_t>(gWeaponType)]) {
+    if(gWeaponType<0||gWeaponType>=4||!gWeaponOwned[static_cast<size_t>(gWeaponType)]) {
         setStatus("SEM ARMA • PROCURE UM EQUIPAMENTO NO CHÃO");return;
     }
     int& ammo=gWeaponAmmo[static_cast<size_t>(gWeaponType)];
@@ -1644,9 +1640,9 @@ void firePulse() {
     gPlayerYaw=gCameraYaw;
     gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gCameraYaw);
     const float fx=-std::sin(gCameraYaw),fz=-std::cos(gCameraYaw);
-    const float range=gWeaponType==5?76.0f:(gWeaponType==4?64.0f:(gWeaponType==6?48.0f:(gWeaponType==2?42.0f:56.0f)));
-    const float tolerance=(gWeaponType==5?1.35f:(gWeaponType==4?1.85f:(gWeaponType==6?2.35f:(gWeaponType==1?2.7f:2.0f))));
-    const int damage=(gWeaponType==5?3:(gWeaponType==4?2:(gWeaponType==6?1:(gWeaponType==2?3:(gWeaponType==1?2:1)))));
+    const float range=gWeaponType==0?56.0f:(gWeaponType==1?42.0f:(gWeaponType==2?64.0f:48.0f));
+    const float tolerance=gWeaponType==0?1.65f:(gWeaponType==1?2.7f:(gWeaponType==2?1.85f:2.35f));
+    const int damage=gWeaponType==0?3:(gWeaponType==1?1:(gWeaponType==2?2:1));
     float best=range;
     int hitTarget=-1,hitBot=-1;
     if(gSelectedMode==3) {
@@ -1714,7 +1710,7 @@ void firePulse() {
         }
     }
     if(hitTarget<0&&hitBot<0) {
-        const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI","XM8 DESERT","CARAPINA","UMP"};
+        const char* names[]={"DESERT EAGLE","MINI UZI","XM8","UMP"};
         std::ostringstream out;out<<names[std::clamp(gWeaponType,0,6)]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
         setStatus(out.str());
     }
@@ -1873,14 +1869,11 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         if(gSelectedMode==3) {
             gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);
             gDropState=3;gDropTimer=0;gPlaneExteriorView=false;gParachuteOpen=false;
-            gWeaponOwned.fill(true);gWeaponAmmo.fill(999);gWeaponType=5;
+            gWeaponOwned.fill(true);gWeaponAmmo.fill(999);gWeaponType=1;
             gGroundLoot[0]={{-3.0f,0.55f,-2.0f},0,240,true,false};
             gGroundLoot[1]={{3.0f,0.55f,-2.0f},1,240,true,false};
             gGroundLoot[2]={{-3.0f,0.55f,3.0f},2,240,true,false};
             gGroundLoot[3]={{3.0f,0.55f,3.0f},3,240,true,false};
-            gGroundLoot[4]={{-6.0f,0.55f,0.0f},4,240,true,false};
-            gGroundLoot[5]={{6.0f,0.55f,0.0f},5,240,true,false};
-            gGroundLoot[6]={{0.0f,0.55f,6.0f},6,240,true,false};
         } else {
             gDropState=1;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;
         }
@@ -2160,8 +2153,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(aimHeld&&gDropState>=2) gPlayerYaw=gCameraYaw;
     if(swapPressed&&gDropState==3) {
         int next=-1;
-        for(int step=1;step<=7;++step) {
-            const int candidate=(gWeaponType+step+7)%7;
+        for(int step=1;step<=4;++step) {
+            const int candidate=(gWeaponType+step+4)%4;
             if(gWeaponOwned[static_cast<size_t>(candidate)]){next=candidate;break;}
         }
         if(next>=0){gWeaponType=next;setStatus(std::string("EQUIPADO: ")+weaponName());}
@@ -2222,7 +2215,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     }
     // Segurar DISPARAR mantém o disparo automático; um toque rápido dispara uma vez.
     if(pulseHeld&&gDropState==3&&!gPlayerDowned&&gPulseCooldown<=0.0f) {
-        firePulse();gPulseCooldown=(gWeaponType==3?0.10f:(gWeaponType==6?0.12f:(gWeaponType==5?0.62f:(gWeaponType==4?0.20f:(gWeaponType==2?0.55f:0.24f)))));
+        firePulse();gPulseCooldown=(gWeaponType==1?0.10f:(gWeaponType==3?0.12f:(gWeaponType==2?0.20f:0.42f)));
     }
 
     if(gDropState==3) {
