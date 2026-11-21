@@ -69,16 +69,22 @@ public final class AdminActivity extends Activity {
 
     private void showLogin() {
         base("BATTLE UNIVERSE ADMIN");
-        if (api.isEmpty()) { status.setText("API não configurada. Defina ADMIN_API_BASE_URL no build do APK após hospedar o servidor HTTPS."); return; }
+        EditText serverUrl = field("URL HTTPS da API (ex.: https://seu-servidor.onrender.com)", false);
+        serverUrl.setText(api);
         EditText user = field("Usuário administrativo", false);
         EditText pass = field("Senha administrativa", true);
-        button("ENTRAR NO PAINEL", () -> work("Validando administrador...", () -> {
+        button("ENTRAR NO PAINEL", () -> {
+            api = serverUrl.getText().toString().trim();
+            while (api.endsWith("/")) api = api.substring(0, api.length()-1);
+            if (!api.startsWith("https://")) { status.setText("Informe uma URL HTTPS válida do servidor."); return; }
+            work("Validando administrador...", () -> {
             JSONObject body = new JSONObject(); body.put("username", user.getText().toString().trim());
             body.put("password", pass.getText().toString());
             JSONObject result = request("POST", "/v1/admin/login", body);
             token = result.getString("access_token");
             runOnUiThread(this::showDashboard);
-        }));
+            });
+        });
         status.setText("Acesso restrito. Credenciais são verificadas pelo servidor; não existe senha mestra no APK.");
     }
 
