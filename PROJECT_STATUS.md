@@ -126,3 +126,13 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - O movimento no solo atualiza a altura vertical do personagem conforme a função de terreno do mapa. A colisão existente continua bloqueando as áreas íngremes definidas.
 - Limites: esta versão usa terreno procedural low-poly e aproximações matemáticas; não é um sistema completo de navegação em encostas, física de água, interiores ou destruição. Pontos de loot e alguns objetos antigos ainda precisam ser ajustados individualmente à altura do terreno.
 - A compilação após os commits de relevo e teste visual no Redmi 12 ainda precisam ser confirmados. Não instalar até o workflow terminar e o APK correto ser validado.
+
+
+## Configurações do motor — implementação publicada em 2026-11-21 (build pendente)
+- A tela de configurações foi reorganizada para expor controles que já possuem integração real, sem manter botões de áudio que apenas alteravam preferências sem mixer conectado.
+- Sensibilidade geral e sensibilidade ao mirar agora são valores independentes de 25% a 200%, persistidos em SharedPreferences e reaplicados quando a superfície OpenGL é recriada.
+- A engine C++ recebe os dois valores por JNI e seleciona a sensibilidade de câmera livre ou de mira conforme o estado real de mira.
+- A sensibilidade antiga de três níveis é migrada para um valor inicial compatível quando o usuário ainda não tem a nova preferência salva.
+- Qualidade gráfica continua ligada a `nativeSetQuality`; inversão vertical, minimapa e háptica mantêm suas preferências existentes. A inversão vertical já é aplicada no deslocamento vertical enviado ao motor.
+- Áudio/mixagem não é apresentado como configurável nesta tela enquanto não existir um mixer real integrado. Sensibilidade independente por ponto vermelho/2x/4x/sniper/olhadinha, layout avançado do HUD, volumes de áudio, coleta automática e demais ajustes continuam pendentes; não declarar o menu de configurações completo.
+- Código publicado nos commits `56df6551231b16f9dc931ac530878a2402547f93`, `a16cf9e77f2a6c62dc527e973cbcc66a63d0f6de` e `390da6b529d633c2b1957f9fa79a3eafad599b43`. A compilação deste conjunto ainda precisa ser confirmada pelo GitHub Actions; não há teste físico no Redmi 12.
