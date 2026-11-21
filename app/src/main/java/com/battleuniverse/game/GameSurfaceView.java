@@ -15,6 +15,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private volatile int beardStyle,helmetStyle,backpackStyle,vestStyle;
     private volatile boolean contentPackReady=false;
     private volatile boolean invertCameraY=false;
+    private volatile boolean trainingGodMode=false;
     private boolean aimToggled=false;
     private int movePointer=-1,lookPointer=-1;
     private final int[] buttonPointers={-1,-1,-1,-1,-1,-1,-1,-1,-1};
@@ -63,6 +64,10 @@ public final class GameSurfaceView extends GLSurfaceView {
         queueEvent(()->nativeSetLookSensitivity(lookSensitivity,aimSensitivity));
     }
     public void setInvertCameraY(boolean enabled) { invertCameraY=enabled; }
+    public void setTrainingGodMode(boolean enabled) {
+        trainingGodMode=enabled&&matchMode==3;
+        queueEvent(()->nativeSetGodMode(trainingGodMode));
+    }
     public void setWardrobe(int shirt,int boots,int set) {
         shirtStyle=Math.max(0,Math.min(4,shirt));
         bootStyle=Math.max(0,Math.min(4,boots));
@@ -248,6 +253,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetCharacter(int id);
     private static native void nativeSetMap(int id);
     private static native void nativeSetMode(int id);
+    private static native void nativeSetGodMode(boolean enabled);
     private static native void nativeSetQuality(int value);
     private static native void nativeSetLookSensitivity(float general,float aiming);
     private static native void nativeSetWardrobe(int shirt,int boots,int set);
@@ -270,6 +276,7 @@ public final class GameSurfaceView extends GLSurfaceView {
                 javax.microedition.khronos.egl.EGLConfig config) {
             nativeInit();
             nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
+            nativeSetGodMode(trainingGodMode);
             nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
             nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
             nativeSetPantsStyle(pantsStyle);
