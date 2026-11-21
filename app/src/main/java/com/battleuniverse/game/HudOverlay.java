@@ -164,8 +164,12 @@ public final class HudOverlay extends View {
         panel(c,1000,17,246,60,0xC5152938,0x557AA0B8,15);
         circle(c,1032,47,18,0xFF1F7584,
             prefs.getBoolean("shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
+        if(prefs.getBoolean("shop_emblem_bloob",false))
+            text(c,"B",1029,51,10,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,nickname.length()>11?nickname.substring(0,11):nickname,1060,42,12,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"NÍVEL "+String.format(Locale.US,"%02d",level)+"  •  "+xp+" XP",1060,60,9,0xFF9BB6C6,Typeface.DEFAULT);
+        if(prefs.getBoolean("shop_title_champion",false))
+            text(c,"TÍTULO • CAMPEÃO",1060,73,7,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         text(c,"◆ "+formatDiamonds(diamonds)+"  ● "+formatDiamonds(profile.getCoins()),1138,51,9,0xFFFFC76B,Typeface.DEFAULT_BOLD);
     }
     private String formatDiamonds(long value) {
@@ -469,7 +473,8 @@ public final class HudOverlay extends View {
                 owned?0xFF4BD4C9:0x335D8495,12);
             circle(c,x+24,y+24,14,SHOP_COLORS[i],0xFFB5D6E1);
             text(c,SHOP_NAMES[i],x+44,y+20,8,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,owned?"JÁ ADQUIRIDO":"◆ "+SHOP_PRICES[i]+" DIAMANTES",x+44,y+36,7,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            String priceLabel=i<3?"● "+SHOP_PRICES[i]+" MOEDAS":"◆ "+SHOP_PRICES[i]+" DIAMANTES";
+            text(c,owned?"JÁ ADQUIRIDO":priceLabel,x+44,y+36,7,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         }
         text(c,"Itens cosméticos diretos • sem roleta paga ou prêmio aleatório.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
@@ -794,11 +799,15 @@ public final class HudOverlay extends View {
         if(prefs.getBoolean(SHOP_KEYS[index],false)) {
             toast("Este item já está no seu inventário.");return;
         }
-        PlayerProfileStore.PurchaseResult result=profile.purchase(SHOP_KEYS[index],SHOP_PRICES[index]);
-        if(result==PlayerProfileStore.PurchaseResult.INSUFFICIENT_FUNDS){toast("Diamantes insuficientes.");return;}
+        PlayerProfileStore.PurchaseResult result=index<3
+            ?profile.purchaseWithCoins(SHOP_KEYS[index],SHOP_PRICES[index])
+            :profile.purchase(SHOP_KEYS[index],SHOP_PRICES[index]);
+        if(result==PlayerProfileStore.PurchaseResult.INSUFFICIENT_FUNDS){
+            toast(index<3?"Moedas insuficientes.":"Diamantes insuficientes.");return;
+        }
         if(result==PlayerProfileStore.PurchaseResult.ALREADY_OWNED){toast("Este item já está no seu inventário.");return;}
         if(result!=PlayerProfileStore.PurchaseResult.PURCHASED){toast("Falha ao salvar a compra. Saldo preservado.");return;}
-        toast(SHOP_NAMES[index]+" adquirido!");
+        toast(SHOP_NAMES[index]+" adquirido com "+(index<3?"moedas!":"diamantes!"));
     }
 
     private void drawEventsPage(Canvas c) {
