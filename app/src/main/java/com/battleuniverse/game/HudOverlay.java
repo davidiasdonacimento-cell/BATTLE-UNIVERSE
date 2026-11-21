@@ -1147,18 +1147,17 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
 
     private void showRedeemDialog() {
         EditText input=new EditText(getContext());
-        input.setSingleLine(true); input.setHint("Digite 100K");
+        input.setSingleLine(true); input.setHint("Digite seu código promocional");
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         new AlertDialog.Builder(getContext())
             .setTitle("Resgatar código secreto")
-            .setMessage("O código 100K concede 100.000 diamantes virtuais uma única vez por conta no servidor online.")
+            .setMessage("Resgate códigos ativos no servidor. Cada código segue seu limite e regras de uso.")
             .setView(input).setNegativeButton("CANCELAR",null)
             .setPositiveButton("RESGATAR",(dialog,which)->redeemCode(input.getText().toString()))
             .show();
     }
     private void redeemCode(String rawCode) {
         String code=rawCode==null?"":rawCode.trim().toUpperCase(Locale.ROOT);
-        if(!"100K".equals(code)) { toast("Código inválido."); return; }
         if(promoCodeAction==null) {
             toast("Resgate online indisponível. Entre na conta e tente novamente.");
             return;
