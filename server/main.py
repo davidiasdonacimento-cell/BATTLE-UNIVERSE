@@ -21,8 +21,8 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "").strip()
 JWT_ISSUER = os.environ.get("JWT_ISSUER", "battle-universe-accounts")
 ACCESS_TOKEN_MINUTES = max(15, min(43200, int(os.environ.get("ACCESS_TOKEN_MINUTES", "43200"))))
 ADMIN_TOKEN_MINUTES = max(10, min(720, int(os.environ.get("ADMIN_TOKEN_MINUTES", "120"))))
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "").strip().lower()
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+OWNER_PAIRING_CODE = os.environ.get("OWNER_PAIRING_CODE", "").strip()
+OWNER_TOKEN_MINUTES = 43200
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is required")
 if len(JWT_SECRET) < 32:
@@ -103,9 +103,8 @@ class LoginBody(BaseModel):
 class ProfileBody(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
 
-class AdminLoginBody(BaseModel):
-    username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=12, max_length=128)
+class OwnerPairBody(BaseModel):
+    pairing_code: str = Field(min_length=32, max_length=256)
 
 class AccountEditBody(BaseModel):
     username: str | None = Field(default=None, min_length=3, max_length=18, pattern=r"^[A-Za-z0-9_]+$")
@@ -144,15 +143,9 @@ def audit(db: Session, admin: str, action: str, target: str = "", details: dict[
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
-    # Admin is provisioned only from private hosting environment variables.
-    if ADMIN_USERNAME and ADMIN_PASSWORD:
-        if len(ADMIN_PASSWORD) < 12:
-            raise RuntimeError("ADMIN_PASSWORD must contain at least 12 characters")
-        with SessionLocal() as db:
-            admin = db.scalar(select(AdminUser).where(AdminUser.username == ADMIN_USERNAME))
-            if admin is None:
-                db.add(AdminUser(username=ADMIN_USERNAME, password_hash=password_hash.hash(ADMIN_PASSWORD)))
-                db.commit()
+    # Owner pairing code stays in the hosting environment and is never embedded in the APK.
+    if OWNER_PAIRING_CODE and len(OWNER_PAIRING_CODE) < 32:
+        raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
 
 def player_payload(player: Player) -> dict[str, Any]:
     return {"id": player.id, "username": player.username, "profile": player.profile or {},
@@ -187,6 +180,12 @@ def current_player(credentials: HTTPAuthorizationCredentials | None = Depends(be
     if control and control.state != "active":
         raise HTTPException(403, "Esta conta está suspensa ou encerrada.")
     return player
+
+def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> str:
+    claims = token_claims(credentials)
+    if claims.get("role") != "owner" or claims.get("sub") != "owner-device":
+        raise HTTPException(403, "Aparelho não autorizado para configurar o jogo.")
+    return "owner-device"
 
 def current_admin(credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
                   db: Session = Depends(db_session)) -> AdminUser:
@@ -268,6 +267,42 @@ def player_game_settings(db: Session = Depends(db_session), player: Player = Dep
     return {"game_name": values.get("game_name", "BATTLE UNIVERSE"),
             "character_names": values.get("character_names", {}),
             "account_character_name": (player.profile or {}).get("character_display_name", "")}
+
+@app.post("/v1/owner/pair")
+def owner_pair(body: OwnerPairBody) -> dict[str, Any]:
+    if not OWNER_PAIRING_CODE:
+        raise HTTPException(503, "Ativação do proprietário ainda não foi configurada no servidor.")
+    if not secrets.compare_digest(body.pairing_code, OWNER_PAIRING_CODE):
+        raise HTTPException(401, "Código de ativação inválido.")
+    return {"access_token": issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES),
+            "token_type": "bearer", "expires_in": OWNER_TOKEN_MINUTES * 60}
+
+@app.get("/v1/owner/settings")
+def owner_get_settings(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    rows = db.scalars(select(GameSetting)).all()
+    settings = {row.key: row.value for row in rows}
+    return {"game_name": settings.get("game_name", "BATTLE UNIVERSE"),
+            "character_names": settings.get("character_names", {})}
+
+@app.put("/v1/owner/settings")
+def owner_put_settings(body: GameSettingsBody, db: Session = Depends(db_session),
+                       owner: str = Depends(current_owner)):
+    if len(body.character_names) > 100:
+        raise HTTPException(413, "Limite de nomes de personagens excedido.")
+    clean_names = {}
+    for key, value in body.character_names.items():
+        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,48}", key) or not value.strip() or len(value.strip()) > 32:
+            raise HTTPException(422, "ID ou nome de personagem inválido.")
+        clean_names[key] = value.strip()
+    values = {"game_name": body.game_name.strip(), "character_names": clean_names}
+    for key, value in values.items():
+        row = db.get(GameSetting, key) or GameSetting(key=key, value=value)
+        row.value = value
+        row.updated_at = datetime.now(timezone.utc)
+        db.add(row)
+    audit(db, "owner-device", "game_settings_update", "global", values)
+    db.commit()
+    return {"settings": values, "saved": True}
 
 @app.post("/v1/admin/login")
 def admin_login(body: AdminLoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
