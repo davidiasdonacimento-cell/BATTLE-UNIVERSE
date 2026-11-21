@@ -260,8 +260,11 @@ float terrainHeightForMap(int map,float x,float z) {
         const float dx=(x-cx)/sx,dz=(z-cz)/sz;
         return std::exp(-0.5f*(dx*dx+dz*dz));
     };
-    const float edge=std::clamp((78.0f-std::sqrt(x*x+z*z))/15.0f,0.0f,1.0f);
+    const float radial=std::sqrt(x*x+z*z);
+    const float edge=std::clamp((78.0f-radial)/15.0f,0.0f,1.0f);
     const float coast=edge*edge*(3.0f-2.0f*edge);
+    const float coastFade=std::clamp((radial-68.0f)/10.0f,0.0f,1.0f);
+    const float coastBlend=coastFade*coastFade*(3.0f-2.0f*coastFade);
     float h=0.0f;
     switch(map) {
         case 0: // Tropical: cristas centrais e morros em ferradura.
@@ -313,7 +316,8 @@ float terrainHeightForMap(int map,float x,float z) {
             break;
         }
     }
-    return 0.48f+std::max(-0.20f,h)*coast;
+    const float inland=0.48f+std::max(-0.20f,h)*coast;
+    return inland*(1.0f-coastBlend)+(-1.15f)*coastBlend;
 }
 MeshBuffer buildMapTerrain(int map) {
     std::vector<float> vertices;
@@ -532,6 +536,7 @@ bool worldPositionBlocked(float x,float z,float radius) {
 void moveWithCollision(Vec3& actor,float nextX,float nextZ,float radius) {
     if(!worldPositionBlocked(nextX,actor.z,radius))actor.x=nextX;
     if(!worldPositionBlocked(actor.x,nextZ,radius))actor.z=nextZ;
+    actor.y=terrainHeightForMap(gSelectedMap,actor.x,actor.z)+0.08f;
 }
 void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
     const float wallY=0.55f+h*0.5f,front=z-d*0.5f,back=z+d*0.5f;
