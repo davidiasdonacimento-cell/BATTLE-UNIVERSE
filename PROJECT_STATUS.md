@@ -136,3 +136,15 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Qualidade gráfica continua ligada a `nativeSetQuality`; inversão vertical, minimapa e háptica mantêm suas preferências existentes. A inversão vertical já é aplicada no deslocamento vertical enviado ao motor.
 - Áudio/mixagem não é apresentado como configurável nesta tela enquanto não existir um mixer real integrado. Sensibilidade independente por ponto vermelho/2x/4x/sniper/olhadinha, layout avançado do HUD, volumes de áudio, coleta automática e demais ajustes continuam pendentes; não declarar o menu de configurações completo.
 - Código publicado nos commits `56df6551231b16f9dc931ac530878a2402547f93`, `a16cf9e77f2a6c62dc527e973cbcc66a63d0f6de` e `390da6b529d633c2b1957f9fa79a3eafad599b43`. A compilação deste conjunto ainda precisa ser confirmada pelo GitHub Actions; não há teste físico no Redmi 12.
+
+
+## Núcleo compartilhado de perfil/economia — código publicado em 2026-11-21 (build pendente)
+- Novo `PlayerProfileStore` centraliza leitura do perfil, XP, nível, carteira de diamantes e carteira de moedas; migra saves existentes preservando XP/diamantes e inicializa a carteira de moedas sem sobrescrever um saldo já inicializado.
+- Compras da loja debitam diamantes e registram a propriedade do item no mesmo commit local; saldo insuficiente, item já adquirido e falha de gravação têm respostas distintas.
+- Resgates de missões, passe, recompensa diária, código 100K, evento, correio e conquistas passam pelo mesmo serviço, com marcadores de resgate e histórico local de até 60 movimentações.
+- Giro Royale registra débito, prêmio, item/compensação por repetição, contador e histórico numa única gravação; o resultado só é mostrado após confirmação do commit.
+- Recompensas de partida incluem moedas virtuais e identificador de sessão para evitar reaplicação da mesma recompensa local.
+- Lobby superior, perfil, loja, inventário e painel de progresso consultam a mesma carteira; inventário apresenta as duas movimentações mais recentes. O painel de progresso abre a central de missões.
+- `AccountSyncManager` inclui moedas, ledger, configurações de sensibilidade, missões e marcos Royale no salvamento/restauração Firestore. O ledger também detecta transações repetidas após restauração em outro aparelho.
+- Limites: a carteira continua local/offline até existir servidor autoritativo; não é saldo online seguro. A loja atual ainda usa diamantes para os itens catalogados; catálogo de compras com moedas permanece pendente. O ledger guarda as 60 movimentações mais recentes. Ainda faltam testes automatizados de concorrência/migração, compilação Android e teste no Redmi 12.
+- Arquivos: `PlayerProfileStore.java`, `HudOverlay.java`, `AccountSyncManager.java`. Não distribuir APK antes do workflow confirmar a compilação deste conjunto.
