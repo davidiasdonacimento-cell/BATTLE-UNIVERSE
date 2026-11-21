@@ -111,7 +111,7 @@ float gJumpHeight=0, gJumpVelocity=0, gMatchTime=0, gZoneRadius=30;
 float gInteractCooldown=0;
 int gCollected=0, gPreviousButtons=0;
 std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
-struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; float fireFlash=0; bool aiming=false; int targetIndex=-1; bool targetPlayer=false; };
+struct BotState { Vec3 pos; Vec3 projectileStart{},projectileEnd{}; float yaw=0; float speed=0; float phase=0; float fireFlash=0; bool aiming=false; int targetIndex=-1; bool targetPlayer=false; };
 std::array<int,BOT_COUNT> gBotHealth{};
 std::array<int,BOT_COUNT> gBotDamageAmount{};
 std::array<float,BOT_COUNT> gBotDamageTimer{};
@@ -1506,6 +1506,9 @@ void updateBots(float dt) {
             if(attackDistance>4.0f && attackDistance<58.0f
                     && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
                 bot.fireFlash=0.32f;
+                bot.projectileStart=localPoint(bot.pos,0.0f,1.32f,-1.18f,bot.yaw);
+                bot.projectileEnd=enemy;
+                bot.projectileEnd.y+=1.25f+(targetPlayer?gJumpHeight:0.0f);
                 if(targetPlayer) {
                     applyPlayerDamage(1,"ELIMINADO • FIM DA PARTIDA");
                 } else if(targetBot>=0 && gBotActive[static_cast<size_t>(targetBot)]) {
@@ -2340,12 +2343,17 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
                 {canopy.x+1.35f,canopy.y-0.18f,canopy.z},0.022f,{0.90f,0.90f,0.85f});
         }
         if(bot.fireFlash>0.0f) {
-            const Vec3 muzzle=localPoint(bot.pos,0.0f,1.32f,-1.18f,bot.yaw);
-            Vec3 impact=gPlayer;
-            if(!bot.targetPlayer&&bot.targetIndex>=0&&bot.targetIndex<BOT_COUNT)
-                impact=gBots[static_cast<size_t>(bot.targetIndex)].pos;
-            impact.y+=1.25f+(bot.targetPlayer?gJumpHeight:0.0f);
-            drawSegment({0,0,0},0.0f,muzzle,impact,0.055f,{0.18f,0.88f,1.0f});
+            const float travel=std::clamp(1.0f-bot.fireFlash/0.32f,0.0f,1.0f);
+            const Vec3 delta{bot.projectileEnd.x-bot.projectileStart.x,
+                bot.projectileEnd.y-bot.projectileStart.y,bot.projectileEnd.z-bot.projectileStart.z};
+            const float length=std::sqrt(delta.x*delta.x+delta.y*delta.y+delta.z*delta.z);
+            const Vec3 bullet{bot.projectileStart.x+delta.x*travel,
+                bot.projectileStart.y+delta.y*travel,bot.projectileStart.z+delta.z*travel};
+            const Vec3 tail{bullet.x-(length>0.001f?delta.x/length:0.0f)*0.34f,
+                bullet.y-(length>0.001f?delta.y/length:0.0f)*0.34f,
+                bullet.z-(length>0.001f?delta.z/length:0.0f)*0.34f};
+            drawSphere(bullet,{0.055f,0.055f,0.12f},{1.0f,0.74f,0.32f});
+            drawSegment({0,0,0},0.0f,tail,bullet,0.020f,{0.95f,0.82f,0.54f});
         }
         drawCube({bot.pos.x,bot.pos.y+2.72f,bot.pos.z},
             {0.70f*static_cast<float>(gBotHealth[static_cast<size_t>(i)])/static_cast<float>(BOT_MAX_HEALTH),0.07f,0.07f},
