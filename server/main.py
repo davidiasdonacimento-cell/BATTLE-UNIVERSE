@@ -45,7 +45,7 @@ PROFILE_FIELDS = {
     "wear_shirt_frost", "wear_shirt_desert", "wear_boots_combat", "wear_boots_neon",
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
     "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
-    "wear_set_cerrado", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest",
+    "wear_set_cerrado", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "character_display_name",
 }
 
 class Base(DeclarativeBase):
@@ -260,6 +260,14 @@ def update_profile(body: ProfileBody, db: Session = Depends(db_session),
     player.updated_at = datetime.now(timezone.utc)
     db.add(player); db.commit(); db.refresh(player)
     return {"player": {"id": player.id, "username": player.username, "profile": player.profile}}
+
+@app.get("/v1/game/settings")
+def player_game_settings(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    rows = db.scalars(select(GameSetting)).all()
+    values = {row.key: row.value for row in rows}
+    return {"game_name": values.get("game_name", "BATTLE UNIVERSE"),
+            "character_names": values.get("character_names", {}),
+            "account_character_name": (player.profile or {}).get("character_display_name", "")}
 
 @app.post("/v1/admin/login")
 def admin_login(body: AdminLoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
