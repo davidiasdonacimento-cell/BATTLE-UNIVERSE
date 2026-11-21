@@ -229,3 +229,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Na restauração da conta, contadores de progresso são mesclados pelo maior valor, flags de desbloqueio/recompensa usam união lógica e históricos locais/remotos são unidos sem duplicatas (com limites de linhas), evitando substituir progresso local por um perfil remoto menor.
 - Adicionado `MODMENU2` nas Configurações. O God Mode é restrito ao modo Treinamento offline; não altera partidas online. Não há aimbot nem edição de carteira pelo cliente. Moedas e diamantes permanecem controlados pela API autenticada.
 - Estado: commits no GitHub; workflow de validação DEBUG está em execução. APK ainda não foi compilado nem testado no aparelho.
+
+
+## Pacote Season 02 salvo no celular e reutilizado — 2026-11-21
+- `ContentPackInstaller` agora salva o ZIP externo validado em `Downloads/Battle Universe/battle-universe-season-02-pack.zip` no Android 10+ por MediaStore.
+- Em nova instalação/atualização, procura esse ZIP no armazenamento compartilhado, copia para a área privada de trabalho e valida o SHA-256 antes de extrair. Não baixa novamente quando o arquivo existente está íntegro.
+- O ZIP é mantido após a instalação. Se estiver ausente, incompleto ou com hash incorreto, o instalador baixa uma nova cópia e substitui a salva.
+- Android 7–9 usa armazenamento externo específico do app como fallback.
+- Código publicado nos commits `1903fef` e `7c7ce21`. Build Android e teste físico ainda não confirmados; o comportamento no aparelho permanece pendente de validação.
