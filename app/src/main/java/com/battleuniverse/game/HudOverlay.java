@@ -189,25 +189,15 @@ public final class HudOverlay extends View {
         drawPage(c);
     }
     private void drawLobbyBackdrop(Canvas c) {
+        // Vinheta translúcida para preservar a cena 3D renderizada pela engine.
         p.setShader(new LinearGradient(0,0,1280,720,
-            new int[]{0x88071521,0x88102A3B,0x880A1825},null,Shader.TileMode.CLAMP));
+            new int[]{0x44051320,0x100C2835,0x5506131E},null,Shader.TileMode.CLAMP));
         c.drawRect(0,0,1280,720,p);p.setShader(null);
-        p.setColor(0x88102D3A);c.drawOval(680,300,1360,920,p);
-        p.setColor(0x77123A45);c.drawOval(820,390,1410,850,p);
-        p.setColor(0x66173D46);c.drawOval(920,450,1370,800,p);
-        p.setColor(0x4429BFD0);c.drawCircle(1070,250,145,p);
-        p.setColor(0x2227B7D2);c.drawCircle(1070,250,190,p);
-        Path ridge=new Path();ridge.moveTo(0,520);ridge.lineTo(190,430);ridge.lineTo(330,488);
-        ridge.lineTo(510,382);ridge.lineTo(690,470);ridge.lineTo(880,398);
-        ridge.lineTo(1040,468);ridge.lineTo(1280,350);ridge.lineTo(1280,720);
-        ridge.lineTo(0,720);ridge.close();p.setColor(0x990B2430);c.drawPath(ridge,p);
-        p.setColor(0x4439D7E8);p.setStrokeWidth(1.2f);
-        for(int i=0;i<7;i++)c.drawLine(0,570+i*22,1280,500+i*22,p);
-        for(int i=0;i<34;i++) {
-            float x=(i*173)%1280,y=170+(i*97)%380;
-            p.setColor(i%3==0?0xAA70DDE6:0x557CA7B9);c.drawCircle(x,y,i%4==0?1.8f:1.0f,p);
-        }
-        p.setColor(0x3322D7E8);c.drawRect(0,96,1280,98,p);
+        p.setColor(0x1829BFD0);c.drawCircle(660,300,220,p);
+        p.setColor(0x2229BFD0);c.drawCircle(660,300,300,p);
+        p.setShader(new LinearGradient(0,0,0,720,
+            new int[]{0x22030A12,0x00000000,0x44030A12},null,Shader.TileMode.CLAMP));
+        c.drawRect(0,96,1280,720,p);p.setShader(null);
     }
 
     private void drawBrand(Canvas c) {
@@ -227,16 +217,16 @@ public final class HudOverlay extends View {
         int level=profile.getLevel();
         String nickname=profile.getNickname();
         panel(c,1000,17,246,60,0xC5152938,0x557AA0B8,15);
-        circle(c,1032,47,18,0xFF1F7584,
+        circle(c,1028,47,18,0xFF1F7584,
             prefs.getBoolean("shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
         if(prefs.getBoolean("shop_emblem_bloob",false))
-            text(c,"B",1029,51,10,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,nickname.length()>11?nickname.substring(0,11):nickname,1060,42,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"NÍVEL "+String.format(Locale.US,"%02d",level)+"  •  "+xp+" XP",1060,60,9,0xFF9BB6C6,Typeface.DEFAULT);
+            text(c,"B",1025,51,10,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,nickname.length()>10?nickname.substring(0,10):nickname,1052,42,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"NÍVEL "+String.format(Locale.US,"%02d",level)+"  •  "+xp+" XP",1052,60,8,0xFF9BB6C6,Typeface.DEFAULT);
         if(prefs.getBoolean("shop_title_champion",false))
-            text(c,"TÍTULO • CAMPEÃO",1060,73,7,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        long coins=onlineCoins>=0L?onlineCoins:profile.getCoins();
-        text(c,"◆ "+formatDiamonds(diamonds)+"  ● "+formatDiamonds(coins),1138,51,9,0xFFFFC76B,Typeface.DEFAULT_BOLD);
+            text(c,"CAMPEÃO",1052,73,6,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        panel(c,1164,29,72,36,0x553B5262,0x446A9BAB,10);
+        text(c,"◆ "+formatDiamonds(diamonds),1170,51,8,0xFFFFD16E,Typeface.DEFAULT_BOLD);
     }
     private String characterName(int index) {
         int safe=Math.max(0,Math.min(3,index));
@@ -297,58 +287,80 @@ public final class HudOverlay extends View {
         else if(page==DEV_MENU)drawDevMenu(c);
     }
     private void drawHome(Canvas c){
-        // Lobby de partida em tela cheia: operador em destaque, ações rápidas e início claro.
-        eyebrow(c,42,137,"BATTLE UNIVERSE  •  TEMPORADA 03");
-        text(c,"BATTLE ROYALE",42,174,24,Color.WHITE,
-            Typeface.create("sans-serif-black",Typeface.BOLD));
-        panel(c,28,190,292,468,0xC9162938,0x557AA9BC,18);
-
-        eyebrow(c,48,222,"MODO DE JOGO");
-        panel(c,44,238,260,68,0xD51B3C4D,0x557AA9BC,13);
-        text(c,MODE_NAMES[mode],62,267,16,Color.WHITE,
-            Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,mode==0?"SOLO  •  30 PARTICIPANTES":mode==1?"DUPLA  •  EQUIPES DE 2":
-            mode==2?"ESQUADRÃO  •  EQUIPES DE 4":mode==3?"TREINAMENTO LIVRE":"DUELO 1V1  •  META DE 5",
-            62,289,8,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-        chevron(c,284,271);
-
-        eyebrow(c,48,337,"MAPA");
-        panel(c,44,352,260,68,0xD51B3C4D,0x557AA9BC,13);
-        text(c,MAP_NAMES[map],62,381,14,Color.WHITE,
-            Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,MAP_DETAILS[map],62,402,8,0xFF9DB6C5,Typeface.DEFAULT);
-        chevron(c,284,385);
-
-        eyebrow(c,48,449,"TIPO DE PARTIDA");
-        pill(c,44,462,124,31,"OFFLINE",onlineMode?0x553B6172:0xFF176A75,Color.WHITE);
-        pill(c,180,462,124,31,"ONLINE",onlineMode?0xFF7A4D25:0x553B6172,Color.WHITE);
-        gradientButton(c,44,512,260,66,"JOGAR","ENTRAR NA PARTIDA",0xFFFFB45E,0xFFE97543);
-        text(c,"▶",62,553,20,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
-        text(c,mode==4?"Offline: duelo 1v1 contra IA":"Offline: você + 29 bots IA",48,601,9,0xFFB3C8D4,Typeface.DEFAULT_BOLD);
-        text(c,onlineMode?"Online bloqueado • servidor pendente":
-            "Servidor local • partida sem internet",48,622,8,
-            onlineMode?0xFFFFC27A:0xFF8EDFD4,Typeface.DEFAULT);
-
-        pill(c,448,139,354,29,"OPERADOR EM DESTAQUE  •  "+characterName(character),
+        // Lobby principal com composição inspirada no gênero battle royale,
+        // mantendo identidade, rótulos e navegação próprios do BATTLE UNIVERSE.
+        eyebrow(c,270,133,"BATTLE UNIVERSE  •  TEMPORADA 03");
+        pill(c,270,149,240,27,"PERSONAGEM  •  "+characterName(character),
             0xAA123D4A,0xFF9BEAF4);
-        text(c,"Toque em PERSONAGENS para trocar seu operador.",468,637,9,
-            0xFFB3C8D4,Typeface.DEFAULT);
+        text(c,"Prepare-se para a próxima partida",272,198,13,0xFFE5F2F7,
+            Typeface.create("sans-serif-medium",Typeface.NORMAL));
+        text(c,"Bermuda",272,222,10,0xFF91B6C6,Typeface.DEFAULT_BOLD);
 
-        eyebrow(c,970,153,"ACESSO RÁPIDO");
-        String[] names={"COLEÇÃO","MENU ROYALE","LOJA","EVENTOS","MISSÕES"};
-        String[] hints={"Itens e visuais adquiridos","Coleções temáticas do universo","Visuais e equipamentos","Conteúdo da temporada","Objetivos da carreira"};
-        int[] colors={0xFF1A6372,0xFF73501F,0xFF285D79,0xFF425C7A,0xFF315D55};
-        for(int i=0;i<names.length;i++){
-            float y=174+i*94f;
-            panel(c,950,y,298,78,0xC9162938,0x557AA9BC,14);
-            circle(c,978,y+38,18,colors[i],0xFF9BC9D2);
-            text(c,String.valueOf(i+1),974,y+43,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,names[i],1008,y+33,12,Color.WHITE,
+        // Menu principal à esquerda: cada atalho abre uma página existente.
+        panel(c,20,119,226,340,0xC90A1B2B,0x557AA9BC,18);
+        text(c,"CENTRAL DE JOGO",40,145,10,0xFF79DCE7,
+            Typeface.create("sans-serif-black",Typeface.BOLD));
+        String[] menuNames={"LOJA","ROYALE","MISSÕES","EVENTOS","AMIGOS"};
+        int[] menuPages={SHOP,ROYALE,MISSIONS,EVENTS,FRIENDS};
+        int[] menuColors={0xFF285D79,0xFF73501F,0xFF315D55,0xFF425C7A,0xFF1A6372};
+        for(int i=0;i<menuNames.length;i++){
+            float y=158+i*57f;
+            panel(c,30,y,206,47,0xA91B3040,0x335A8297,11);
+            circle(c,53,y+23.5f,14,menuColors[i],0xFF9BC9D2);
+            drawNavIcon(c,i==0?2:i==1?3:i==2?4:i==3?0:1,53,y+23.5f,true);
+            text(c,menuNames[i],77,y+28,10,0xFFEAF4F8,
                 Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,hints[i],1008,y+52,8,0xFF9DB6C5,Typeface.DEFAULT);
-            chevron(c,1228,y+39);
+            chevron(c,220,y+24);
         }
-        text(c,"BATTLE UNIVERSE",950,664,8,0xFF7895A6,Typeface.DEFAULT_BOLD);
+
+        // Painel de equipe transparente: vagas não são apresentadas como jogadores reais.
+        panel(c,1000,112,252,304,0xC90A1B2B,0x557AA9BC,17);
+        text(c,"SUA EQUIPE",1020,140,11,0xFFEAF4F8,
+            Typeface.create("sans-serif-black",Typeface.BOLD));
+        pill(c,1130,121,103,24,"OFFLINE",0x553B6172,0xFFBBD0D9);
+        for(int i=0;i<3;i++){
+            float y=157+i*62f;
+            panel(c,1016,y,220,52,0x77172C3B,0x335A8297,10);
+            circle(c,1043,y+26,16,0xFF254A5C,0xFF6F9AAA);
+            text(c,"+",1038,y+32,18,0xFFD5E7EE,Typeface.DEFAULT_BOLD);
+            text(c,"VAGA DISPONÍVEL",1070,y+23,9,0xFFDCEAF0,Typeface.DEFAULT_BOLD);
+            text(c,"Convites online indisponíveis",1070,y+37,7,0xFF8FAAB8,Typeface.DEFAULT);
+        }
+        pill(c,1018,354,216,39,"GERENCIAR AMIGOS",0xFF176A75,Color.WHITE);
+        text(c,"Contatos locais não representam jogadores online.",1019,407,7,
+            0xFF91AAB7,Typeface.DEFAULT);
+
+        // Barra inferior de atalhos para as páginas já implementadas.
+        panel(c,265,626,574,70,0xC90A1B2B,0x557AA9BC,15);
+        String[] bottomNames={"COFRE","PERSONAGENS","ROUPAS","PERFIL"};
+        int[] bottomPages={INVENTORY,CHARACTERS,WARDROBE,PROFILE};
+        float[] bottomX={278,418,558,698};
+        float[] bottomW={130,130,130,128};
+        for(int i=0;i<bottomNames.length;i++){
+            panel(c,bottomX[i],640,bottomW[i],42,0xA91B3040,0x335A8297,10);
+            text(c,bottomNames[i],bottomX[i]+12,666,8,0xFFE2EDF2,
+                Typeface.create("sans-serif-black",Typeface.BOLD));
+            chevron(c,bottomX[i]+bottomW[i]-13,661);
+        }
+
+        // Seleção de modo, mapa único Bermuda e entrada na partida.
+        panel(c,858,520,394,176,0xD20A1B2B,0x667AA9BC,17);
+        eyebrow(c,878,543,"PRÓXIMA PARTIDA");
+        panel(c,876,553,176,45,0xD51B3C4D,0x557AA9BC,10);
+        text(c,MODE_NAMES[mode],891,572,11,Color.WHITE,
+            Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,mode==0?"SOLO":mode==1?"DUPLA":mode==2?"ESQUADRÃO":
+            mode==3?"TREINAMENTO":"GLADIADORES",891,588,7,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+        chevron(c,1038,576);
+        panel(c,1062,553,172,45,0xD51B3C4D,0x557AA9BC,10);
+        text(c,"MAPA",1077,570,7,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+        text(c,"BERMUDA",1077,588,11,Color.WHITE,
+            Typeface.create("sans-serif-black",Typeface.BOLD));
+        pill(c,878,609,92,29,"OFFLINE",onlineMode?0x553B6172:0xFF176A75,Color.WHITE);
+        pill(c,977,609,92,29,"ONLINE",onlineMode?0xFF7A4D25:0x553B6172,Color.WHITE);
+        gradientButton(c,1080,608,154,58,"JOGAR","ENTRAR",0xFFFFB45E,0xFFE97543);
+        text(c,"Partida offline: jogador + bots identificados",878,680,7,
+            0xFF9DB6C5,Typeface.DEFAULT);
     }
     private void drawCharacters(Canvas c){
         eyebrow(c,270,175,"PERSONALIZAÇÃO • MODELO DO LOBBY");
@@ -1643,29 +1655,34 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
             }
         }
         if(page==HOME){
-            if(hit(x,y,44,462,124,31)){
+            if(hit(x,y,30,158,206,47)){page=SHOP;return;}
+            if(hit(x,y,30,215,206,47)){page=ROYALE;return;}
+            if(hit(x,y,30,272,206,47)){page=MISSIONS;return;}
+            if(hit(x,y,30,329,206,47)){page=EVENTS;return;}
+            if(hit(x,y,30,386,206,47)){page=FRIENDS;return;}
+            if(hit(x,y,1018,354,216,39)){page=FRIENDS;return;}
+            if(hit(x,y,278,640,130,42)){page=INVENTORY;return;}
+            if(hit(x,y,418,640,130,42)){page=CHARACTERS;return;}
+            if(hit(x,y,558,640,130,42)){page=WARDROBE;return;}
+            if(hit(x,y,698,640,128,42)){page=PROFILE;return;}
+            if(hit(x,y,876,553,176,45)){page=MODES_PAGE;return;}
+            if(hit(x,y,1062,553,172,45)){page=MAPS_PAGE;return;}
+            if(hit(x,y,878,609,92,29)){
                 onlineMode=false;prefs.edit().putBoolean("online_mode",false).apply();
                 toast("MODO OFFLINE SELECIONADO.");return;
             }
-            if(hit(x,y,180,462,124,31)){
+            if(hit(x,y,977,609,92,29)){
                 onlineMode=true;game.setTrainingGodMode(false);
                 prefs.edit().putBoolean("online_mode",true).putBoolean("modmenu2_god_mode",false).apply();
                 toast("ONLINE AINDA PRECISA DE UM SERVIDOR DE PARTIDAS.");return;
             }
-            if(hit(x,y,44,238,260,68)){page=MODES_PAGE;return;}
-            if(hit(x,y,44,352,260,68)){page=MAPS_PAGE;return;}
-            if(hit(x,y,44,512,260,66)){
+            if(hit(x,y,1080,608,154,58)){
                 if(onlineMode){
                     toast("ONLINE INDISPONÍVEL: SERVIDOR MULTIPLAYER AINDA NÃO CONFIGURADO. SELECIONE OFFLINE.");
                     return;
                 }
                 page=PREMATCH;return;
             }
-            if(hit(x,y,950,174,298,78)){page=INVENTORY;return;}
-            if(hit(x,y,950,268,298,78)){page=ROYALE;return;}
-            if(hit(x,y,950,362,298,78)){page=SHOP;return;}
-            if(hit(x,y,950,456,298,78)){page=EVENTS;return;}
-            if(hit(x,y,950,550,298,78)){page=MISSIONS;return;}
         }else if(page==PREMATCH){
             if(hit(x,y,270,636,170,34)){page=HOME;return;}
             if(mode==4)for(int i=0;i<4;i++)if(hit(x,y,886+i*76,572,70,25)) {
