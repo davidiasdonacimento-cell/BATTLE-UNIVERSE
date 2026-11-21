@@ -178,10 +178,10 @@ public final class AdminActivity extends Activity {
             JSONObject a=rows.optJSONObject(i); if(a==null) continue;
             int id=a.optInt("id"); String username=a.optString("username");
             String state=a.optString("state"); String character=a.optString("character_name");
-            TextView item=new TextView(this); item.setText("#"+id+"  "+username+"\nPersonagem: "+character+"\nEstado: "+state);
+            long diamonds=a.optLong("diamonds",0);\n            TextView item=new TextView(this); item.setText("#"+id+"  "+username+"\nPersonagem: "+character+"\nDiamantes: "+String.format(java.util.Locale.US,"%,d",diamonds)+"\nEstado: "+state);
             item.setTextColor(Color.WHITE); item.setTextSize(15); item.setPadding(12,14,12,8);
             content.addView(item);
-            Button edit=new Button(this); edit.setText("EDITAR NICKNAME / PERSONAGEM"); edit.setAllCaps(false);
+            Button wallet=new Button(this); wallet.setText("GERENCIAR DIAMANTES / HISTÓRICO"); wallet.setAllCaps(false); content.addView(wallet);\n            wallet.setOnClickListener(v->showWalletDialog(id,username));\n            Button edit=new Button(this); edit.setText("EDITAR NICKNAME / PERSONAGEM"); edit.setAllCaps(false);
             content.addView(edit); edit.setOnClickListener(v->editAccount(id,username,character));
             Button stateButton=new Button(this); stateButton.setText(state.equals("suspended")?"REATIVAR CONTA":"SUSPENDER CONTA");
             stateButton.setAllCaps(false); content.addView(stateButton);
@@ -191,6 +191,48 @@ public final class AdminActivity extends Activity {
             View divider=new View(this); divider.setBackgroundColor(Color.DKGRAY);
             content.addView(divider,new LinearLayout.LayoutParams(-1,2));
         }
+    }
+
+    private void showWalletDialog(int id,String username) {
+        work("Consultando carteira de "+username+"...",()->{
+            JSONObject wallet=request("GET","/v1/owner/accounts/"+id+"/wallet",null);
+            JSONArray tx=wallet.optJSONArray("transactions");
+            StringBuilder history=new StringBuilder("Saldo atual: "+wallet.optLong("diamonds",0)+" diamantes\\n\\nÚLTIMAS OPERAÇÕES\\n");
+            if(tx!=null)for(int i=0;i<tx.length();i++){
+                JSONObject row=tx.optJSONObject(i); if(row==null)continue;
+                long delta=row.optLong("delta");
+                history.append(delta>=0?"+":"").append(delta).append(" ◆  ")
+                    .append(row.optString("reason")).append("  → ")
+                    .append(row.optLong("balance_after")).append("\\n");
+            }
+            String text=history.toString();
+            runOnUiThread(()->new AlertDialog.Builder(this).setTitle("CARTEIRA • "+username)
+                .setMessage(text).setPositiveButton("ADICIONAR", (d,w)->adjustWallet(id,username,"add"))
+                .setNeutralButton("RETIRAR", (d,w)->adjustWallet(id,username,"remove"))
+                .setNegativeButton("FECHAR",null).show());
+        });
+    }
+
+    private void adjustWallet(int id,String username,String action) {
+        LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(18,4,18,4);
+        EditText amount=new EditText(this); amount.setHint("Quantidade de diamantes"); amount.setInputType(2); box.addView(amount);
+        EditText reason=new EditText(this); reason.setHint("Motivo obrigatório"); box.addView(reason);
+        String title=action.equals("add")?"Adicionar diamantes":"Retirar diamantes";
+        new AlertDialog.Builder(this).setTitle(title+" • "+username).setView(box)
+            .setNegativeButton("Cancelar",null).setPositiveButton("CONFIRMAR",(d,w)->work("Atualizando carteira...",()->{
+                long value;
+                try{value=Long.parseLong(amount.getText().toString().trim());}
+                catch(Exception e){throw new IOException("Quantidade inválida.");}
+                if(value<=0)throw new IOException("Informe uma quantidade maior que zero.");
+                String why=reason.getText().toString().trim();
+                if(why.length()<3)throw new IOException("Informe o motivo da operação.");
+                JSONObject body=new JSONObject();
+                body.put("operation_id",java.util.UUID.randomUUID().toString());
+                body.put("action",action); body.put("diamonds",value); body.put("reason",why);
+                JSONObject result=request("POST","/v1/owner/accounts/"+id+"/wallet",body);
+                message("Carteira atualizada: "+result.optLong("diamonds")+" diamantes. Operação auditada.");
+                loadAccounts(search==null?"":search.getText().toString());
+            })).show();
     }
 
     private void editAccount(int id,String oldUser,String oldCharacter) {
