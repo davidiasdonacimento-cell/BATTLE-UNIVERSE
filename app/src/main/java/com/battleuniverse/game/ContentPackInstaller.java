@@ -12,8 +12,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.security.MessageDigest;
 import java.util.Enumeration;
 import java.util.Locale;
@@ -23,8 +21,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public final class ContentPackInstaller {
-    private static final String MANIFEST_URL =
-        "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v2/content-pack-manifest.json";
     private static final long MAX_DOWNLOAD_BYTES = 2L * 1024L * 1024L * 1024L;
     private static final long MAX_EXTRACTED_BYTES = 3L * 1024L * 1024L * 1024L;
     private static final int PACK_VERSION = 2;
@@ -84,38 +80,40 @@ public final class ContentPackInstaller {
         running=true;
         worker.execute(()->{
             File root=appContext.getFilesDir();
-            File archive=new File(root,"battle-content-download.part");
+            File archive=new File(root,"battle-content-embedded.part");
             File staging=new File(root,"battle-content-staging");
             File installed=new File(root,"battle-content");
             File backup=new File(root,"battle-content-backup");
-            long expectedDownloadSize=-1L;
+            long expectedPackSize=-1L;
             try {
-                postProgress(0,1,"CONSULTANDO VERSÃO DO PACOTE...");
-                JSONObject manifest=downloadManifest();
-                String url=manifest.getString("url");
+                postProgress(0,1,"PREPARANDO A PRIMEIRA CONFIGURAÇÃO...");
+                JSONObject manifest=readEmbeddedManifest();
                 String expectedHash=manifest.getString("sha256").toLowerCase(Locale.US);
                 long expectedSize=manifest.getLong("size_bytes");
-                expectedDownloadSize=expectedSize;
+                expectedPackSize=expectedSize;
                 int version=manifest.getInt("version");
-                if(version!=PACK_VERSION) throw new Exception("Versão de dados incompatível.");
+                if(version!=PACK_VERSION) throw new Exception("Versão de conteúdo incompatível com este APK.");
                 if(expectedSize<=250L*1024L*1024L||expectedSize>MAX_DOWNLOAD_BYTES)
-                    throw new Exception("Tamanho do pacote fora do intervalo esperado para a Temporada 02.");
+                    throw new Exception("Tamanho do conteúdo integrado fora do intervalo esperado.");
                 StatFs storage=new StatFs(root.getAbsolutePath());
                 long needed=expectedSize*2L+256L*1024L*1024L;
                 if(storage.getAvailableBytes()<needed)
-                    throw new Exception("Espaço insuficiente. Libere pelo menos "+
+                    throw new Exception("Espaço insuficiente para configurar o conteúdo. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
-                downloadArchive(url,archive,expectedSize);
-                postProgress(expectedSize,expectedSize,"VERIFICANDO INTEGRIDADE DO PACOTE...");
+                copyEmbeddedArchive(archive,expectedSize);
+                postProgress(expectedSize,expectedSize,"CONFERINDO A INTEGRIDADE DO CONTEÚDO...");
                 String actualHash=sha256(archive);
-                if(!actualHash.equals(expectedHash)) throw new Exception("Falha na verificação SHA-256. O pacote foi descartado.");
-                postProgress(expectedSize,expectedSize,"PREPARANDO INSTALAÇÃO DOS ARQUIVOS...");
+                if(!actualHash.equals(expectedHash))
+                    throw new Exception("A verificação SHA-256 do conteúdo integrado falhou.");
+                postProgress(0,1,"PREPARANDO OS RECURSOS DO UNIVERSO...");
                 deleteTree(staging);
-                if(!staging.mkdirs()&&!staging.isDirectory()) throw new Exception("Não foi possível criar a pasta temporária.");
+                if(!staging.mkdirs()&&!staging.isDirectory())
+                    throw new Exception("Não foi possível preparar os arquivos temporários.");
                 extractAndVerify(archive,staging);
                 JSONObject installedInfo=new JSONObject();
                 installedInfo.put("version",version);
                 installedInfo.put("archive_sha256",actualHash);
+                installedInfo.put("source","embedded_apk");
                 installedInfo.put("installed_at",System.currentTimeMillis());
                 try(FileOutputStream out=new FileOutputStream(new File(staging,"installed.json"))) {
                     out.write(installedInfo.toString().getBytes("UTF-8"));
@@ -130,94 +128,53 @@ public final class ContentPackInstaller {
                 }
                 deleteTree(backup);
                 archive.delete();
-                postProgress(expectedSize,expectedSize,"DADOS VERIFICADOS • REINICIANDO O JOGO...");
+                postProgress(1,1,"UNIVERSO CONFIGURADO • ABRINDO O BATTLE UNIVERSE...");
                 main.post(()->{running=false;listener.onSuccess();});
             } catch(Exception error) {
-                // Keep incomplete data for resume, but discard a complete archive that failed validation.
-                if(expectedDownloadSize>0L && archive.isFile()
-                        && archive.length()>=expectedDownloadSize) archive.delete();
+                if(expectedPackSize>0L && archive.isFile()
+                        && archive.length()>=expectedPackSize) archive.delete();
                 deleteTree(staging);
-                String message=error.getMessage()==null?"Falha desconhecida durante a instalação.":error.getMessage();
+                String message=error.getMessage()==null?
+                    "Falha desconhecida durante a configuração.":error.getMessage();
                 main.post(()->{running=false;listener.onFailure(message);});
             }
         });
     }
 
-    private JSONObject downloadManifest() throws Exception {
-        HttpURLConnection connection=open(MANIFEST_URL);
-        try(InputStream in=new BufferedInputStream(connection.getInputStream());
+    private JSONObject readEmbeddedManifest() throws Exception {
+        try(InputStream in=new BufferedInputStream(appContext.getAssets().open("season02-manifest.json"));
             ByteArrayOutputStream out=new ByteArrayOutputStream()) {
             byte[] buffer=new byte[4096];int count,total=0;
             while((count=in.read(buffer))!=-1) {
                 total+=count;
-                if(total>65536) throw new Exception("Manifesto maior que o limite permitido.");
+                if(total>65536) throw new Exception("Manifesto integrado excede o limite permitido.");
                 out.write(buffer,0,count);
             }
             return new JSONObject(out.toString("UTF-8"));
-        } finally { connection.disconnect(); }
+        }
     }
 
-    private void downloadArchive(String url,File output,long total) throws Exception {
-        long existing=output.isFile()?output.length():0L;
-        if(existing<0||existing>total) { output.delete(); existing=0L; }
-        if(existing==total) return; // Complete .part file: continue directly to SHA-256 validation.
-
-        HttpURLConnection connection=(HttpURLConnection)new URL(url).openConnection();
-        connection.setConnectTimeout(18000);
-        connection.setReadTimeout(45000);
-        connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("User-Agent","BattleUniverse-Android/1.1");
-        connection.setRequestProperty("Accept","application/octet-stream");
-        if(existing>0) connection.setRequestProperty("Range","bytes="+existing+"-");
-
-        try {
-            int code=connection.getResponseCode();
-            if(existing>0 && code==200) {
-                // Server ignored Range: restart cleanly rather than append a duplicate archive.
-                existing=0L;
-            } else if(existing>0 && code==206) {
-                String range=connection.getHeaderField("Content-Range");
-                if(range==null||!range.startsWith("bytes "+existing+"-"))
-                    throw new Exception("O servidor retornou um intervalo de download inválido.");
-            } else if(code<200||code>=300) {
-                throw new Exception("Servidor de dados respondeu HTTP "+code+". Tente novamente.");
-            }
-            try(InputStream in=new BufferedInputStream(connection.getInputStream());
-                FileOutputStream file=new FileOutputStream(output,existing>0)) {
-                byte[] buffer=new byte[65536];int count;long received=existing;
-                while((count=in.read(buffer))!=-1) {
-                    received+=count;
-                    if(received>MAX_DOWNLOAD_BYTES||received>total)
-                        throw new Exception("Download excedeu o limite ou o tamanho informado.");
-                    file.write(buffer,0,count);
-                    if(received%262144<buffer.length) {
-                        postProgress(received,total,"BAIXANDO PACOTE DE CONTEÚDO...");
-                        postFileProgress("battle-universe-season-02-pack.zip",1,1,received,total);
-                    }
+    private void copyEmbeddedArchive(File output,long expectedSize) throws Exception {
+        long copied=0L;
+        try(InputStream in=new BufferedInputStream(appContext.getAssets().open("season02.zip"));
+            FileOutputStream out=new FileOutputStream(output,false)) {
+            byte[] buffer=new byte[65536];int count;long lastReport=0L;
+            while((count=in.read(buffer))!=-1) {
+                copied+=count;
+                if(copied>MAX_DOWNLOAD_BYTES||copied>expectedSize)
+                    throw new Exception("O conteúdo integrado excedeu o tamanho declarado.");
+                out.write(buffer,0,count);
+                if(copied-lastReport>=1048576L) {
+                    postProgress(copied,expectedSize,"CONFIGURANDO ARQUIVOS INTEGRADOS...");
+                    postFileProgress("CONTEÚDO DA TEMPORADA 02",1,1,copied,expectedSize);
+                    lastReport=copied;
                 }
-                file.getFD().sync();
-                if(received!=total)
-                    throw new Exception("Download interrompido. O arquivo parcial foi preservado para continuar depois.");
-                postFileProgress("battle-universe-season-02-pack.zip",1,1,received,total);
             }
-        } finally {
-            connection.disconnect();
+            out.getFD().sync();
         }
-    }
-
-    private HttpURLConnection open(String address) throws Exception {
-        HttpURLConnection connection=(HttpURLConnection)new URL(address).openConnection();
-        connection.setConnectTimeout(18000);
-        connection.setReadTimeout(25000);
-        connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("User-Agent","BattleUniverse-Android/0.4");
-        connection.setRequestProperty("Accept","application/octet-stream, application/json");
-        int code=connection.getResponseCode();
-        if(code<200||code>=300) {
-            connection.disconnect();
-            throw new Exception("Servidor de dados respondeu HTTP "+code+". Tente novamente.");
-        }
-        return connection;
+        if(copied!=expectedSize)
+            throw new Exception("O conteúdo integrado está incompleto dentro do APK.");
+        postFileProgress("CONTEÚDO DA TEMPORADA 02",1,1,copied,expectedSize);
     }
 
     private void extractAndVerify(File archive,File destination) throws Exception {
