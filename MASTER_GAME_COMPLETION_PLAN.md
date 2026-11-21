@@ -26,7 +26,7 @@ Estados oficiais: **planejado**, **em desenvolvimento**, **implementado**, **com
 - Conteúdo: carregador com manifesto, versão, hashes, dependências, tamanho, espaço livre, rollback e migração.
 
 ### Serviços online (ainda precisam ser construídos)
-- Firebase Authentication/Firestore podem continuar responsáveis por identidade e dados persistentes da conta, mas **não** são o servidor autoritativo de uma partida em tempo real.
+- A API própria FastAPI + PostgreSQL é responsável por identidade, perfis e administração. O servidor autoritativo de partidas em tempo real permanece um serviço separado; o cliente nunca decide resultados online.
 - Criar serviço de partidas separado: autenticação de sessão, salas, matchmaking, servidor autoritativo, estado replicado, validação de comandos, reconexão, encerramento e resultados.
 - O cliente nunca decide sozinho resultados online, saldo de conta, compras, recompensas ou sorteios.
 - Definir protocolo e versão antes de conectar o cliente. Mensagens devem ter identificador, versão, sessão, sequência, validação de tamanho e tratamento de repetição/atraso.
@@ -190,3 +190,12 @@ A fase 2 agora inclui, além do contrato de perfil/carteiras:
 - sincronização Firestore dos contadores, histórico e carteiras;
 - apresentação de estatísticas no lobby e perfil.
 A fase permanece em desenvolvimento até build Android, testes automatizados, teste de sincronização entre instalações e validação física.
+
+
+## Administração própria — extensão integrada em 2026-11-21
+- O módulo Android `:admin` é um aplicativo nativo separado do jogo e acessa apenas a API administrativa por HTTPS.
+- O backend separa tokens de jogador e administrador por claim de papel; todos os endpoints de administração exigem administrador ativo.
+- Provisionamento inicial do administrador ocorre apenas por variáveis privadas do ambiente de hospedagem. Nenhum segredo administrativo pode ser empacotado no APK ou commitado no Git.
+- Operações de conta e alterações de configuração são auditadas. Exclusão é lógica, com bloqueio imediato de login e preservação mínima de auditoria.
+- As configurações de nome do jogo e nomes de personagens ficam persistidas no PostgreSQL. O cliente do jogo ainda precisa consumir essas configurações antes de serem visíveis no lobby.
+- Antes de produção: migrar o esquema para Alembic, adicionar limitação de tentativas/login administrativo, configurar backups/restauração e testar endpoints em banco PostgreSQL real; validar APK admin e jogo em dispositivos Android.
