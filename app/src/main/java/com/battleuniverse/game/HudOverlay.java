@@ -375,6 +375,18 @@ public final class HudOverlay extends View {
             text(c,owned?"DESBLOQUEADO":"BLOQUEADO",x+45,y+37,7,
                 owned?0xFF83DCD5:0xFF91A9B7,Typeface.DEFAULT_BOLD);
         }
+        panel(c,270,628,570,54,0x8E102536,0x335D8495,12);
+        text(c,"HISTÓRICO DA CARTEIRA • MOVIMENTAÇÕES MAIS RECENTES",286,647,8,0xFF70DDE6,Typeface.DEFAULT_BOLD);
+        String[] history=profile.getRecentLedgerEntries(2);
+        if(history.length==0) text(c,"Nenhuma movimentação registrada.",286,669,8,0xFF9CB4C1,Typeface.DEFAULT);
+        else {
+            String first=history[0].length()>78?history[0].substring(0,75)+"...":history[0];
+            text(c,first,286,665,8,Color.WHITE,Typeface.DEFAULT);
+            if(history.length>1) {
+                String second=history[1].length()>78?history[1].substring(0,75)+"...":history[1];
+                text(c,second,286,678,7,0xFF9CB4C1,Typeface.DEFAULT);
+            }
+        }
     }
 
     private void drawSensitivityBar(Canvas c,String label,int value,float y){
@@ -640,7 +652,7 @@ public final class HudOverlay extends View {
         panel(c,275,220,330,104,0xCC123B39,0xFF45D6AE,16);
         text(c,"RECOMPENSAS RECEBIDAS",296,247,10,0xFFB7EBDD,Typeface.DEFAULT_BOLD);
         text(c,"+"+prefs.getLong("last_match_reward_diamonds",0L)+" DIAMANTES",296,278,19,0xFFFFD36D,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"+"+prefs.getLong("last_match_reward_xp",0L)+" XP",296,302,12,0xFF8BE6D1,Typeface.DEFAULT_BOLD);
+        text(c,"+"+prefs.getLong("last_match_reward_xp",0L)+" XP  •  +"+prefs.getLong("last_match_reward_coins",0L)+" MOEDAS",296,302,10,0xFF8BE6D1,Typeface.DEFAULT_BOLD);
         panel(c,625,220,380,104,0xCC132B43,0xFF4B9BD0,16);
         text(c,"RESULTADO DA EQUIPE",648,247,10,0xFFAED8F0,Typeface.DEFAULT_BOLD);
         text(c,""+stats[3]+" OPONENTES RESTANTES",648,278,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -688,8 +700,7 @@ public final class HudOverlay extends View {
                 100L+index*50L,MISSION_DIAMONDS[index],MISSION_XP[index])){
             toast("A recompensa desta missão já foi registrada.");return;
         }
-        toast(MISSION_XP[index]>0?"+ "+MISSION_XP[index]+" XP recebidos!":
-            "+ "+MISSION_DIAMONDS[index]+" diamantes virtuais!");
+        toast("Recompensa recebida: +"+(100L+index*50L)+" moedas, +"+MISSION_XP[index]+" XP e +"+MISSION_DIAMONDS[index]+" diamantes.");
     }
     private void drawMissionsPage(Canvas c) {
         ensureDailyMissionWindow();
@@ -738,7 +749,7 @@ public final class HudOverlay extends View {
             toast("A recompensa diária já foi registrada.");return;
         }
         prefs.edit().putLong("daily_reward_day",day).commit();
-        toast("+100 XP e +50 diamantes virtuais!");
+        toast("+100 XP, +50 diamantes e +300 moedas virtuais!");
     }
 
     private void showRedeemDialog() {
@@ -878,14 +889,14 @@ public final class HudOverlay extends View {
         if(!profile.claimOnce("event_season_03","event_season_claimed",250L,75L,150L)){
             toast("Recompensa do evento já registrada.");return;
         }
-        toast("Evento concluído: +150 XP e +75 diamantes virtuais.");
+        toast("Evento concluído: +150 XP, +75 diamantes e +250 moedas.");
     }
     private void claimMailReward() {
         if(prefs.getBoolean("mail_welcome_claimed",false)){toast("Presente já coletado.");return;}
         if(!profile.claimOnce("mail_welcome_01","mail_welcome_claimed",100L,50L,0L)){
             toast("Presente já registrado.");return;
         }
-        toast("Presente de boas-vindas: +50 diamantes virtuais.");
+        toast("Presente: +50 diamantes e +100 moedas virtuais.");
     }
     private void claimAchievement(int index) {
         int[] goals={500,1500,3000};long[] rewards={50,100,200};
@@ -896,7 +907,7 @@ public final class HudOverlay extends View {
         if(!profile.claimOnce("achievement_"+goals[index],keys[index],150L*(index+1),rewards[index],0L)){
             toast("Conquista já registrada.");return;
         }
-        toast("Conquista resgatada: +"+rewards[index]+" diamantes.");
+        toast("Conquista: +"+rewards[index]+" diamantes e +"+(150L*(index+1))+" moedas.");
     }
 
     private void drawTeam(Canvas c){
