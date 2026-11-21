@@ -1523,12 +1523,27 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         drawControl(c,x,y,radius,label,fill,edge,false);
     }
     private void drawControl(Canvas c,float x,float y,float radius,String label,int fill,int edge,boolean active){
-        p.setColor(active?0xAA39DCEB:0x443ED9E8);c.drawCircle(x,y,radius+7,p);
-        p.setColor(active?0xFF087F8D:fill);c.drawCircle(x,y,radius,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(active?3.0f:2.0f);
-        p.setColor(active?0xFFFFFFFF:edge);c.drawCircle(x,y,radius,p);p.setStyle(Paint.Style.FILL);
+        // Botão tático em camadas: halo, corpo com gradiente, aro externo e núcleo.
+        p.setShader(null);p.setStyle(Paint.Style.FILL);
+        p.setColor(active?0x663BEAF4:0x55243C4D);c.drawCircle(x,y,radius+9,p);
+        int top=active?0xFF159BA8:blendControl(fill,0xFF172B3A,0.28f);
+        int bottom=active?0xFF075B72:fill;
+        p.setShader(new LinearGradient(x-radius,y-radius,x+radius,y+radius,top,bottom,Shader.TileMode.CLAMP));
+        c.drawCircle(x,y,radius,p);p.setShader(null);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.4f);p.setColor(0x66FFFFFF);
+        c.drawCircle(x,y,radius-4,p);
+        p.setStrokeWidth(active?3.0f:2.0f);p.setColor(active?0xFFFFFFFF:edge);
+        c.drawCircle(x,y,radius,p);p.setStyle(Paint.Style.FILL);
+        p.setColor(active?0xFFBDFBFF:0x553BDAE8);c.drawCircle(x,y-radius+7,3.2f,p);
         p.setTextAlign(Paint.Align.CENTER);p.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));
         p.setTextSize(label.length()>7?8:10);p.setColor(Color.WHITE);c.drawText(label,x,y+4,p);p.setTextAlign(Paint.Align.LEFT);
+    }
+    private int blendControl(int color,int overlay,float amount){
+        int a=(int)(((color>>>24)&255)*(1-amount)+((overlay>>>24)&255)*amount);
+        int r=(int)(((color>>>16)&255)*(1-amount)+((overlay>>>16)&255)*amount);
+        int g=(int)(((color>>>8)&255)*(1-amount)+((overlay>>>8)&255)*amount);
+        int b=(int)((color&255)*(1-amount)+(overlay&255)*amount);
+        return (a<<24)|(r<<16)|(g<<8)|b;
     }
     private void drawToast(Canvas c,float w,float h){
         float x=(w-370)/2f;p.setColor(0xEC102A38);c.drawRoundRect(x,h-86,x+370,h-34,16,16,p);
