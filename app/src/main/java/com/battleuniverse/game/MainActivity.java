@@ -147,7 +147,7 @@ public final class MainActivity extends Activity {
         hud.setDailyRewardAction(callback->accountSync.claimDailyReward(callback::onResult));
         hud.setPromoCodeAction((code,callback)->accountSync.redeemPromoCode(code,callback::onResult));
         accountSync.fetchWallet((coins,diamonds,message)->{
-            if(hud!=null)hud.setOnlineWallet(coins,diamonds);
+            if(hud!=null)hud.setOnlineWallet(diamonds);
         });
         root.addView(gameSurface,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
