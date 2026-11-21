@@ -22,6 +22,7 @@ class MultiplayerRouteContractTests(unittest.TestCase):
             ("/v1/matches/{match_id}/commands", ("POST",)),
             ("/v1/matches/{match_id}/events", ("GET",)),
             ("/v1/matches/{match_id}/heartbeat", ("POST",)),
+            ("/v1/matches/{match_id}/leave", ("DELETE",)),
             ("/v1/matches/{match_id}/finish", ("POST",)),
         }
         self.assertTrue(expected.issubset(routes))
