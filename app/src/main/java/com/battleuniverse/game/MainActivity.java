@@ -146,7 +146,7 @@ public final class MainActivity extends Activity {
         hud.setRoyaleSpinAction((requestId,callback)->accountSync.spinRoyale(requestId,callback::onResult));
         hud.setDailyRewardAction(callback->accountSync.claimDailyReward(callback::onResult));
         hud.setPromoCodeAction((code,callback)->accountSync.redeemPromoCode(code,callback::onResult));
-        accountSync.fetchWallet((coins,diamonds,message)->{
+        accountSync.fetchWallet((diamonds,message)->{
             if(hud!=null)hud.setOnlineWallet(diamonds);
         });
         root.addView(gameSurface,new FrameLayout.LayoutParams(
