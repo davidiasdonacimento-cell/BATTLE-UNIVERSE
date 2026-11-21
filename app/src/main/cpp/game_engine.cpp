@@ -144,7 +144,7 @@ std::array<Vec3,BOT_COUNT> gBotHomes{{
     {87,0.55f,-71},{98,0.55f,-18},{88,0.55f,48},{48,0.55f,94},
     {2,0.55f,91},{-47,0.55f,83},{-96,0.55f,42},{-101,0.55f,-22}
 }};
-struct BuildPiece { Vec3 pos; float yaw=0; int type=0; };
+struct BuildPiece { Vec3 pos; float yaw=0; int type=0; int health=120; };
 std::array<BuildPiece,BUILD_CAPACITY> gBuildPieces{};
 int gBuildCount=0, gBuildType=0, gWood=120, gBuildLimit=12, gResourceCount=5;
 constexpr std::array<Vec3,32> gBuildingPositions{{
@@ -563,7 +563,7 @@ bool worldPositionBlocked(float x,float z,float radius) {
     }
     for(int i=0;i<gBuildCount;++i) {
         const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
-        if(b.type!=0)continue;
+        if(b.type!=0||b.health<=0)continue;
         const float rx=x-b.pos.x,rz=z-b.pos.z,co=std::cos(b.yaw),sn=std::sin(b.yaw);
         const float localX=co*rx-sn*rz,localZ=sn*rx+co*rz;
         if(std::fabs(localX)<1.60f+radius&&std::fabs(localZ)<0.12f+radius)return true;
@@ -1657,6 +1657,7 @@ void drawBuildPreview() {
 void drawBuildPieces() {
     for(int i=0;i<gBuildCount;++i) {
         const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
+        if(b.health<=0)continue;
         if(b.type==0) {
             drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},{0.20f,0.67f,0.82f},b.yaw);
             drawCube({b.pos.x-0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.48f,0.88f,0.96f},b.yaw);
@@ -1686,7 +1687,21 @@ void firePulse() {
     const float range=gWeaponType==0?56.0f:(gWeaponType==1?42.0f:(gWeaponType==2?64.0f:48.0f));
     const float tolerance=gWeaponType==0?1.65f:(gWeaponType==1?2.7f:(gWeaponType==2?1.85f:2.35f));
     const int damage=gWeaponType==0?3:(gWeaponType==1?1:(gWeaponType==2?2:1));
-    float best=range;
+    float wallDistance=range;
+    int wallIndex=-1;
+    for(int i=0;i<gBuildCount;++i) {
+        const BuildPiece& wall=gBuildPieces[static_cast<size_t>(i)];
+        if(wall.type!=0||wall.health<=0)continue;
+        const float dx=wall.pos.x-gPlayer.x,dz=wall.pos.z-gPlayer.z;
+        const float along=dx*fx+dz*fz;
+        const float side=std::fabs(dx*fz-dz*fx);
+        if(along>0.8f&&along<wallDistance&&side<1.85f) {
+            wallDistance=along;
+            wallIndex=i;
+        }
+    }
+    const bool wallBlocksShot=wallIndex>=0&&wallDistance<range;
+    float best=wallBlocksShot?wallDistance:range;
     int hitTarget=-1,hitBot=-1;
     if(gSelectedMode==3) {
         for(int i=0;i<TARGET_COUNT;++i) {
@@ -1710,6 +1725,19 @@ void firePulse() {
         }
     }
     gPulseHitPosition={gPlayer.x+fx*best,gPlayer.y+1.45f+gJumpHeight,gPlayer.z+fz*best};
+    if(wallBlocksShot&&hitTarget<0&&hitBot<0&&best==wallDistance) {
+        BuildPiece& wall=gBuildPieces[static_cast<size_t>(wallIndex)];
+        wall.health=std::max(0,wall.health-std::max(10,damage*15));
+        gPulseHitPosition=wall.pos;
+        if(wall.health==0) {
+            wall.type=-1;
+            setStatus("PAREDE DE GELO DESTRUÍDA");
+        } else {
+            std::ostringstream hit;hit<<"PAREDE DE GELO  •  RESISTÊNCIA "<<wall.health<<"/120";
+            setStatus(hit.str());
+        }
+        return;
+    }
     if(hitTarget>=0) {
         TrainingTarget& target=gTargets[static_cast<size_t>(hitTarget)];
         target.energy=std::max(0,target.energy-damage);
@@ -2019,7 +2047,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetContentData(JNIEnv*,jclass
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
-    gScreenMode=0;gSelectedCharacter=0;gSelectedMap=0;gSelectedMode=0;gQuality=1;
+    gScreenMode=0;gSelectedCharacter=0;gSelectedMap=0;gSelectedMode=0;gQuality=2;
     gDuelBotScore=0;gDuelPlayerRespawn=0.0f;gDuelPlayerPendingRespawn=false;
     gJumpHeight=0;gJumpVelocity=0;gMatchTime=0;gZoneRadius=112;
     gCollected=0;gPreviousButtons=0;gInteractCooldown=0;gCrystalTaken.fill(false);
