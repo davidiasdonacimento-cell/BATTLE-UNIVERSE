@@ -256,3 +256,14 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Os alvos de toque do novo layout foram atualizados junto com os elementos desenhados. As páginas de destino reutilizam telas já existentes; convites e presença online continuam indisponíveis enquanto o serviço multiplayer não existir.
 - Commit: `6042a3bc4d66dabd66b500fb2b28ae5743dc22cf` na branch `feature/bermuda-map-hud-stability`, PR #6.
 - Próxima validação obrigatória: workflow Gradle/NDK, checagem de sobreposição/áreas de toque, captura da tela em aparelho e teste funcional no Redmi 12. Até isso ocorrer, a alteração está apenas publicada no código, não validada no aparelho.
+
+
+## Economia definitiva — somente diamantes (decisão confirmada em 2026-11-21)
+- Decisão atual que substitui qualquer menção histórica a moedas/ouro: **diamantes são a única moeda**; ouro/moedas foram removidos completamente.
+- O backend passa a modelar PlayerWallet e DailyRewardClaim sem coluna de moedas; a inicialização remove as colunas legadas `coins` de `player_wallets` e `daily_reward_claims`. Saldos legados de ouro são descartados; diamantes legados podem ser migrados uma única vez.
+- A API de carteira retorna somente `diamonds`. O APK sincroniza o saldo da API sem ler um campo de ouro/moedas.
+- A central ADMIN recebe consulta de carteira, histórico, adição/retirada de diamantes com motivo, ID idempotente e auditoria.
+- Códigos promocionais passam a ser cadastrados no PostgreSQL; ADMIN pode criar, listar e ativar/desativar códigos, definir recompensa em diamantes e limite total. O código 100K é semeado como código inicial compatível com resgates anteriores.
+- O APK deixa de bloquear códigos diferentes de 100K no formulário; a validação e a recompensa são decididas pelo servidor.
+- Alterações publicadas na branch `feature/bermuda-map-hud-stability`; commits atuais incluem API, ADMIN, sincronização Android e testes de regressão. PR #6 permanece aberto.
+- **Ainda não comprovado:** CI desta sequência, deploy Render, APK gerado/baixável e teste no Redmi 12. A loja ainda precisa concluir a integração de compras com a API; não declarar todas as compras online funcionais.
