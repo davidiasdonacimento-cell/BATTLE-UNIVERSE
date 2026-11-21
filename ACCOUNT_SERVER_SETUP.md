@@ -38,11 +38,19 @@ A chave de assinatura precisa ser a mesma que assinou o APK que está instalado 
 
 ## Carteira online e códigos promocionais
 
-- GET /v1/accounts/me/wallet retorna a carteira autoritativa player_wallets.
-- POST /v1/game/rewards/redeem recebe { "code": "100K" } e concede 100.000 diamantes virtuais uma única vez por conta. O banco registra a chave do código por jogador; repetir o pedido não concede novamente.
-- O saldo antigo de moedas/diamantes salvo no perfil é migrado uma única vez para a carteira na primeira consulta. O ledger antigo é usado para preservar o estado de resgate anterior do código 100K.
-- coins e diamonds não podem mais ser enviados pelo cliente em PATCH /v1/accounts/me/profile. A carteira é lida e alterada por endpoints próprios.
+- GET /v1/accounts/me/wallet retorna somente a carteira autoritativa de diamantes `player_wallets`.
+- POST /v1/game/rewards/redeem valida códigos ativos cadastrados no PostgreSQL e concede a quantidade configurada em diamantes uma única vez por conta. O banco registra a chave do código por jogador; repetir o pedido não concede novamente.
+- O saldo legado de diamantes salvo no perfil é migrado uma única vez. O saldo legado de ouro/moedas é descartado e as colunas antigas são removidas na migração do servidor.
+- Ouro/moedas foram removidos da economia. O cliente não pode enviar saldo de diamantes pelo PATCH /v1/accounts/me/profile; a carteira é lida pela API e alterada por operações autoritativas.
 - POST /v1/game/rewards/daily concede a recompensa diária pelo servidor. POST /v1/royale/spin debita e registra giros no servidor.
+
+## Administração da carteira e dos códigos
+
+- GET /v1/owner/accounts/{player_id}/wallet consulta saldo e histórico.
+- POST /v1/owner/accounts/{player_id}/wallet aceita `action` = `add` ou `remove`, quantidade positiva de diamantes, motivo e `operation_id` único.
+- GET /v1/owner/promos lista códigos. POST /v1/owner/promos cria código com recompensa em diamantes e limite de resgates. PATCH /v1/owner/promos/{promo_id} ativa ou desativa.
+- Todas as rotas exigem token do proprietário; cada ajuste de carteira gera registro no ledger e na auditoria.
+- O app ADMIN apresenta controles para consultar, adicionar e retirar diamantes e gerenciar códigos promocionais.
 
 ## Limites atuais da economia
 
@@ -56,5 +64,5 @@ A chave de assinatura precisa ser a mesma que assinou o APK que está instalado 
 - Senhas protegidas com Argon2; nunca em texto puro.
 - Token JWT com validade máxima de 30 dias, guardado no Android Keystore.
 - O perfil aceita apenas configurações e cosméticos não econômicos.
-- Diamantes e moedas não são aceitos como valores enviados pelo cliente para o perfil.
+- Somente diamantes existem como moeda; o cliente não pode alterar saldo por gravação de perfil.
 - Ainda não existe recuperação de senha nem revogação remota individual de sessão.
