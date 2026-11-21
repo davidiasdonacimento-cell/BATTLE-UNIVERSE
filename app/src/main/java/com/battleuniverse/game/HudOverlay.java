@@ -1374,6 +1374,7 @@ public final class HudOverlay extends View {
                     prefs.edit().putInt("selected_boots",selectedBoots).putInt("selected_set",0).apply();
                     game.setWardrobe(selectedShirt,selectedBoots,0);toast("Botas equipadas.");return;
                 }
+            }
             for(int i=0;i<7;i++) {
                 int col=i%4,row=i/4;float sx=270+col*146f,sy=552+row*72f;
                 if(hit(x,y,sx,sy,132,64)) {
