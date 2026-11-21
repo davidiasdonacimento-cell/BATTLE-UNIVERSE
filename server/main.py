@@ -47,7 +47,7 @@ PROFILE_FIELDS = {
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
     "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
     "wear_set_cerrado", "wear_beard_old", "wear_pants_angelical", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
-    "nickname", "xp", "coins", "diamonds", "profile_schema_version", "coins_wallet_initialized",
+    "nickname", "xp", "profile_schema_version", "coins_wallet_initialized",
     "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
     "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result", "match_history",
     "economy_ledger", "royale_history", "royale_spin_count",
@@ -118,6 +118,15 @@ class DailyRewardClaim(Base):
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=100)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class PromoCodeRedemption(Base):
+    __tablename__ = "promo_code_redemptions"
+    __table_args__ = (UniqueConstraint("player_id", "code_id", name="uq_promo_player_code"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    code_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -160,6 +169,10 @@ class LoginBody(BaseModel):
 
 class ProfileBody(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
+
+class PromoCodeBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    code: str = Field(min_length=1, max_length=32)
 
 class DeviceRegisterBody(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -439,16 +452,74 @@ def recover_account(body: RecoverAccountBody, db: Session = Depends(db_session))
             "player": player_payload(player), "new_recovery_code": replacement,
             "message": "Acesso recuperado. Guarde o novo código; o anterior foi invalidado."}
 
+def migrate_legacy_wallet_once(db: Session, player: Player, wallet: PlayerWallet) -> None:
+    profile = dict(player.profile or {})
+    if profile.get("server_wallet_migrated_v1"):
+        return
+    # One-time transfer of balances previously saved in the authenticated profile.
+    legacy_coins = max(0, int(profile.get("coins", 0) or 0))
+    legacy_diamonds = max(0, int(profile.get("diamonds", 0) or 0))
+    wallet.coins += legacy_coins
+    wallet.diamonds += legacy_diamonds
+    profile.pop("coins", None)
+    profile.pop("diamonds", None)
+    profile["server_wallet_migrated_v1"] = True
+    player.profile = profile
+    db.add(wallet)
+    db.add(player)
+    db.commit()
+    db.refresh(wallet)
+
 @app.get("/v1/accounts/me/wallet")
 def get_wallet(db: Session = Depends(db_session), player: Player = Depends(current_player)):
     wallet = db.get(PlayerWallet, player.id)
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
         db.add(wallet)
-        db.commit()
-        db.refresh(wallet)
+        db.flush()
+    migrate_legacy_wallet_once(db, player, wallet)
     return {"coins": wallet.coins, "diamonds": wallet.diamonds,
             "currency": "virtual", "authority": "server"}
+
+@app.post("/v1/game/rewards/redeem")
+def redeem_promo_code(body: PromoCodeBody, db: Session = Depends(db_session),
+                      player: Player = Depends(current_player)):
+    code = body.code.strip().upper()
+    if code != "100K":
+        raise HTTPException(400, "Código promocional inválido.")
+    code_id = "WELCOME_100K"
+    existing = db.scalar(select(PromoCodeRedemption).where(
+        PromoCodeRedemption.player_id == player.id,
+        PromoCodeRedemption.code_id == code_id))
+    if existing is not None:
+        wallet = db.get(PlayerWallet, player.id)
+        raise HTTPException(409, f"Código já resgatado. Saldo online: {wallet.diamonds if wallet else 0} diamantes.")
+    wallet = db.scalar(select(PlayerWallet).where(
+        PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        db.add(wallet)
+        db.flush()
+    migrate_legacy_wallet_once(db, player, wallet)
+    wallet.diamonds += 100000
+    redemption = PromoCodeRedemption(player_id=player.id, code_id=code_id,
+                                     diamonds=100000, created_at=datetime.now(timezone.utc))
+    db.add(redemption)
+    try:
+        db.commit()
+        db.refresh(wallet)
+    except Exception:
+        db.rollback()
+        existing = db.scalar(select(PromoCodeRedemption).where(
+            PromoCodeRedemption.player_id == player.id,
+            PromoCodeRedemption.code_id == code_id))
+        wallet = db.get(PlayerWallet, player.id)
+        if existing is not None:
+            raise HTTPException(409, f"Código já resgatado. Saldo online: {wallet.diamonds if wallet else 0} diamantes.")
+        raise HTTPException(503, "Não foi possível confirmar o resgate. Tente sincronizar a carteira.")
+    return {"claimed": True, "code": code_id, "diamonds_added": 100000,
+            "wallet": {"coins": wallet.coins, "diamonds": wallet.diamonds},
+            "authority": "server"}
 
 @app.post("/v1/game/rewards/daily")
 def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depends(current_player)):
