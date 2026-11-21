@@ -87,6 +87,21 @@ public final class PlayerProfileStore {
         }
     }
 
+    /** Atomically purchases a profile cosmetic with the soft-currency wallet. */
+    public PurchaseResult purchaseWithCoins(String itemKey, long price) {
+        if (itemKey == null || itemKey.trim().isEmpty() || price < 0L) return PurchaseResult.SAVE_FAILED;
+        synchronized (LOCK) {
+            if (prefs.getBoolean(itemKey, false)) return PurchaseResult.ALREADY_OWNED;
+            long balance = getCoins();
+            if (balance < price) return PurchaseResult.INSUFFICIENT_FUNDS;
+            SharedPreferences.Editor edit = prefs.edit()
+                    .putLong("coins", balance - price)
+                    .putBoolean(itemKey, true);
+            appendLedger(edit, "purchase_" + itemKey, "PURCHASE_COINS", -price, 0L, 0L);
+            return edit.commit() ? PurchaseResult.PURCHASED : PurchaseResult.SAVE_FAILED;
+        }
+    }
+
     /** Resolves the Royale debit, prize, duplicate compensation and history in one commit. */
     public String performRoyaleSpin(long cost, String itemKey, long diamondPrize,
                                     long duplicateCompensation, String itemName) {
