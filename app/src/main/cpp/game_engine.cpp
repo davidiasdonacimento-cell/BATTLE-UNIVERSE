@@ -402,8 +402,26 @@ void drawPalm(float x,float z,float scale) {
 float buildingWidth(size_t i) { return 7.0f+static_cast<float>(i%3)*2.1f; }
 float buildingDepth(size_t i) { return 6.0f+static_cast<float>(i%2)*2.0f; }
 float buildingHeight(size_t i) { return 4.0f+static_cast<float>(i%4)*1.5f; }
+bool terrainPositionBlocked(float x,float z,float radius) {
+    auto ellipse=[&](float cx,float cz,float rx,float rz) {
+        const float dx=(x-cx)/std::max(0.1f,rx+radius);
+        const float dz=(z-cz)/std::max(0.1f,rz+radius);
+        return dx*dx+dz*dz<1.0f;
+    };
+    switch(gSelectedMap) {
+        case 0: return ellipse(-64,-62,17,13)||ellipse(61,-58,22,15)||ellipse(-66,66,19,14)||ellipse(62,66,17,13)||ellipse(0,-88,24,9);
+        case 1: return ellipse(-76,-72,15,13)||ellipse(76,-72,15,13)||ellipse(-78,72,15,13)||ellipse(78,72,15,13);
+        case 2: return ellipse(-82,-88,19,15)||ellipse(-20,-88,17,14)||ellipse(48,-88,18,15)||ellipse(88,58,19,15)||ellipse(-62,58,17,14);
+        case 3: return ellipse(-82,-78,22,14)||ellipse(-28,-88,20,13)||ellipse(42,-80,24,15)||ellipse(82,60,23,16)||ellipse(-70,62,20,14);
+        case 4: return ellipse(-82,-76,18,14)||ellipse(-28,-76,18,14)||ellipse(34,-76,18,14)||ellipse(84,-76,18,14)||ellipse(-76,68,18,14)||ellipse(32,68,18,14);
+        case 5: return ellipse(-82,-70,23,16)||ellipse(-28,-76,21,15)||ellipse(36,-72,24,17)||ellipse(82,66,22,16)||ellipse(-8,70,22,16);
+        case 6: return ellipse(-82,-70,20,16)||ellipse(-24,-70,20,16)||ellipse(38,-70,20,16)||ellipse(82,62,20,16)||ellipse(-52,62,20,16);
+        default:return ellipse(-82,-72,20,15)||ellipse(-26,-72,18,14)||ellipse(34,-72,21,16)||ellipse(82,64,21,16)||ellipse(-58,64,18,14);
+    }
+}
 bool worldPositionBlocked(float x,float z,float radius) {
     if(x<-WORLD_LIMIT+radius||x>WORLD_LIMIT-radius||z<-WORLD_LIMIT+radius||z>WORLD_LIMIT-radius)return true;
+    if(terrainPositionBlocked(x,z,radius))return true;
     for(size_t i=0;i<gBuildingPositions.size();++i) {
         const Vec3 h=gBuildingPositions[i];
         const float halfW=buildingWidth(i)*0.5f,halfD=buildingDepth(i)*0.5f;
@@ -451,6 +469,86 @@ void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
     drawCube({x+1.35f,0.92f,z+0.75f},{1.45f,0.55f,0.85f},{0.24f,0.34f,0.40f});
     drawCube({x-1.35f,0.72f,z+1.05f},{0.85f,0.25f,0.70f},{0.46f,0.35f,0.23f});
 }
+void drawMapTerrain() {
+    // Cada mapa recebe relevo próprio em escala de mundo. As massas são posicionadas
+    // sobre a superfície-base e suas áreas íngremes são bloqueadas em terrainPositionBlocked().
+    const Vec3 tropicalA{0.36f,0.29f,0.17f}, tropicalB{0.30f,0.25f,0.15f};
+    const Vec3 desert{0.66f,0.42f,0.23f}, desertLight{0.76f,0.53f,0.31f};
+    const Vec3 ice{0.70f,0.84f,0.93f}, iceShadow{0.43f,0.64f,0.76f};
+    const Vec3 green{0.15f,0.38f,0.20f}, greenLight{0.23f,0.48f,0.25f};
+    switch(gSelectedMap) {
+        case 0: // Ilha Tropical: espinhaço central e quatro morros costeiros separados por enseadas.
+            drawSphere({-64,3.1f,-62},{34,5.2f,26},tropicalA);
+            drawSphere({61,3.0f,-58},{44,5.0f,30},tropicalB);
+            drawSphere({-66,2.8f,66},{38,4.6f,28},tropicalB);
+            drawSphere({62,2.7f,66},{34,4.4f,26},tropicalA);
+            drawSphere({0,1.9f,-88},{48,3.0f,18},{0.48f,0.39f,0.24f});
+            drawSphere({0,0.49f,0},{18,0.08f,76},{0.06f,0.34f,0.43f});
+            break;
+        case 1: // Neon City: quadras em terraços, canal rebaixado e plataformas urbanas.
+            drawCube({-76,1.15f,-72},{30,1.25f,26},{0.22f,0.25f,0.32f});
+            drawCube({76,1.15f,-72},{30,1.25f,26},{0.22f,0.25f,0.32f});
+            drawCube({-78,1.05f,72},{30,1.05f,26},{0.18f,0.23f,0.30f});
+            drawCube({78,1.05f,72},{30,1.05f,26},{0.18f,0.23f,0.30f});
+            drawCube({0,0.49f,-12},{17,0.08f,170},{0.035f,0.16f,0.23f});
+            for(int i=0;i<9;++i) drawCube({-4.8f+i*1.2f,0.57f,-12},{0.10f,0.12f,170},{0.10f,0.62f,0.78f});
+            break;
+        case 2: // Desert Storm: dunas longas, mesas altas e um vale seco sinuoso.
+            drawSphere({-82,4.0f,-88},{38,7.0f,30},desert);
+            drawSphere({-20,3.7f,-88},{34,6.4f,28},desertLight);
+            drawSphere({48,4.1f,-88},{36,7.2f,30},desert);
+            drawSphere({88,3.4f,58},{38,6.0f,30},desertLight);
+            drawSphere({-62,3.0f,58},{34,5.2f,28},desert);
+            drawSphere({0,0.50f,18},{22,0.08f,150},{0.34f,0.27f,0.19f});
+            break;
+        case 3: // Frozen Front: cordilheiras glaciais e fendas profundas de gelo.
+            drawSphere({-82,4.0f,-78},{44,7.0f,28},ice);
+            drawSphere({-28,4.5f,-88},{40,8.0f,26},iceShadow);
+            drawSphere({42,4.1f,-80},{48,7.2f,30},ice);
+            drawSphere({82,4.2f,60},{46,7.4f,32},iceShadow);
+            drawSphere({-70,3.7f,62},{40,6.5f,28},ice);
+            drawCube({0,0.50f,0},{18,0.08f,310},{0.22f,0.34f,0.43f});
+            break;
+        case 4: // Industrial Zone: bacia de escavação, taludes de rejeito e platôs fabris.
+            drawSphere({-82,2.9f,-76},{36,5.0f,28},{0.30f,0.34f,0.34f});
+            drawSphere({-28,2.9f,-76},{36,5.0f,28},{0.34f,0.37f,0.36f});
+            drawSphere({34,2.9f,-76},{36,5.0f,28},{0.30f,0.33f,0.33f});
+            drawSphere({84,2.9f,-76},{36,5.0f,28},{0.35f,0.37f,0.36f});
+            drawSphere({-76,2.7f,68},{36,4.6f,28},{0.28f,0.32f,0.33f});
+            drawSphere({32,2.7f,68},{36,4.6f,28},{0.32f,0.35f,0.34f});
+            drawCube({0,0.50f,0},{38,0.08f,310},{0.15f,0.19f,0.20f});
+            break;
+        case 5: // Green Valley: colinas onduladas e corredor de vale fluvial.
+            drawSphere({-82,3.2f,-70},{46,5.6f,32},green);
+            drawSphere({-28,3.0f,-76},{42,5.2f,30},greenLight);
+            drawSphere({36,3.4f,-72},{48,6.0f,34},green);
+            drawSphere({82,3.1f,66},{44,5.4f,32},greenLight);
+            drawSphere({-8,3.0f,70},{44,5.2f,32},green);
+            drawSphere({-70,0.51f,-8},{17,0.08f,190},{0.06f,0.34f,0.42f});
+            drawSphere({-70,0.54f,-8},{11,0.06f,184},{0.12f,0.52f,0.55f});
+            break;
+        case 6: // Orbital Base: crateres, anéis de impacto e plataformas de lançamento.
+            for(int i=0;i<5;++i) {
+                float x=-82.0f+i*41.0f, z=(i%2)?-70.0f:62.0f;
+                drawSphere({x,0.54f,z},{34,0.10f,30},{0.07f,0.12f,0.20f});
+                drawSphere({x,1.9f,z-17.0f},{38,2.8f,10},{0.23f,0.31f,0.43f});
+                drawSphere({x,1.9f,z+17.0f},{38,2.8f,10},{0.23f,0.31f,0.43f});
+            }
+            drawCube({0,0.78f,0},{66,0.48f,66},{0.24f,0.31f,0.43f});
+            break;
+        default: // Abandoned Sector: crateres de impacto e cordões de entulho.
+            drawSphere({-82,0.53f,-72},{42,0.10f,34},{0.13f,0.12f,0.10f});
+            drawSphere({-82,2.8f,-92},{48,4.8f,18},{0.34f,0.30f,0.24f});
+            drawSphere({-26,0.53f,-72},{40,0.10f,32},{0.12f,0.11f,0.09f});
+            drawSphere({-26,2.6f,-90},{44,4.4f,18},{0.31f,0.28f,0.22f});
+            drawSphere({34,0.53f,-72},{46,0.10f,36},{0.12f,0.11f,0.09f});
+            drawSphere({34,2.9f,-94},{50,5.0f,20},{0.35f,0.30f,0.23f});
+            drawSphere({82,0.53f,64},{44,0.10f,34},{0.13f,0.12f,0.10f});
+            drawSphere({82,2.7f,84},{46,4.6f,18},{0.32f,0.28f,0.21f});
+            drawSphere({-58,2.5f,64},{40,4.2f,28},{0.30f,0.27f,0.21f});
+            break;
+    }
+}
 void drawWorld(float time) {
     // Expanded island arena: broad coast, inland districts, roads and forest belts.
     drawSphere({0,-1.05f,0},{520,0.55f,520},{0.025f,0.22f,0.36f});
@@ -470,6 +568,7 @@ void drawWorld(float time) {
     const Vec3 beach=beachColors[mapStyle],land=landColors[mapStyle],road=roadColors[mapStyle];
     drawSphere({0,-0.02f,0},{174,0.62f,174},beach);
     drawSphere({0,0.31f,0},{158,0.31f,158},land);
+    drawMapTerrain();
 
     // Long roads create readable navigation across the larger play space.
     drawCube({0,0.535f,0},{8.0f,0.06f,310.0f},road);
