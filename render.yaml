@@ -13,4 +13,4 @@ services:
       - key: JWT_ISSUER
         value: battle-universe-accounts
       - key: ACCESS_TOKEN_MINUTES
-        value: "10080"
+        value: "43200"

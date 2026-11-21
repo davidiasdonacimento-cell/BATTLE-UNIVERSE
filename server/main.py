@@ -19,7 +19,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sess
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 JWT_SECRET = os.environ.get("JWT_SECRET", "").strip()
 JWT_ISSUER = os.environ.get("JWT_ISSUER", "battle-universe-accounts")
-ACCESS_TOKEN_MINUTES = max(15, min(1440, int(os.environ.get("ACCESS_TOKEN_MINUTES", "60"))))
+ACCESS_TOKEN_MINUTES = max(15, min(43200, int(os.environ.get("ACCESS_TOKEN_MINUTES", "43200"))))
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is required")
 if len(JWT_SECRET) < 32:
@@ -41,7 +41,7 @@ PROFILE_FIELDS = {
     "selected_mode", "selected_map", "selected_character", "quality",
     "music", "effects", "look_sensitivity", "sensitivity_general",
     "sensitivity_aim", "invert_camera_y", "show_minimap", "haptics",
-    "selected_shirt", "selected_boots", "selected_set",
+    "mode", "map", "character", "selected_mode", "selected_map", "selected_character",\n    "selected_shirt", "selected_boots", "selected_set",
     "wear_shirt_tactical", "wear_shirt_neon", "wear_shirt_frost",
     "wear_shirt_desert", "wear_boots_combat", "wear_boots_neon",
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora",
@@ -73,7 +73,7 @@ class LoginBody(BaseModel):
 class ProfileBody(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
 
-app = FastAPI(title="BATTLE UNIVERSE Account API", version="1.0.0")
+app = FastAPI(title="BATTLE UNIVERSE Account API", version="1.1.0")
 origins = [x.strip() for x in os.environ.get("CORS_ORIGINS", "").split(",") if x.strip()]
 if origins:
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,

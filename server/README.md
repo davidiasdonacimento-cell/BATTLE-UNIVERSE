@@ -1,30 +1,18 @@
 # BATTLE UNIVERSE Account API
 
-FastAPI + PostgreSQL account service. This service replaces Firebase Authentication and Firestore for player identity and the allowlisted profile settings.
+FastAPI + PostgreSQL account service.
 
 ## Endpoints
-- GET /health — database connectivity check
-- POST /v1/accounts/register — create a unique nickname/password account
-- POST /v1/accounts/login — authenticate with nickname/password
-- GET /v1/accounts/me — return the authenticated account
-- PATCH /v1/accounts/me/profile — sync allowlisted cosmetic and settings fields
+- GET /health
+- POST /v1/accounts/register
+- POST /v1/accounts/login
+- GET /v1/accounts/me
+- PATCH /v1/accounts/me/profile
 
-Nicknames are normalized to lowercase and constrained to 3–18 ASCII letters, digits, or underscores. Passwords are hashed with Argon2. The database unique constraint is the final authority for nickname uniqueness. Passwords are never returned or stored in plaintext. Authentication uses signed, expiring JWT bearer tokens.
+Nicknames: 3–18 ASCII letters, digits or underscores; unique and case-normalized. Passwords: 8–72 characters, stored as Argon2 hashes only. The API issues a signed JWT with up to 30 days of validity.
 
-The profile endpoint intentionally rejects authority over diamonds, coins, XP, match results, inventory rewards, and the economy ledger. Those require separate server-authoritative game endpoints; accepting client-written currency would permit cheating.
+The Android client stores only the JWT session token and nickname, encrypted with AES-GCM using an Android Keystore key. It never stores the password. Normal in-place APK updates preserve the session only when the package ID and signing certificate remain unchanged.
 
-## Environment
-Set DATABASE_URL to PostgreSQL and JWT_SECRET to a random secret with at least 32 characters. See .env.example. Do not commit production credentials.
+The profile endpoint only accepts allowlisted settings/cosmetics. Wallets, diamonds, coins, XP, rewards and match results must be controlled by authoritative server endpoints, not values supplied by the client.
 
-## Local run
-```sh
-cd server
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-export DATABASE_URL='postgresql+psycopg://user:password@localhost:5432/battle_universe'
-export JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-Interactive API documentation is available at /docs in development. Use HTTPS in production.
+Set DATABASE_URL and JWT_SECRET in the hosting provider. Never commit real credentials. See ../ACCOUNT_SERVER_SETUP.md for deployment and signing continuity.
