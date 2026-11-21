@@ -236,3 +236,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - O ZIP é mantido após a instalação. Se estiver ausente, incompleto ou com hash incorreto, o instalador baixa uma nova cópia e substitui a salva.
 - Android 7–9 usa armazenamento externo específico do app como fallback.
 - Código publicado nos commits `1903fef`, `7c7ce21`, `af92026` e `6e51c0c`. A cópia privada temporária é removida após instalação bem-sucedida, mantendo o ZIP em Downloads; a checagem de espaço considera ZIP duplicado temporário e até 3 GiB de extração. Build Android e teste físico ainda não confirmados; o comportamento no aparelho permanece pendente de validação.
+
+## Gladiadores offline + proteção MODMENU2 — implementação na branch em 2026-11-21
+- A engine nativa recebe o modo 4, preservando sem migração os IDs existentes 0–3.
+- Gladiadores é um duelo local 1v1: um único oponente IA, placar independente dos dois lados, vitória de quem alcançar primeiro 5 eliminações, reentrada após ponto, reinício de vida/posição e tela final com placar.
+- Antes da partida, o jogador escolhe uma das quatro armas já permitidas; a IA recebe automaticamente uma escolha válida. O duelo começa direto na arena, sem aeronave, loot, kits, construção ou zona BR.
+- Gladiadores é offline. Não concede moedas/diamantes por resultado local e não finge ser multiplayer online.
+- MODMENU2 permanece acessível nas Configurações. God Mode continua restrito à sessão Treinamento offline; trocar de modo ou selecionar Online desativa o estado ativo. Nenhuma função de vantagem online ou edição de carteira foi adicionada.
+- Estado de comprovação: código enviado somente à branch feature/arena-modes-core; build CI, APK e teste físico ainda pendentes. Não mesclado na main.
