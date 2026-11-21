@@ -81,7 +81,8 @@ public final class HudOverlay extends View {
     private boolean googleConfigured, googleSignedIn;
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
-    private Runnable accountSyncAction, accountSignOutAction;
+    private Runnable accountSyncAction, accountSignOutAction, recoveryCodeAction;
+    private String deviceIdentity="";
     private long toastUntil, lastTap;
     private int collectionPage=0;
     private int cofreTab=0;
@@ -575,13 +576,16 @@ public final class HudOverlay extends View {
         text(c,prefs.getString("nickname","JOGADOR"),382,346,23,Color.WHITE,
             Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"NÍVEL "+level+"  •  "+xp+" XP",382,374,13,0xFF9FC0CF,Typeface.DEFAULT_BOLD);
-        text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,407,15,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS",382,432,11,0xFF82E5DC,Typeface.DEFAULT_BOLD);
+        text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,399,15,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS",382,420,11,0xFF82E5DC,Typeface.DEFAULT_BOLD);
         text(c,"PARTIDAS "+profile.getMatchesPlayed()+"  •  VITÓRIAS "+profile.getWins()
-            +"  •  ELIMS "+profile.getEliminations(),292,452,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
+            +"  •  ELIMS "+profile.getEliminations(),292,440,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
         text(c,prefs.getBoolean("code_100k_redeemed",false)
             ?"CÓDIGO 100K JÁ RESGATADO NESTE PERFIL"
-            :"CÓDIGO SECRETO 100K DISPONÍVEL",292,472,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+            :"CÓDIGO SECRETO 100K DISPONÍVEL",292,458,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+        String deviceLine=deviceIdentity.isEmpty()?"ID DO DISPOSITIVO • REGISTRANDO...":"ID DO DISPOSITIVO • "+deviceIdentity;
+        if(deviceLine.length()>68)deviceLine=deviceLine.substring(0,65)+"...";
+        text(c,deviceLine,292,476,8,0xFF9BC4D0,Typeface.DEFAULT_BOLD);
         panel(c,270,486,570,58,googleSignedIn?0xCC176A75:0xA91A3040,
             googleSignedIn?0xFF58DDE6:0x335D8495,15);
         text(c,googleSignedIn?"CONTA VINCULADA • TOQUE PARA SINCRONIZAR":
@@ -591,8 +595,8 @@ public final class HudOverlay extends View {
         if(accountLine.length()>68)accountLine=accountLine.substring(0,65)+"...";
         text(c,accountLine,292,530,9,0xFFBBD0D9,Typeface.DEFAULT);
         panel(c,270,558,270,70,0xCC176A75,0xFF58DDE6,16);
-        text(c,"RESGATAR CÓDIGO",294,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"Digite seu código secreto",294,607,10,0xFFD2F6F8,Typeface.DEFAULT);
+        text(c,googleSignedIn?"CÓDIGO DE RECUPERAÇÃO":"RESGATAR CÓDIGO",294,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,googleSignedIn?"Gerar um novo código secreto":"Digite seu código secreto",294,607,10,0xFFD2F6F8,Typeface.DEFAULT);
         panel(c,558,558,282,70,0xA91A3040,0x335D8495,16);
         text(c,"EDITAR NICKNAME",582,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Nome do seu perfil",582,607,10,0xFF9EB6C4,Typeface.DEFAULT);
@@ -1563,7 +1567,7 @@ public final class HudOverlay extends View {
                 if(accountSignOutAction!=null)accountSignOutAction.run();
                 return;
             }
-            if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
+            if(hit(x,y,270,558,270,70)){if(googleSignedIn){if(recoveryCodeAction!=null)recoveryCodeAction.run();}else showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
         }else if(page==INVENTORY){
             if(hit(x,y,270,312,150,29)){cofreTab=0;return;}
@@ -1748,6 +1752,16 @@ public final class HudOverlay extends View {
                 toast(hapticsEnabled?"Vibração ativada":"Vibração desativada");return;
             }
         }
+    }
+
+    public void setDeviceIdentity(String code) { deviceIdentity=code==null?"":code; invalidate(); }
+    public void setRecoveryCodeAction(Runnable action) { recoveryCodeAction=action; }
+    public void showRecoveryCode(String code) {
+        if(code==null||code.isEmpty())return;
+        EditText field=new EditText(getContext());field.setText(code);field.setTextIsSelectable(true);
+        new AlertDialog.Builder(getContext()).setTitle("NOVO CÓDIGO DE RECUPERAÇÃO")
+            .setMessage("Guarde este código fora do aparelho. Ele aparece somente agora; o código anterior foi invalidado.")
+            .setView(field).setPositiveButton("ENTENDI",null).setCancelable(false).show();
     }
 
     public void setUsernameAccountActions(UsernameAccountAction authAction,
