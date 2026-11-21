@@ -20,6 +20,7 @@ import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.HapticFeedbackConstants;
+import org.json.JSONObject;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
@@ -161,8 +162,13 @@ public final class HudOverlay extends View {
     }
 
     private void drawBrand(Canvas c) {
-        text(c,"BATTLE",34,47,30,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"UNIVERSE",151,47,30,0xFF49D9E8,Typeface.create("sans-serif-black",Typeface.BOLD));
+        String gameName=prefs.getString("server_game_name","BATTLE UNIVERSE");
+        if("BATTLE UNIVERSE".equalsIgnoreCase(gameName)) {
+            text(c,"BATTLE",34,47,30,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"UNIVERSE",151,47,30,0xFF49D9E8,Typeface.create("sans-serif-black",Typeface.BOLD));
+        } else {
+            text(c,gameName,34,47,25,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        }
         text(c,"MUNDO  •  SOBREVIVÊNCIA  •  AVENTURA",36,68,10,0xFF9AB7C9,Typeface.DEFAULT_BOLD);
         pill(c,272,25,128,29,"LOBBY PRINCIPAL",0x332FD2E5,0xFF9BEAF4);
     }
@@ -181,6 +187,20 @@ public final class HudOverlay extends View {
         if(prefs.getBoolean("shop_title_champion",false))
             text(c,"TÍTULO • CAMPEÃO",1060,73,7,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         text(c,"◆ "+formatDiamonds(diamonds)+"  ● "+formatDiamonds(profile.getCoins()),1138,51,9,0xFFFFC76B,Typeface.DEFAULT_BOLD);
+    }
+    private String characterName(int index) {
+        int safe=Math.max(0,Math.min(3,index));
+        if(safe==character) {
+            String accountName=prefs.getString("character_display_name","").trim();
+            if(!accountName.isEmpty())return accountName;
+        }
+        try {
+            JSONObject names=new JSONObject(prefs.getString("server_character_names","{}"));
+            String[] ids={"caio","maya","dante","luna"};
+            String value=names.optString(ids[safe],"").trim();
+            if(!value.isEmpty())return value;
+        } catch(Exception ignored) {}
+        return CHARACTER_NAMES[safe];
     }
     private String formatDiamonds(long value) {
         return NumberFormat.getIntegerInstance(new Locale("pt","BR")).format(value);
@@ -258,7 +278,7 @@ public final class HudOverlay extends View {
             "Servidor local • partida sem internet",48,622,8,
             onlineMode?0xFFFFC27A:0xFF8EDFD4,Typeface.DEFAULT);
 
-        pill(c,448,139,354,29,"OPERADOR EM DESTAQUE  •  "+CHARACTER_NAMES[character],
+        pill(c,448,139,354,29,"OPERADOR EM DESTAQUE  •  "+characterName(character),
             0xAA123D4A,0xFF9BEAF4);
         text(c,"Toque em PERSONAGENS para trocar seu operador.",468,637,9,
             0xFFB3C8D4,Typeface.DEFAULT);
@@ -294,7 +314,7 @@ public final class HudOverlay extends View {
                 active?0xFF48D7E1:0x335D8495,12);
             circle(c,306,y+30,18,colors[i],active?0xFF68E9EF:0xFF8AA5B4);
             text(c,new String[]{"C","M","D","L"}[i],300,y+36,13,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,CHARACTER_NAMES[i],334,y+27,12,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,characterName(i),334,y+27,12,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
             text(c,roles[i],334,y+44,8,0xFF9DB6C5,Typeface.DEFAULT);
             if(active)text(c,"●",430,y+36,9,0xFF76E7CF,Typeface.DEFAULT_BOLD);
         }
