@@ -113,6 +113,33 @@ public final class PlayerProfileStore {
         }
     }
 
+    public String[] getRecentLedgerEntries(int count) {
+        String ledger = prefs.getString("economy_ledger", "");
+        if (ledger.isEmpty() || count <= 0) return new String[0];
+        String[] rows = ledger.split("\\n");
+        int size = Math.min(count, rows.length);
+        String[] result = new String[size];
+        for (int i = 0; i < size; i++) {
+            String[] fields = rows[rows.length - 1 - i].split("\\|");
+            if (fields.length < 5) {
+                result[i] = rows[rows.length - 1 - i];
+                continue;
+            }
+            result[i] = fields[1] + "  •  " + signed(fields[2]) + " moedas  •  "
+                    + signed(fields[3]) + " diamantes  •  " + signed(fields[4]) + " XP";
+        }
+        return result;
+    }
+
+    private static String signed(String value) {
+        try {
+            long amount = Long.parseLong(value);
+            return amount > 0L ? "+" + amount : String.valueOf(amount);
+        } catch (NumberFormatException ignored) {
+            return value;
+        }
+    }
+
     private boolean containsLedgerTransaction(String id) {
         String prefix = safeKey(id) + "|";
         String ledger = prefs.getString("economy_ledger", "");
