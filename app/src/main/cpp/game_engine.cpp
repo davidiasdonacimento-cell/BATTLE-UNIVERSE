@@ -27,6 +27,7 @@ constexpr int BUTTON_PULSE = 16;
 constexpr int BUTTON_SWAP = 32;
 constexpr int BUTTON_AIM = 64;
 constexpr int BUTTON_CROUCH = 128;
+constexpr int BUTTON_KIT = 256;
 constexpr int BUILD_CAPACITY = 24;
 constexpr int TARGET_COUNT = 3;
 
@@ -173,9 +174,9 @@ std::array<TrainingTarget,TARGET_COUNT> gTargets{{
 std::array<int,4> gWeaponAmmo{{0,0,0,0}};
 std::array<bool,4> gWeaponOwned{{false,false,false,false}};
 int gTrainingScore=0, gWeaponType=-1;
-struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=true; bool ammoOnly=false; };
-std::array<GroundLoot,18> gGroundLoot{};
-int gPlayerHealth=100,gEliminations=0;
+struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=true; bool ammoOnly=false; int kind=0; };
+std::array<GroundLoot,64> gGroundLoot{};
+int gPlayerHealth=100,gPlayerShield=0,gMedkits=0,gEliminations=0;
 int gDamageDealt=0,gDamageTaken=0,gAiEliminations=0;
 bool gMatchFinished=false,gSpectatorMode=false;
 int gSpectatorTarget=-1;
@@ -1128,12 +1129,19 @@ void drawGroundLoot(float time) {
     for(size_t i=0;i<gGroundLoot.size();++i) {
         const GroundLoot& loot=gGroundLoot[i];if(!loot.active)continue;
         const float bob=std::sin(time*2.6f+static_cast<float>(i))*0.12f;
-        const Vec3 color=loot.ammoOnly?Vec3{0.92f,0.68f,0.20f}:
+        const Vec3 color=loot.kind==2?Vec3{0.18f,0.88f,0.48f}:
+            (loot.kind==3?Vec3{0.35f,0.72f,1.0f}:
+            (loot.ammoOnly?Vec3{0.92f,0.68f,0.20f}:
             (loot.weaponType==0?Vec3{0.12f,0.86f,0.94f}:
-             (loot.weaponType==1?Vec3{0.28f,0.58f,1.0f}:(loot.weaponType==2?Vec3{0.94f,0.48f,0.20f}:Vec3{0.20f,0.92f,0.56f})));
+             (loot.weaponType==1?Vec3{0.28f,0.58f,1.0f}:(loot.weaponType==2?Vec3{0.94f,0.48f,0.20f}:Vec3{0.20f,0.92f,0.56f})))));
         drawCube({loot.pos.x,loot.pos.y+0.34f+bob,loot.pos.z},{0.82f,0.52f,0.62f},color);
         drawCube({loot.pos.x,loot.pos.y+0.63f+bob,loot.pos.z},{0.54f,0.12f,0.66f},{0.12f,0.17f,0.22f});
-        if(!loot.ammoOnly) {
+        if(loot.kind==2) {
+            drawCube({loot.pos.x,loot.pos.y+0.76f+bob,loot.pos.z},{0.16f,0.12f,0.68f},{0.96f,0.98f,0.96f});
+            drawCube({loot.pos.x,loot.pos.y+0.76f+bob,loot.pos.z},{0.68f,0.12f,0.16f},{0.96f,0.98f,0.96f});
+        } else if(loot.kind==3) {
+            drawSphere({loot.pos.x,loot.pos.y+0.78f+bob,loot.pos.z},{0.32f,0.32f,0.32f},{0.62f,0.90f,1.0f});
+        } else if(!loot.ammoOnly) {
             drawCube({loot.pos.x,loot.pos.y+0.76f+bob,loot.pos.z-0.36f},{0.16f,0.13f,0.56f},{0.17f,0.20f,0.24f});
             drawCube({loot.pos.x,loot.pos.y+0.48f+bob,loot.pos.z+0.25f},{0.20f,0.25f,0.18f},{0.78f,0.83f,0.86f});
         } else {
@@ -1225,6 +1233,16 @@ void resetBots() {
     }
 }
 void applyPlayerDamage(int amount,const char* reason);
+void spawnEliminationLoot(Vec3 position,int seed) {
+    position.y=terrainHeightForMap(gSelectedMap,position.x,position.z)+0.08f;
+    auto add=[&](const GroundLoot& item) {
+        for(auto& slot:gGroundLoot) if(!slot.active){slot=item;return true;}
+        return false;
+    };
+    add({position,(seed+1)%4,30,true,true,1});
+    Vec3 med=position;med.x+=1.05f;add({med,0,0,true,false,2});
+    if(seed%3==0){Vec3 shield=position;shield.z+=1.05f;add({shield,0,0,true,false,3});}
+}
 void updateBots(float dt) {
     if(gMatchFinished) return;
     // Limita a pressão simultânea no jogador: o restante da IA prioriza combates entre bots.
@@ -1399,6 +1417,7 @@ void updateBots(float dt) {
                             gBotDowned[victim]=true;gBotDownedTimer[victim]=90.0f;gBotReviveProgress[victim]=0.0f;
                             gBotHealth[victim]=0;
                         } else { gBotActive[victim]=false;++gAiEliminations;
+                            if(!isAllyBot(targetBot)&&gSelectedMode!=3)spawnEliminationLoot(gBots[victim].pos,targetBot+gAiEliminations);
                             gBotRespawn[victim]=gSelectedMode==3?3.0f:0.0f; }
                     }
                 }
@@ -1442,7 +1461,9 @@ void updateDownedState(float dt) {
     else {gReviveProgress=0;if(gDownedTimer<=0){gDownedTimer=15.0f;setStatus("DERRUBADO • ESQUADRÃO AINDA PODE SOCORRER");}else setStatus("DERRUBADO • AGUARDANDO ALIADO • "+std::to_string(static_cast<int>(gDownedTimer))+"s");}
 }
 void applyPlayerDamage(int amount,const char* reason) {
-    if(gPlayerDowned||gMatchFinished)return;gPlayerHealth=std::max(0,gPlayerHealth-amount);gDamageTaken+=amount;
+    if(gPlayerDowned||gMatchFinished)return;
+    const int absorbed=std::min(gPlayerShield,amount);gPlayerShield-=absorbed;amount-=absorbed;
+    gPlayerHealth=std::max(0,gPlayerHealth-amount);gDamageTaken+=absorbed+amount;
     if(gPlayerHealth<=0){bool ally=false;if(gSelectedMode==1||gSelectedMode==2)for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])ally=true;
         if(ally){gPlayerDowned=true;gDownedTimer=90;gReviveProgress=0;setStatus("DERRUBADO • RASTEJE ATÉ SEU ESQUADRÃO • AGUARDANDO REVIVER");}else{gMatchFinished=true;setStatus(reason);}}
     else setStatus("DANO RECEBIDO • VIDA "+std::to_string(gPlayerHealth)+"%");
@@ -1558,6 +1579,7 @@ void firePulse() {
                 gBotReviveProgress[static_cast<size_t>(hitBot)]=0.0f;
                 setStatus("ALIADO DERRUBADO • APROXIME-SE E TOQUE USAR PARA REVIVER");
             } else { gBotActive[static_cast<size_t>(hitBot)]=false;
+            if(gSelectedMode!=3)spawnEliminationLoot(gBots[static_cast<size_t>(hitBot)].pos,hitBot+gEliminations+1);
             if(gSelectedMode==3) {
                 gBotRespawn[static_cast<size_t>(hitBot)]=12.0f;
                 gTrainingScore+=150;
@@ -1722,7 +1744,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gMatchTime=0;gZoneRadius=112;gCollected=0;gCrystalTaken.fill(false);
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
-        gPlayerHealth=100;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
+        gPlayerHealth=100;gPlayerShield=0;gMedkits=0;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
         gPlayerDowned=false;gCrouched=false;gBuildPreview=false;gDownedTimer=0;gReviveProgress=0;
     gPlayerReviveTarget=-1;gPlayerReviveProgress=0;
         resetGroundLoot();
@@ -1792,7 +1814,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gCollected=0;gPreviousButtons=0;gInteractCooldown=0;gCrystalTaken.fill(false);
     gBuildCount=0;gBuildType=0;gWood=180;gBuildCooldown=0;gBuildLimit=12;gResourceCount=5;gContentPackReady=false;
     gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
-    gPlayerHealth=100;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
+    gPlayerHealth=100;gPlayerShield=0;gMedkits=0;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
     gPlayerDowned=false;gCrouched=false;gBuildPreview=false;gDownedTimer=0;gReviveProgress=0;
     gBotAttackCooldown.fill(0.0f);gLookSensitivity=1.0f;
     gDropState=0;gDropTimer=0;gPlaneExteriorView=false;gPlanePosition={-110,24,-32};gPlaneWalkX=1.0f;gPlaneWalkZ=0.0f;gParachuteOpen=false;
@@ -1835,6 +1857,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const bool interactHeld=(buttons&BUTTON_INTERACT)!=0;
     const bool pulseHeld=(buttons&BUTTON_PULSE)!=0;
     const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
+    const bool kitPressed=(buttons&BUTTON_KIT)&&!(gPreviousButtons&BUTTON_KIT);
     gPreviousButtons=buttons;
 
     if(gScreenMode==0) {
@@ -2029,19 +2052,33 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         if(lootIndex>=0) {
             GroundLoot& loot=gGroundLoot[static_cast<size_t>(lootIndex)];
             const size_t type=static_cast<size_t>(std::clamp(loot.weaponType,0,3));
-            gWeaponAmmo[type]=std::min(240,gWeaponAmmo[type]+loot.ammo);
-            if(!loot.ammoOnly) {
-                gWeaponOwned[type]=true;gWeaponType=static_cast<int>(type);
-                setStatus(std::string("ARMA COLETADA: ")+weaponName()+" • "+std::to_string(gWeaponAmmo[type])+" CARGAS");
+            if(loot.kind==2) {
+                if(gMedkits>=3)setStatus("LIMITE DE KITS MÉDICOS ATINGIDO");
+                else {++gMedkits;setStatus("KIT MÉDICO COLETADO • "+std::to_string(gMedkits)+" DISPONÍVEIS");loot.active=false;}
+            } else if(loot.kind==3) {
+                if(gPlayerShield>=100)setStatus("PROTEÇÃO COMPLETA");
+                else {gPlayerShield=std::min(100,gPlayerShield+25);setStatus("PROTEÇÃO COLETADA • "+std::to_string(gPlayerShield)+"%");loot.active=false;}
             } else {
-                setStatus("MUNIÇÃO COLETADA • "+std::to_string(gWeaponAmmo[type])+" CARGAS");
+                gWeaponAmmo[type]=std::min(240,gWeaponAmmo[type]+loot.ammo);
+                if(!loot.ammoOnly) {
+                    gWeaponOwned[type]=true;gWeaponType=static_cast<int>(type);
+                    setStatus(std::string("EQUIPAMENTO COLETADO: ")+weaponName()+" • "+std::to_string(gWeaponAmmo[type])+" CARGAS");
+                } else setStatus("MUNIÇÃO COLETADA • "+std::to_string(gWeaponAmmo[type])+" CARGAS");
+                loot.active=false;
             }
-            loot.active=false;gInteractCooldown=0.35f;
+            gInteractCooldown=0.35f;
         } else if(nearest>=0) {
             gCrystalTaken[static_cast<size_t>(nearest)]=true;++gCollected;
             gWood=std::min(250,gWood+20);gInteractCooldown=0.35f;
             setStatus("RECURSO COLETADO  •  +20 MADEIRA");
         } else setStatus("NADA PRÓXIMO • PROCURE ARMAS, MUNIÇÃO OU CRISTAIS");
+    }
+    if(kitPressed&&gDropState==3&&!gPlayerDowned) {
+        if(gMedkits>0&&gPlayerHealth<100) {
+            --gMedkits;gPlayerHealth=std::min(100,gPlayerHealth+35);
+            setStatus("KIT MÉDICO UTILIZADO • VIDA "+std::to_string(gPlayerHealth)+"%");
+        } else if(gMedkits<=0) setStatus("SEM KIT MÉDICO • PROCURE CAIXAS DE SUPRIMENTO");
+        else setStatus("VIDA COMPLETA • KIT MÉDICO NÃO NECESSÁRIO");
     }
     if(buildPressed&&gDropState==3&&!gPlayerDowned) {
         if(!gBuildPreview){gBuildPreview=true;setStatus("PRÉVIA DE GELO • TOQUE CONSTRUIR NOVAMENTE PARA CONFIRMAR");}
@@ -2291,4 +2328,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeGetEliminations(JNIEnv*,jclas
 extern "C" JNIEXPORT jint JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetCollected(JNIEnv*,jclass) {
     return static_cast<jint>(gCollected);
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetMedkits(JNIEnv*,jclass) {
+    return static_cast<jint>(gMedkits);
 }
