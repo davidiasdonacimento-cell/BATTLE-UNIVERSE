@@ -362,7 +362,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         int skip=Math.max(0,rows.size()-limit),index=0;
         for(String row:rows){
             if(index++<skip)continue;
-            if(merged.length()>0)merged.append('\\n');
+            if(merged.length()>0)merged.append('\n');
             merged.append(row);
         }
         return merged.toString();
