@@ -273,3 +273,44 @@ A decisão “tudo pronto no primeiro lançamento” significa:
 ## 8. Próxima ação autorizada após organização
 
 Quando o responsável autorizar iniciar a execução, começar pela Fase 0: ler por completo os documentos e o estado atual do repositório, gerar a matriz de rastreabilidade, identificar contradições e apresentar relatório de auditoria antes de editar código. Até essa autorização, manter este cronograma como planejamento.
+
+
+## 9. Requisitos específicos recuperados na conferência dos documentos-base
+
+Esta seção torna explícitos requisitos que já estavam no estado do projeto e que precisam continuar cobertos pelo cronograma. Não substitui os documentos de origem.
+
+### Lobby, telas e fluxo da partida
+- Manter lobby de battle royale mobile com personagem humano central em cenário 3D, câmera dinâmica, menus laterais e botão JOGAR; não transformar a experiência em site.
+- Preservar as áreas: personagens, cofre/inventário, loja, Royale, passe, missões, eventos, perfil, amigos/equipe, configurações, modos, coleção/equipamentos, correio, conquistas/classificação, notícias, calendário e resgate de códigos.
+- O fluxo BR inclui sala de espera, contagem, aeronave caminhável, mapa tático, salto, queda livre, paraquedas, combate, resultado e recompensas.
+- A aeronave já registrada no estado do projeto possui corredor, rampa, movimentação, embarque de 7 segundos e saída de segurança aos 34 segundos. A auditoria deve confirmar o comportamento atual e preservar esses tempos/regras, salvo decisão expressa posterior.
+- Fogo amigo permanece desligado; dificuldade dos bots permanece NORMAL como requisito atual.
+- Em partidas online, aguardar 30 segundos por participantes humanos e só então completar vagas com bots quando o serviço real de partidas estiver implantado. Nunca contar bots como jogadores humanos.
+
+### Modos e regras específicas
+- Preservar solo, dupla, esquadrão e treinamento, além dos modos adicionais já definidos.
+- Gladiadores: duelo individual; primeiro a alcançar 5 eliminações vence; seleção de equipamento antes do duelo; placar e reinício de partida próprios.
+- Contra Squad: duas equipes; vence quem alcançar 4 rounds; round termina quando uma equipe é eliminada; fase de compra entre rounds; pistola e saldo inicial; compras e inventário válidos durante a partida.
+- Não alterar IDs JNI/nativos existentes (incluindo 0–3) sem migração versionada e testes.
+
+### Arsenal e Royale
+- O estado atual de `PROJECT_STATUS.md` define o arsenal permitido como exatamente quatro armas: Desert Eagle (Desert), Mini Uzi, XM8 e UMP. Não reintroduzir armas removidas nem mudar índices sem auditoria e migração.
+- O Royale existente tem custo de 100 diamantes, probabilidades 40/30/20/9/1 (total de 100%), cinco cosméticos, compensação por repetição e histórico. Preservar transparência das chances, validação da soma, compensação e histórico durante a migração para a carteira única.
+
+### Conta, autenticação e sincronização — conflito que a Fase 0 precisa resolver
+- Os documentos registram arquiteturas em momentos diferentes: uma seção antiga de `PROJECT_STATUS.md` descreve Firebase Authentication/Firestore; a arquitetura confirmada mais recente declara Firebase descontinuado e migração para FastAPI + PostgreSQL; atualizações posteriores também registram sincronização Firestore e carteira PostgreSQL.
+- Não presumir que essas descrições são simultaneamente a arquitetura final. Na Fase 0, verificar o código atual, os endpoints realmente implantados, os fluxos de login/sincronização e a fonte de verdade de cada dado. Produzir uma decisão arquitetural explícita (incluindo plano de migração e compatibilidade) antes de alterar autenticação ou persistência.
+- A carteira PostgreSQL é registrada como fonte de verdade online para saldo; o armazenamento local é cache/fila offline. O objetivo final continua sendo uma única carteira de diamantes, com reconciliação idempotente e sem saldo duplicado.
+- A API administrativa, os papéis player/admin, auditoria, exclusão lógica e configurações globais precisam ser auditados e testados; alterações de nome exibido não podem mudar applicationId, pacote ou assinatura.
+
+### Conteúdo, identidade e distribuição
+- Preservar THE VISION como experiência de primeira entrada com etapas ligadas à cópia, extração e validação reais do conteúdo.
+- Preservar Season 02 como conteúdo real, versionado e validado por manifesto/hash; manter a estratégia de pacote externo e cópia persistente em Downloads/Battle Universe, confirmando o comportamento em reinstalação.
+- Preservar assinatura estável do APK para atualização in-place. Nunca recriar ou substituir a chave de assinatura existente.
+- Monetização futura deve ser transparente, opcional e compatível com regras da plataforma; não prometer renda.
+
+### Itens de auditoria adicionais obrigatórios na Fase 0
+- Conferir os requisitos permanentes e o histórico completo dos itens 1–11, não apenas este resumo.
+- Confirmar cada tela, modo, ID, arma, regra de aeronave, bot, mapa, conta, sincronização, Royale, THE VISION, Season 02 e assinatura contra o código e os testes atuais.
+- Registrar explicitamente o que existe apenas como tela, o que é lógica local, o que depende de backend e o que já foi testado em aparelho.
+- Não resolver conflitos de documentos por suposição: registrar a decisão e obter confirmação quando a escolha alterar comportamento ou dados existentes.
