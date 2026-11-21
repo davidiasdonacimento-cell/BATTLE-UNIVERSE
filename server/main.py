@@ -106,6 +106,10 @@ class ProfileBody(BaseModel):
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
 
+class AdminLoginBody(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=12, max_length=128)
+
 class AccountEditBody(BaseModel):
     username: str | None = Field(default=None, min_length=3, max_length=18, pattern=r"^[A-Za-z0-9_]+$")
     character_name: str | None = Field(default=None, min_length=1, max_length=32)
@@ -120,7 +124,7 @@ app = FastAPI(title="BATTLE UNIVERSE Account & Admin API", version="1.2.0")
 origins = [x.strip() for x in os.environ.get("CORS_ORIGINS", "").split(",") if x.strip()]
 if origins:
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
-                       allow_methods=["GET", "PATCH", "POST", "DELETE"], allow_headers=["Authorization", "Content-Type"])
+                       allow_methods=["GET", "PUT", "PATCH", "POST", "DELETE"], allow_headers=["Authorization", "Content-Type"])
 
 @app.middleware("http")
 async def security_headers(request, call_next):
