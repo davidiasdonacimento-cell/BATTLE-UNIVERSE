@@ -56,7 +56,7 @@ public final class PlayerProfileStore {
                 || coins < 0L || diamonds < 0L || xp < 0L) return false;
         synchronized (LOCK) {
             String txKey = "economy_tx_" + safeKey(transactionId);
-            if (prefs.getBoolean(txKey, false)) return false;
+            if (prefs.getBoolean(txKey, false) || containsLedgerTransaction(transactionId)) return false;
             if (legacyMarker != null && prefs.getBoolean(legacyMarker, false)) return false;
             long nextCoins = safeAdd(getCoins(), coins);
             long nextDiamonds = safeAdd(getDiamonds(), diamonds);
@@ -111,6 +111,16 @@ public final class PlayerProfileStore {
                     "ROYALE", 0L, credit - cost, 0L);
             return edit.commit() ? result : null;
         }
+    }
+
+    private boolean containsLedgerTransaction(String id) {
+        String prefix = safeKey(id) + "|";
+        String ledger = prefs.getString("economy_ledger", "");
+        if (ledger.isEmpty()) return false;
+        for (String row : ledger.split("\\n")) {
+            if (row.startsWith(prefix)) return true;
+        }
+        return false;
     }
 
     private void appendLedger(SharedPreferences.Editor edit, String id, String type,
