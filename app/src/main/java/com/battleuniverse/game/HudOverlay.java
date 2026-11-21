@@ -1049,6 +1049,7 @@ public final class HudOverlay extends View {
         drawControl(c,1152,562,47,"SALTAR",0xFF7B3D35,0xFFFFA28F);
         drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
         drawControl(c,850,562,39,"AGACHAR",0xFF315B50,0xFF8DE7C1);
+        drawControl(c,1065,605,35,"KIT "+game.getMedkits(),0xFF176447,0xFF9CF0B9,game.getMedkits()>0);
 
         if(!gameStatus.startsWith("EMBARQUE")&&!gameStatus.startsWith("AVIÃO")) {
             float cx=640,cy=360;
