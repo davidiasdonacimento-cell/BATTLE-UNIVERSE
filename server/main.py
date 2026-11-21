@@ -99,6 +99,16 @@ class RoyaleSpin(Base):
     balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class DailyRewardClaim(Base):
+    __tablename__ = "daily_reward_claims"
+    __table_args__ = (UniqueConstraint("player_id", "reward_day", name="uq_daily_reward_player_day"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    reward_day: Mapped[str] = mapped_column(String(10), nullable=False)
+    coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=250)
+    diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=100)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -258,6 +268,9 @@ def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str,
         raise HTTPException(409, "Esse nickname já está em uso.")
     player = Player(username=username, password_hash=password_hash.hash(body.password), profile={})
     db.add(player)
+    db.flush()
+    db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+    db.add(player)
     try:
         db.commit()
         db.refresh(player)
@@ -410,6 +423,51 @@ def recover_account(body: RecoverAccountBody, db: Session = Depends(db_session))
             "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60,
             "player": player_payload(player), "new_recovery_code": replacement,
             "message": "Acesso recuperado. Guarde o novo código; o anterior foi invalidado."}
+
+@app.get("/v1/accounts/me/wallet")
+def get_wallet(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    wallet = db.get(PlayerWallet, player.id)
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        db.add(wallet)
+        db.commit()
+        db.refresh(wallet)
+    return {"coins": wallet.coins, "diamonds": wallet.diamonds,
+            "currency": "virtual", "authority": "server"}
+
+@app.post("/v1/game/rewards/daily")
+def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    day = datetime.now(timezone.utc).date().isoformat()
+    existing = db.scalar(select(DailyRewardClaim).where(
+        DailyRewardClaim.player_id == player.id, DailyRewardClaim.reward_day == day))
+    if existing is not None:
+        wallet = db.get(PlayerWallet, player.id)
+        return {"claimed": False, "reward_day": day, "coins": existing.coins,
+                "diamonds": existing.diamonds,
+                "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
+    wallet = db.get(PlayerWallet, player.id)
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        db.add(wallet)
+        db.flush()
+    wallet.coins += 250
+    wallet.diamonds += 100
+    claim = DailyRewardClaim(player_id=player.id, reward_day=day, coins=250, diamonds=100)
+    db.add(claim)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        existing = db.scalar(select(DailyRewardClaim).where(
+            DailyRewardClaim.player_id == player.id, DailyRewardClaim.reward_day == day))
+        wallet = db.get(PlayerWallet, player.id)
+        if existing is None:
+            raise HTTPException(503, "Não foi possível confirmar a recompensa diária.")
+        return {"claimed": False, "reward_day": day, "coins": existing.coins,
+                "diamonds": existing.diamonds,
+                "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
+    return {"claimed": True, "reward_day": day, "coins": 250, "diamonds": 100,
+            "wallet": {"coins": wallet.coins, "diamonds": wallet.diamonds}}
 
 @app.get("/v1/royale/config")
 def royale_config(player: Player = Depends(current_player)):
