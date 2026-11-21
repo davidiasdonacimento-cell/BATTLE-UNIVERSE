@@ -925,11 +925,17 @@ public final class HudOverlay extends View {
         text(c,"●  MODO LOCAL",913,414,14,0xFF76E7CF,Typeface.DEFAULT_BOLD);
         text(c,"Partidas com bots • sem conexão online",913,438,10,0xFF9CB4C1,Typeface.DEFAULT);
         panel(c,888,477,362,183,0x74101F2C,0x226A8EA0,16);
-        eyebrow(c,913,506,"DICA DE OPERAÇÃO");
-        text(c,"Os dois operadores ao lado são",913,540,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"personagens de demonstração do lobby.",913,560,11,0xFFB3C7D1,Typeface.DEFAULT);
-        text(c,"PARTIDA OFFLINE",913,599,10,0xFF7FA4B7,Typeface.DEFAULT_BOLD);
-        text(c,"Bots IA entram ao iniciar a partida.",913,616,10,0xFF7FA4B7,Typeface.DEFAULT);
+        long xp=profile.getXp();
+        int level=profile.getLevel();
+        long levelProgress=profile.getLevelProgress();
+        eyebrow(c,913,506,"PROGRESSO DO OPERADOR");
+        text(c,"NÍVEL "+level+" / 30",913,539,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,xp+" XP TOTAL  •  "+levelProgress+" / 500 XP",913,558,9,0xFFB3C7D1,Typeface.DEFAULT_BOLD);
+        p.setColor(0xFF233F4F);r.set(913,570,1224,579);c.drawRoundRect(r,5,5,p);
+        p.setColor(0xFF55DDE7);r.set(913,570,913+311*(levelProgress/500f),579);c.drawRoundRect(r,5,5,p);
+        text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS  •  ◆ "+formatDiamonds(profile.getDiamonds()),913,601,9,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        pill(c,913,615,154,29,"ABRIR MISSÕES",0xFF176A75,Color.WHITE);
+        text(c,"Progresso local salvo neste aparelho",1080,634,8,0xFF8FAAB8,Typeface.DEFAULT);
     }
     private void mapArtwork(Canvas c,int map,float x,float y,float w,float h){
         int[][] palettes={{0xFF54C2D1,0xFF1B665B},{0xFF7B6BD6,0xFF171F49},{0xFFE4B366,0xFF8B5737},
@@ -1240,6 +1246,7 @@ public final class HudOverlay extends View {
                 page=PREMATCH;return;
             }
             if(hit(x,y,270,565,245,61)){page=ROYALE;return;}
+            if(hit(x,y,913,615,154,29)){page=MISSIONS;return;}
         }else if(page==PREMATCH){
             if(hit(x,y,270,636,170,34)){page=HOME;return;}
             if(hit(x,y,862,636,350,34)){beginOfflineMatch();return;}
