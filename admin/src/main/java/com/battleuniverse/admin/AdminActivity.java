@@ -178,10 +178,13 @@ public final class AdminActivity extends Activity {
             JSONObject a=rows.optJSONObject(i); if(a==null) continue;
             int id=a.optInt("id"); String username=a.optString("username");
             String state=a.optString("state"); String character=a.optString("character_name");
-            long diamonds=a.optLong("diamonds",0);\n            TextView item=new TextView(this); item.setText("#"+id+"  "+username+"\nPersonagem: "+character+"\nDiamantes: "+String.format(java.util.Locale.US,"%,d",diamonds)+"\nEstado: "+state);
+            long diamonds=a.optLong("diamonds",0);
+            TextView item=new TextView(this); item.setText("#"+id+"  "+username+"\nPersonagem: "+character+"\nDiamantes: "+String.format(java.util.Locale.US,"%,d",diamonds)+"\nEstado: "+state);
             item.setTextColor(Color.WHITE); item.setTextSize(15); item.setPadding(12,14,12,8);
             content.addView(item);
-            Button wallet=new Button(this); wallet.setText("GERENCIAR DIAMANTES / HISTÓRICO"); wallet.setAllCaps(false); content.addView(wallet);\n            wallet.setOnClickListener(v->showWalletDialog(id,username));\n            Button edit=new Button(this); edit.setText("EDITAR NICKNAME / PERSONAGEM"); edit.setAllCaps(false);
+            Button wallet=new Button(this); wallet.setText("GERENCIAR DIAMANTES / HISTÓRICO"); wallet.setAllCaps(false); content.addView(wallet);
+            wallet.setOnClickListener(v->showWalletDialog(id,username));
+            Button edit=new Button(this); edit.setText("EDITAR NICKNAME / PERSONAGEM"); edit.setAllCaps(false);
             content.addView(edit); edit.setOnClickListener(v->editAccount(id,username,character));
             Button stateButton=new Button(this); stateButton.setText(state.equals("suspended")?"REATIVAR CONTA":"SUSPENDER CONTA");
             stateButton.setAllCaps(false); content.addView(stateButton);
