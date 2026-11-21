@@ -70,10 +70,15 @@ jobs:
           python - <<'PY'
           from zipfile import ZipFile
           from pathlib import Path
+          from shutil import copy2
           game = Path("app/build/outputs/apk/debug/app-debug.apk")
-          admin = Path("admin/build/outputs/apk/debug/admin-debug.apk")
+          admin_candidates = sorted(Path("admin/build/outputs/apk").rglob("*.apk"))
           assert game.is_file() and game.stat().st_size > 300_000, "APK do jogo ausente ou pequeno"
-          assert admin.is_file() and admin.stat().st_size > 100_000, "APK administrativo ausente ou pequeno"
+          assert admin_candidates, "Gradle não gerou APK administrativo"
+          admin_source = admin_candidates[0]
+          assert admin_source.stat().st_size > 100_000, f"APK administrativo pequeno: {admin_source}"
+          admin = Path("build/admin-debug.apk")
+          copy2(admin_source, admin)
           with ZipFile(game) as z:
               names = set(z.namelist())
               assert "classes.dex" in names, "DEX do jogo ausente"
@@ -85,7 +90,7 @@ jobs:
               assert z.testzip() is None, "APK administrativo corrompido"
           print(f"Jogo: {game.stat().st_size} bytes; Admin: {admin.stat().st_size} bytes")
           PY
-          ls -lh app/build/outputs/apk/debug/app-debug.apk admin/build/outputs/apk/debug/admin-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk build/admin-debug.apk
           ls -lh build/battle-universe-season-02-pack.zip
           test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 262144000
       - name: Publish verified Season 02 4K data pack
@@ -117,7 +122,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: BATTLE-UNIVERSE-ADMIN-debug-apk
-          path: admin/build/outputs/apk/debug/admin-debug.apk
+          path: build/admin-debug.apk
           if-no-files-found: error
           retention-days: 14
       - name: Upload Season 02 4K package artifact
