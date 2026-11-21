@@ -62,7 +62,7 @@ jobs:
           gradle-version: '8.9'
       - name: Compile game and administration APKs
         env:
-          ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL }}
+          ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
           ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :admin:assembleDebug
       - name: Verify game and administration APKs
