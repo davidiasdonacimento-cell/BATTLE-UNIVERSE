@@ -1330,7 +1330,7 @@ void resetBots() {
                 std::clamp(gPlayer.x+offset.x,-112.0f,112.0f),0.55f,
                 std::clamp(gPlayer.z+offset.z,-112.0f,112.0f)};
         }
-        gBots[static_cast<size_t>(i)]={gBotHomes[static_cast<size_t>(i)],0,0,static_cast<float>(i)*1.3f};
+        gBots[static_cast<size_t>(i)]={gBotHomes[static_cast<size_t>(i)],{}, {},0,0,static_cast<float>(i)*1.3f};
         gBotAttackCooldown[static_cast<size_t>(i)]=0.45f+static_cast<float>(i%5)*0.16f;
     }
 }
