@@ -122,6 +122,9 @@ public final class AdminActivity extends Activity {
         characterJson = field("Nomes por ID em JSON (ex.: {\"caio\":\"Caio\"})", false);
         button("CARREGAR CONFIGURAÇÕES", this::loadSettings);
         button("SALVAR NOME DO JOGO E PERSONAGENS", this::saveSettings);
+        label("CÓDIGOS PROMOCIONAIS");
+        button("CRIAR CÓDIGO DE DIAMANTES", this::createPromoDialog);
+        button("GERENCIAR / ATIVAR / DESATIVAR CÓDIGOS", this::loadPromos);
         button("VER AUDITORIA", this::loadAudit);
         button("BLOQUEAR ESTE APARELHO", () -> { clearToken(); token = ""; showSecurityGate(); });
         loadOverview(); loadSettings();
@@ -136,7 +139,7 @@ public final class AdminActivity extends Activity {
         work("Consultando servidor...", () -> {
             JSONObject r=request("GET","/v1/owner/overview",null);
             message("Contas: "+r.optInt("accounts_total")+" | Suspensas: "+r.optInt("accounts_suspended")+
-                    " | Encerradas: "+r.optInt("accounts_deleted")+" | Admin: "+r.optString("admin"));
+                    " | Encerradas: "+r.optInt("accounts_deleted")+" | Diamantes emitidos: "+r.optLong("diamonds_total")+" | Admin: "+r.optString("admin"));
         });
     }
 
@@ -264,6 +267,64 @@ public final class AdminActivity extends Activity {
             .setNegativeButton("Cancelar",null).setPositiveButton("EXCLUIR",(d,w)->work("Encerrando conta...",()->{
                 request("DELETE","/v1/owner/accounts/"+id,null); message("Conta encerrada."); loadAccounts(search.getText().toString());
             })).show();
+    }
+
+    private void createPromoDialog() {
+        LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(18,4,18,4);
+        EditText code=new EditText(this); code.setHint("Código (ex.: BEMVINDO2026)"); box.addView(code);
+        EditText diamonds=new EditText(this); diamonds.setHint("Quantidade de diamantes"); diamonds.setInputType(2); box.addView(diamonds);
+        EditText limit=new EditText(this); limit.setHint("Limite total de resgates (0 = ilimitado)"); limit.setInputType(2); box.addView(limit);
+        new AlertDialog.Builder(this).setTitle("CRIAR CÓDIGO PROMOCIONAL").setView(box)
+            .setNegativeButton("CANCELAR",null).setPositiveButton("CRIAR",(d,w)->work("Criando código no servidor...",()->{
+                long amount,cap;
+                try{amount=Long.parseLong(diamonds.getText().toString().trim());cap=limit.getText().toString().trim().isEmpty()?0:Long.parseLong(limit.getText().toString().trim());}
+                catch(Exception e){throw new IOException("Quantidade ou limite inválido.");}
+                JSONObject body=new JSONObject();body.put("code",code.getText().toString().trim());
+                body.put("diamonds",amount);body.put("max_redemptions",cap);
+                JSONObject result=request("POST","/v1/owner/promos",body);
+                message("Código "+result.optString("code")+" criado: "+result.optLong("diamonds")+" diamantes.");
+                loadPromos();
+            })).show();
+    }
+
+    private void loadPromos() {
+        work("Carregando códigos promocionais...",()->{
+            JSONObject result=request("GET","/v1/owner/promos",null);
+            JSONArray rows=result.optJSONArray("promos");
+            StringBuilder out=new StringBuilder();
+            if(rows!=null)for(int i=0;i<rows.length();i++){
+                JSONObject p=rows.optJSONObject(i);if(p==null)continue;
+                out.append(p.optString("code")).append(" • ").append(p.optLong("diamonds"))
+                    .append(" ◆ • ").append(p.optInt("redemptions")).append("/")
+                    .append(p.optInt("max_redemptions")==0?"∞":p.optInt("max_redemptions"))
+                    .append(" • ").append(p.optBoolean("active")?"ATIVO":"INATIVO").append("\\n");
+            }
+            String text=out.length()==0?"Nenhum código cadastrado.":out.toString();
+            runOnUiThread(()->new AlertDialog.Builder(this).setTitle("CÓDIGOS PROMOCIONAIS")
+                .setMessage(text).setPositiveButton("ATIVAR/DESATIVAR",(d,w)->choosePromoToggle(rows))
+                .setNegativeButton("FECHAR",null).show());
+            message("Códigos carregados: "+(rows==null?0:rows.length()));
+        });
+    }
+
+    private void choosePromoToggle(JSONArray rows) {
+        if(rows==null||rows.length()==0)return;
+        String[] labels=new String[rows.length()];
+        for(int i=0;i<rows.length();i++){
+            JSONObject p=rows.optJSONObject(i);
+            labels[i]=p.optString("code")+(p.optBoolean("active")?" • ATIVO":" • INATIVO");
+        }
+        new AlertDialog.Builder(this).setTitle("Selecionar código")
+            .setItems(labels,(dialog,which)->{
+                JSONObject promo=rows.optJSONObject(which);String id=promo.optString("id");
+                boolean next=!promo.optBoolean("active");
+                work("Atualizando código...",()->{
+                    JSONObject body=new JSONObject();body.put("active",next);
+                    request("PATCH","/v1/owner/promos/"+id,body);
+                    message("Código "+promo.optString("code")+(next?" ativado.":" desativado."));
+                    loadPromos();
+                });
+            }).setNegativeButton("Cancelar",null).show();
     }
 
     private void loadAudit() {
