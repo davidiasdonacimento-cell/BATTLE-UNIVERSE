@@ -26,7 +26,7 @@ public final class ContentLoadingView extends View {
     private final ArrayList<FileRow> recentFiles=new ArrayList<>();
     private float progress=0f,scale=1f,offsetX,offsetY;
     private long downloaded=0,total=0,started=System.currentTimeMillis();
-    private String status="PREPARANDO CONEXÃO SEGURA...";
+    private String status="CONFIGURANDO A PRIMEIRA ENTRADA...";
     private String error="";
     private Runnable retryAction,continueAction;
 
@@ -39,7 +39,7 @@ public final class ContentLoadingView extends View {
     public void setProgress(long done,long all,String message) {
         downloaded=Math.max(0,done);total=Math.max(0,all);
         progress=all>0?Math.max(0f,Math.min(1f,(float)done/(float)all)):0f;
-        status=message==null?"BAIXANDO DADOS DO JOGO...":message;
+        status=message==null?"CONFIGURANDO O UNIVERSO...":message;
         error="";
         postInvalidate();
     }
@@ -69,7 +69,7 @@ public final class ContentLoadingView extends View {
 
     public void setFailure(String message,Runnable retry,Runnable continueBase) {
         error=message==null?"Não foi possível concluir a instalação.":message;
-        status="NÃO FOI POSSÍVEL INSTALAR O PACOTE";
+        status="NÃO FOI POSSÍVEL CONFIGURAR O CONTEÚDO";
         retryAction=retry;continueAction=continueBase;
         postInvalidate();
     }
@@ -103,10 +103,11 @@ public final class ContentLoadingView extends View {
         }
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(0xFF66F0F0);canvas.drawCircle(640,228,7,paint);
-        text(canvas,"BATTLE",555,105,39,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(canvas,"UNIVERSE",690,105,39,0xFF54DCE9,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(canvas,"EXPANSÃO DE CONTEÚDO  •  TEMPORADA 02",640,365,17,0xFFD4EAF2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-        text(canvas,"Modelos 3D  •  Materiais PBR 4K  •  8 mapas  •  Áudio",640,391,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
+        drawVisionMascot(canvas,t);
+        text(canvas,"THE VISION",640,105,39,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
+        text(canvas,"BATTLE UNIVERSE",640,133,12,0xFF54DCE9,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        text(canvas,"CONFIGURANDO A TEMPORADA 02",640,365,17,0xFFD4EAF2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        text(canvas,"Mapas  •  Operadores  •  Materiais  •  Áudio  •  Efeitos",640,391,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
 
         rect.set(260,414,1020,428);
         paint.setColor(0xFF1B3448);canvas.drawRoundRect(rect,8,8,paint);
@@ -115,7 +116,7 @@ public final class ContentLoadingView extends View {
         canvas.drawRoundRect(rect,8,8,paint);paint.setShader(null);
         text(canvas,String.format(Locale.US,"%d%%",(int)(progress*100)),640,468,28,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
         text(canvas,status,640,493,12,0xFF9FCCD9,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-        String size=total>0?String.format(Locale.US,"%.1f MB / %.1f MB",downloaded/1048576f,total/1048576f):"AGUARDANDO SERVIDOR";
+        String size=total>0?"CONTEÚDO INTEGRADO  •  VERIFICAÇÃO DE INTEGRIDADE":"PREPARANDO RECURSOS DO JOGO";
         text(canvas,size,640,516,10,0xFF7898AA,Typeface.DEFAULT,Paint.Align.CENTER);
 
         if(!error.isEmpty()) {
@@ -125,7 +126,7 @@ public final class ContentLoadingView extends View {
             text(canvas,"ABRIR JOGO BASE",830,606,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
             text(canvas,shortText(error,105),640,665,10,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
         } else {
-            text(canvas,"ARQUIVOS DO JOGO  •  PROGRESSO INDIVIDUAL",260,548,11,0xFF64DDE8,Typeface.DEFAULT_BOLD);
+            text(canvas,"ETAPAS DE CONFIGURAÇÃO  •  PROGRESSO REAL",260,548,11,0xFF64DDE8,Typeface.DEFAULT_BOLD);
             for(int i=0;i<recentFiles.size();i++) {
                 FileRow row=recentFiles.get(i);
                 float y=568+i*29;
@@ -138,7 +139,7 @@ public final class ContentLoadingView extends View {
                 paint.setColor(row.complete?0xFF56D9B8:0xFF36B9D0);
                 canvas.drawRoundRect(rect,3,3,paint);
             }
-            text(canvas,"Cada arquivo é conferido antes de ser ativado.",640,692,9,0xFF648DA1,Typeface.DEFAULT,Paint.Align.CENTER);
+            text(canvas,"THE VISION  •  CONTEÚDO VALIDADO ANTES DE SER ATIVADO",640,692,9,0xFF648DA1,Typeface.DEFAULT,Paint.Align.CENTER);
             postInvalidateDelayed(70);
         }
         canvas.restore();
