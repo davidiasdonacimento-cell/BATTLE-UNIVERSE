@@ -59,8 +59,8 @@ public final class HudOverlay extends View {
     private static final long[] MISSION_DIAMONDS={0,0,80};
     private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO","GLADIADORES"};
     private static final String[] DUEL_WEAPONS={"DESERT EAGLE","MINI UZI","XM8","UMP"};
-    private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM","FROZEN FRONT","INDUSTRIAL ZONE","GREEN VALLEY","ORBITAL BASE","ABANDONED SECTOR"};
-    private static final String[] MAP_DETAILS={"Praias • florestas • vilas","Arranha-céus • neon • avenidas","Dunas • cânions • ruínas","Geleiras • neve • bases polares","Fábricas • depósitos • chaminés","Campos • rios • florestas","Instalações • plataformas • tecnologia","Ruínas • depósitos • estruturas antigas"};
+    private static final String[] MAP_NAMES={"BERMUDA"};
+    private static final String[] MAP_DETAILS={"Ilha tropical • cidades • florestas • praias"};
     private static final String[] CHARACTER_NAMES={"CAIO","MAYA","DANTE","LUNA"};
     private static final String[] QUALITY_NAMES={"ECONÔMICO","EQUILIBRADO","ALTO"};
     private final GameSurfaceView game;
@@ -68,7 +68,7 @@ public final class HudOverlay extends View {
     private final PlayerProfileStore profile;
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r=new RectF();
-    private int page=HOME, mode, map, character, quality=1, lookSensitivity=1, selectedDuelWeapon=1;
+    private int page=HOME, mode, map, character, quality=2, lookSensitivity=1, selectedDuelWeapon=1;
     private int generalSensitivity=100, aimSensitivity=100;
     private int selectedShirt,selectedBoots,selectedSet;
     private int equippedBeard,equippedHelmet,equippedBackpack,equippedVest;
@@ -135,9 +135,9 @@ public final class HudOverlay extends View {
         this.game=game; this.prefs=prefs; this.profile=new PlayerProfileStore(prefs);
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setClickable(true); setFocusable(true);
-        mode=Math.max(0,Math.min(4,prefs.getInt("mode",0))); map=prefs.getInt("map",0);
+        mode=Math.max(0,Math.min(4,prefs.getInt("mode",0))); map=0;
         selectedDuelWeapon=Math.max(0,Math.min(3,prefs.getInt("duel_weapon",1)));
-        character=prefs.getInt("character",0); quality=prefs.getInt("quality",1);
+        character=prefs.getInt("character",0); quality=prefs.getInt("quality",2);
         onlineMode=prefs.getBoolean("online_mode",false);
         map=Math.max(0,Math.min(MAP_NAMES.length-1,map));
         music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
