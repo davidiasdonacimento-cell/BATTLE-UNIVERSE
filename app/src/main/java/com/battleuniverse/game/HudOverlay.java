@@ -91,6 +91,12 @@ public final class HudOverlay extends View {
     public interface DailyRewardResult {
         void onResult(boolean claimed,long coins,long diamonds,String message);
     }
+    public interface PromoCodeAction {
+        void redeem(String code,PromoCodeResult callback);
+    }
+    public interface PromoCodeResult {
+        void onResult(boolean success,long diamonds,String message);
+    }
     private boolean googleConfigured, googleSignedIn;
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
@@ -99,6 +105,7 @@ public final class HudOverlay extends View {
     private long onlineCoins=-1L,onlineDiamonds=-1L;
     private RoyaleSpinAction royaleSpinAction;
     private DailyRewardAction dailyRewardAction;
+    private PromoCodeAction promoCodeAction;
     private boolean royaleRequesting,royaleServerDuplicate;
     private String royaleServerPrizeName="";
     private String pendingRoyaleRequestId="";
@@ -214,7 +221,7 @@ public final class HudOverlay extends View {
     }
     private void drawProfile(Canvas c) {
         long xp=profile.getXp();
-        long diamonds=profile.getDiamonds();
+        long diamonds=onlineDiamonds>=0L?onlineDiamonds:profile.getDiamonds();
         int level=profile.getLevel();
         String nickname=profile.getNickname();
         panel(c,1000,17,246,60,0xC5152938,0x557AA0B8,15);
@@ -226,7 +233,8 @@ public final class HudOverlay extends View {
         text(c,"NÍVEL "+String.format(Locale.US,"%02d",level)+"  •  "+xp+" XP",1060,60,9,0xFF9BB6C6,Typeface.DEFAULT);
         if(prefs.getBoolean("shop_title_champion",false))
             text(c,"TÍTULO • CAMPEÃO",1060,73,7,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,"◆ "+formatDiamonds(diamonds)+"  ● "+formatDiamonds(profile.getCoins()),1138,51,9,0xFFFFC76B,Typeface.DEFAULT_BOLD);
+        long coins=onlineCoins>=0L?onlineCoins:profile.getCoins();
+        text(c,"◆ "+formatDiamonds(diamonds)+"  ● "+formatDiamonds(coins),1138,51,9,0xFFFFC76B,Typeface.DEFAULT_BOLD);
     }
     private String characterName(int index) {
         int safe=Math.max(0,Math.min(3,index));
@@ -1084,7 +1092,7 @@ public final class HudOverlay extends View {
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         new AlertDialog.Builder(getContext())
             .setTitle("Resgatar código secreto")
-            .setMessage("O código 100K concede 100.000 diamantes virtuais uma única vez neste perfil local.")
+            .setMessage("O código 100K concede 100.000 diamantes virtuais uma única vez por conta no servidor online.")
             .setView(input).setNegativeButton("CANCELAR",null)
             .setPositiveButton("RESGATAR",(dialog,which)->redeemCode(input.getText().toString()))
             .show();
@@ -1092,13 +1100,15 @@ public final class HudOverlay extends View {
     private void redeemCode(String rawCode) {
         String code=rawCode==null?"":rawCode.trim().toUpperCase(Locale.ROOT);
         if(!"100K".equals(code)) { toast("Código inválido."); return; }
-        if(prefs.getBoolean("code_100k_redeemed",false)) {
-            toast("O código 100K já foi resgatado neste perfil."); return;
+        if(promoCodeAction==null) {
+            toast("Resgate online indisponível. Entre na conta e tente novamente.");
+            return;
         }
-        if(!profile.claimOnce("promo_100k","code_100k_redeemed",0L,100000L,0L)){
-            toast("O código 100K já foi resgatado neste perfil.");return;
-        }
-        toast("+100.000 DIAMANTES VIRTUAIS!");
+        promoCodeAction.redeem(code,(success,balance,message)->{
+            if(success)onlineDiamonds=Math.max(0L,balance);
+            toast(message);
+            invalidate();
+        });
     }
     private void showNicknameDialog() {
         EditText input=new EditText(getContext());
@@ -1821,6 +1831,7 @@ public final class HudOverlay extends View {
     }
     public void setRoyaleSpinAction(RoyaleSpinAction action) { royaleSpinAction=action; }
     public void setDailyRewardAction(DailyRewardAction action) { dailyRewardAction=action; }
+    public void setPromoCodeAction(PromoCodeAction action) { promoCodeAction=action; }
     public void setDeviceIdentity(String code) { deviceIdentity=code==null?"":code; invalidate(); }
     public void setRecoveryCodeAction(Runnable action) { recoveryCodeAction=action; }
     public void showRecoveryCode(String code) {
