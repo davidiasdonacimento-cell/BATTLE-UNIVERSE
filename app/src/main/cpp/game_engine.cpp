@@ -1790,6 +1790,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(gPulseCooldown>0)gPulseCooldown=std::max(0.0f,gPulseCooldown-dt);
     if(gBuildCooldown>0)gBuildCooldown=std::max(0.0f,gBuildCooldown-dt);
     if(gPulseFlash>0)gPulseFlash=std::max(0.0f,gPulseFlash-dt);
+    const bool aimHeld=(buttons&BUTTON_AIM)!=0;
     const float activeSensitivity=aimHeld?gAimSensitivity:gLookSensitivity;
     gCameraYaw+=static_cast<float>(lookDX)*4.8f*activeSensitivity;
     gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f*activeSensitivity,0.12f,0.85f);
@@ -1802,7 +1803,6 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     const bool interactHeld=(buttons&BUTTON_INTERACT)!=0;
     const bool pulseHeld=(buttons&BUTTON_PULSE)!=0;
     const bool swapPressed=(buttons&BUTTON_SWAP)&&!(gPreviousButtons&BUTTON_SWAP);
-    const bool aimHeld=(buttons&BUTTON_AIM)!=0;
     gPreviousButtons=buttons;
 
     if(gScreenMode==0) {
