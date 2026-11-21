@@ -139,12 +139,23 @@ jobs:
           cp build/battle-universe-season-02-pack.zip build/distribution/
           cp build/content-pack-manifest.json build/distribution/
           ls -lh build/distribution/
-      - name: Upload DEBUG APK and Season 02 package
+      - name: Upload DEBUG APK separately
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: battle-universe-debug-and-season02
-          path: build/distribution/*
+          name: battle-universe-debug-apk
+          path: build/distribution/Battle-Universe-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Upload Season 02 package separately
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: battle-universe-season02-pack
+          path: |
+            build/distribution/battle-universe-season-02-pack.zip
+            build/distribution/content-pack-manifest.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
