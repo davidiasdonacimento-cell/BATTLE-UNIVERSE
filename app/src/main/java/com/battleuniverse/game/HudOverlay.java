@@ -233,24 +233,49 @@ public final class HudOverlay extends View {
         stat(c,665,642,onlineMode?"PEND.":"OFF",onlineMode?"ONLINE NÃO ATIVO":"MODO OFFLINE");
     }
     private void drawCharacters(Canvas c){
-        eyebrow(c,270,175,"PERSONALIZAÇÃO");title(c,"SUA EQUIPE",270,224);
-        subtitle(c,"Escolha entre quatro operadores masculinos e femininos. A seleção acompanha a partida.",270,252);
+        eyebrow(c,270,175,"PERSONALIZAÇÃO • MODELO DO LOBBY");
+        title(c,"OPERADORES",270,224);
+        subtitle(c,"Selecione um operador. O personagem 3D central acompanha a escolha em tempo real.",270,252);
+
+        panel(c,270,276,190,354,0xA9152938,0x557AA9BC,17);
+        eyebrow(c,290,304,"SELECIONE");
         String[] roles={"MASCULINO","FEMININO","MASCULINO","FEMININO"};
         int[] colors={0xFF08A9D8,0xFF344C5C,0xFF8D42D7,0xFFE0A62B};
         for(int i=0;i<4;i++){
-            float x=270+i*146;boolean active=character==i;
-            panel(c,x,295,132,210,active?0xD51B5B69:0xA51A3040,active?0xFF48D7E1:0x335D8495,16);
-            circle(c,x+66,365,36,colors[i],active?0xFF68E9EF:0xFF8AA5B4);
-            text(c,new String[]{"C","M","D","L"}[i],x+59,372,19,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,CHARACTER_NAMES[i],x+18,432,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,roles[i],x+14,453,9,0xFF9DB6C5,Typeface.DEFAULT);
-            pill(c,x+(active?27:35),470,active?78:62,23,active?"SELECIONADO":"ESCOLHER",
-                    active?0xFF176A75:0x553B6172,active?Color.WHITE:0xFFBBD0D9);
+            float y=320+i*72f;boolean active=character==i;
+            panel(c,282,y,166,62,active?0xD51B5B69:0x77304758,
+                active?0xFF48D7E1:0x335D8495,12);
+            circle(c,306,y+30,18,colors[i],active?0xFF68E9EF:0xFF8AA5B4);
+            text(c,new String[]{"C","M","D","L"}[i],300,y+36,13,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,CHARACTER_NAMES[i],334,y+27,12,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,roles[i],334,y+44,8,0xFF9DB6C5,Typeface.DEFAULT);
+            if(active)text(c,"●",430,y+36,9,0xFF76E7CF,Typeface.DEFAULT_BOLD);
         }
-        panel(c,270,535,570,92,0xA6172C3C,0x335D8495,17);
-        eyebrow(c,292,563,"VISUALIZAÇÃO 3D");
-        text(c,"Operador selecionado no cenário 3D e na partida local.",292,590,15,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"Cosméticos visuais não oferecem vantagem competitiva.",292,611,11,0xFF8FAAB8,Typeface.DEFAULT);
+
+        // Mantém o centro livre para a visualização 3D renderizada pela engine OpenGL.
+        p.setColor(0x223BD8E5);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.0f);
+        c.drawOval(488,520,850,594,p);p.setStyle(Paint.Style.FILL);
+        pill(c,548,286,242,27,"VISUALIZAÇÃO 3D AO VIVO",0xAA123D4A,0xFF9BEAF4);
+        text(c,"O modelo aparece no cenário atrás desta interface.",492,620,9,0xFF9CB5C2,Typeface.DEFAULT);
+
+        panel(c,870,276,342,354,0xB8193040,0x557AA9BC,17);
+        eyebrow(c,894,306,"OPERADOR SELECIONADO");
+        text(c,CHARACTER_NAMES[character],894,350,27,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,roles[character]+"  •  NÍVEL DE CONTA",894,374,9,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+        panel(c,894,398,294,1,0x557AA9BC,0x00000000,0);
+        eyebrow(c,894,428,"EQUIPAMENTO ATUAL");
+        String[] shirts={"SEM CAMISA","TÁTICA","NEON","FROST","DESERTO"};
+        String[] boots={"SEM BOTAS","COMBATE","NEON","FROST","DOURADAS"};
+        String[] sets={"SEM CONJUNTO","AURORA","CAMPEÃO","ORBITAL","DESERTO"};
+        int shirt=Math.max(0,Math.min(4,selectedShirt));
+        int boot=Math.max(0,Math.min(4,selectedBoots));
+        int set=Math.max(0,Math.min(4,selectedSet));
+        text(c,"CAMISA  •  "+shirts[shirt],894,461,11,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"BOTAS  •  "+boots[boot],894,487,11,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"CONJUNTO  •  "+sets[set],894,513,11,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"As peças equipadas acompanham o operador",894,552,9,0xFF9DB6C5,Typeface.DEFAULT);
+        text(c,"na partida local. Aparência sem bônus de poder.",894,568,9,0xFF9DB6C5,Typeface.DEFAULT);
+        gradientButton(c,894,584,294,34,"ABRIR GUARDA-ROUPA","PERSONALIZAR VISUAL",0xFF21B9C4,0xFF176A75);
     }
     private void drawModes(Canvas c){
         eyebrow(c,270,175,"SELECIONE A EXPERIÊNCIA");title(c,"MODOS DE JOGO",270,224);
@@ -860,11 +885,11 @@ public final class HudOverlay extends View {
         panel(c,888,124,362,218,0x9B0B1D2C,0x337AA0B2,19);
         eyebrow(c,913,153,"SUA EQUIPE");
         text(c,"ESQUADRÃO DE OPERAÇÃO",913,183,16,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        String[] slots={"VOCÊ  •  "+CHARACTER_NAMES[character],"ALIADO IA  •  ATIVO","ALIADO IA  •  PRONTO","ALIADO IA  •  PRONTO"};
+        String[] slots={"VOCÊ  •  "+CHARACTER_NAMES[character],"OPERADOR DE CENA  •  DEMO 01","OPERADOR DE CENA  •  DEMO 02","ESQUADRÃO REAL  •  NA PARTIDA"};
         for(int i=0;i<4;i++){
             float y=207+i*30;circle(c,925,y-4,7,i==0?0xFF38A9BA:0xFF35586A,0xFF8DDDE6);
-            text(c,slots[i],945,y,11,i==0?Color.WHITE:0xFFB3C7D1,Typeface.DEFAULT_BOLD);
-            if(i>0)text(c,"●",1208,y,9,0xFF6FD9C7,Typeface.DEFAULT_BOLD);
+            text(c,slots[i],945,y,10,i==0?Color.WHITE:0xFFB3C7D1,Typeface.DEFAULT_BOLD);
+            if(i>0&&i<3)text(c,"◌",1208,y,10,0xFF9CB4C1,Typeface.DEFAULT_BOLD);
         }
         panel(c,888,356,362,107,0x83101F2C,0x226A8EA0,16);
         eyebrow(c,913,384,"STATUS DA SESSÃO");
@@ -872,10 +897,10 @@ public final class HudOverlay extends View {
         text(c,"Partidas com bots • sem conexão online",913,438,10,0xFF9CB4C1,Typeface.DEFAULT);
         panel(c,888,477,362,183,0x74101F2C,0x226A8EA0,16);
         eyebrow(c,913,506,"DICA DE OPERAÇÃO");
-        text(c,"Explore o mapa, colete recursos",913,540,13,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"e deixe os aliados em patrulha independente.",913,560,11,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"MISSÕES  •  ROYALE  •  EVENTOS",913,599,10,0xFF7FA4B7,Typeface.DEFAULT_BOLD);
-        text(c,"Operações locais da Temporada 02.",913,616,10,0xFF7FA4B7,Typeface.DEFAULT);
+        text(c,"Os dois operadores ao lado são",913,540,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"personagens de demonstração do lobby.",913,560,11,0xFFB3C7D1,Typeface.DEFAULT);
+        text(c,"PARTIDA OFFLINE",913,599,10,0xFF7FA4B7,Typeface.DEFAULT_BOLD);
+        text(c,"Bots IA entram ao iniciar a partida.",913,616,10,0xFF7FA4B7,Typeface.DEFAULT);
     }
     private void mapArtwork(Canvas c,int map,float x,float y,float w,float h){
         int[][] palettes={{0xFF54C2D1,0xFF1B665B},{0xFF7B6BD6,0xFF171F49},{0xFFE4B366,0xFF8B5737},
@@ -1190,10 +1215,11 @@ public final class HudOverlay extends View {
             if(hit(x,y,270,636,170,34)){page=HOME;return;}
             if(hit(x,y,862,636,350,34)){beginOfflineMatch();return;}
         }else if(page==CHARACTERS){
-            for(int i=0;i<4;i++)if(hit(x,y,270+i*146,295,132,210)){
+            for(int i=0;i<4;i++)if(hit(x,y,282,320+i*72f,166,62)){
                 character=i;game.setCharacter(i);prefs.edit().putInt("character",i).apply();
                 toast("Operador "+CHARACTER_NAMES[i]+" selecionado");return;
             }
+            if(hit(x,y,894,584,294,34)){page=WARDROBE;return;}
         }else if(page==MODES_PAGE){
             for(int i=0;i<4;i++)if(hit(x,y,270+(i%2)*292,290+(i/2)*150,270,126)){
                 mode=i;game.setMatchMode(i);prefs.edit().putInt("mode",i).apply();
