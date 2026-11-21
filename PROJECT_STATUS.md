@@ -190,3 +190,16 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Integração administrativa e de conta está no código, mas não pode ser declarada operacional até o servidor e PostgreSQL serem implantados e testados.
 - Bloqueio de hospedagem identificado: a conta Render já tem um único PostgreSQL gratuito ativo, pertencente ao projeto Quantum Hub, com expiração indicada em 2026-12-14. Não reutilizar banco de outro projeto. O Render recusou criar um segundo banco free. Para manter API no Render sem misturar dados, escolher um banco gratuito externo (ex.: Neon) ou autorizar plano pago com responsável pela conta.
 - Estado desta construção: commits publicados; workflow Android em execução; APKs e teste no aparelho ainda não confirmados.
+
+
+## Atualização THE VISION + Season 02 embutida + Royale — 2026-11-21
+**Estado: código publicado; compilação e validação do APK pendentes. Não há teste físico confirmado.**
+
+- O workflow gera o pacote Season 02 e copia o ZIP e o manifesto para os assets gerados do módulo Android antes do Gradle. O APK do jogo deve conter `assets/season02.zip` e `assets/season02-manifest.json`.
+- `ContentPackInstaller` passou a ler os assets do APK, conferir tamanho e SHA-256 do ZIP, extrair em staging, validar hashes de cada recurso e ativar os dados de forma atômica com preservação/rollback. A instalação inicial não consulta o servidor nem baixa o ZIP.
+- A primeira entrada apresenta a identidade original THE VISION, mascote procedural animado, partículas, anéis e etapas de configuração. O progresso é ligado à cópia, extração e validação reais; não deve exibir uma falsa conclusão.
+- O workflow agora deve conferir presença dos assets, tamanho declarado, SHA-256, integridade do ZIP interno e tamanho do APK acima de 400 MB.
+- Royale recebeu roleta animada com custo local de 100 diamantes, chances visíveis de 40/30/20/9/1 (100% no total), cinco cosméticos, teste temporário do visual antes do giro, compensação de 100 diamantes para repetidos e histórico persistido.
+- O giro e a carteira continuam locais/offline. Não são compras online nem saldo autoritativo de servidor. Não habilitar monetização real com este mecanismo.
+- O pacote ZIP da release antiga não foi apagado; permanece como rollback até o APK embutido ser compilado e validado. A existência do código no GitHub não comprova que o APK final foi produzido ou instalado.
+- Após build: confirmar APK contém os dois assets e comparar hash; validar ZIP interno e hashes de arquivos; medir tamanho real; verificar instalação/armazenamento; só então considerar retirar a distribuição separada antiga.
