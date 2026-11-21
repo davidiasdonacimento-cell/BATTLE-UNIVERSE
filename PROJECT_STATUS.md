@@ -148,3 +148,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - `AccountSyncManager` inclui moedas, ledger, configurações de sensibilidade, missões e marcos Royale no salvamento/restauração Firestore. O ledger também detecta transações repetidas após restauração em outro aparelho.
 - Limites: a carteira continua local/offline até existir servidor autoritativo; não é saldo online seguro. A loja atual ainda usa diamantes para os itens catalogados; catálogo de compras com moedas permanece pendente. O ledger guarda as 60 movimentações mais recentes. Ainda faltam testes automatizados de concorrência/migração, compilação Android e teste no Redmi 12.
 - Arquivos: `PlayerProfileStore.java`, `HudOverlay.java`, `AccountSyncManager.java`. Não distribuir APK antes do workflow confirmar a compilação deste conjunto.
+
+
+## Carteira dupla e cosméticos de perfil — código publicado em 2026-11-21 (build pendente)
+- A carteira local agora tem moedas virtuais e diamantes separados. Perfis existentes recebem 1.000 moedas iniciais uma única vez, sem sobrescrever saldo já inicializado.
+- Na loja, os três cosméticos de perfil (moldura neon, emblema Bloob e título Campeão) usam moedas; os itens de roupa continuam com preços em diamantes. As compras verificam saldo, registram propriedade e histórico na mesma gravação.
+- Moldura, emblema e título adquiridos passam a aparecer no cabeçalho do perfil. Moedas também são concedidas por recompensas locais de partida, missões, evento, correio, passe e conquistas.
+- O inventário apresenta as duas últimas movimentações da carteira. A sincronização Firestore inclui o saldo de moedas e o histórico.
+- Validação realizada até agora: a classe `PlayerProfileStore.java` compilou isoladamente com `javac` usando uma interface `SharedPreferences` de teste. Isso valida sintaxe dessa classe, mas NÃO substitui a compilação Gradle/Android. GitHub Actions ainda precisa confirmar o APK completo; não houve teste físico no Redmi 12.
