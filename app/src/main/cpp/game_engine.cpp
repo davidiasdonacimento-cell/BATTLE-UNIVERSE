@@ -94,7 +94,7 @@ GLuint gProgram=0, gCubeVbo=0, gSphereVbo=0, gCylinderVbo=0, gConeVbo=0;
 GLsizei gSphereCount=0, gCylinderCount=0, gConeCount=0;
 GLint gMvpLocation=-1, gModelLocation=-1, gColorLocation=-1;
 int gScreenMode=0, gSelectedCharacter=0, gSelectedMap=0, gSelectedMode=0, gQuality=1;
-int gSelectedShirtStyle=0,gSelectedBootStyle=0,gSelectedSetStyle=0;
+int gSelectedShirtStyle=0,gSelectedBootStyle=0,gSelectedSetStyle=0,gSelectedPantsStyle=0;
 int gEquippedBeard=0,gEquippedHelmet=0,gEquippedBackpack=0,gEquippedVest=0;
 Mat4 gProjection=identity();
 float gCharacterPoseScale=1.0f;
@@ -975,6 +975,7 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
         if(setIndex>0) { shirtIndex=setIndex; bootIndex=setIndex; }
         shirt=shirts[static_cast<size_t>(shirtIndex)];
         pants=trousers[static_cast<size_t>(shirtIndex)];
+        if(!bot&&gSelectedPantsStyle==1)pants={0.035f,0.30f,0.94f};
         boots=bootStyles[static_cast<size_t>(bootIndex)];
     }
     const Vec3 dark{0.035f,0.045f,0.055f};
@@ -994,6 +995,13 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSegment(p,yaw,kneeL,footL,0.088f,pants);
     drawSegment(p,yaw,hipR,kneeR,0.115f,pants);
     drawSegment(p,yaw,kneeR,footR,0.088f,pants);
+    if(!bot&&gSelectedPantsStyle==1) {
+        const Vec3 trim{0.72f,0.94f,1.0f};
+        drawSegment(p,yaw,{-legWidth-0.055f,0.84f+bob,swing*0.30f},
+            {-legWidth-0.055f,0.50f+bob,swing*0.70f},0.026f,trim);
+        drawSegment(p,yaw,{legWidth+0.055f,0.84f+bob,-swing*0.30f},
+            {legWidth+0.055f,0.50f+bob,-swing*0.70f},0.026f,trim);
+    }
     drawSphere(localPoint(p,-legWidth,0.12f+bob,-0.15f+swing*0.88f,yaw),
         {0.17f,0.11f,0.29f},boots,yaw);
     drawSphere(localPoint(p,legWidth,0.12f+bob,-0.15f-swing*0.88f,yaw),
@@ -1864,6 +1872,10 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetWardrobe(JNIEnv*,jclass,ji
     gSelectedSetStyle=std::clamp(static_cast<int>(set),0,7);
 }
 extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetPantsStyle(JNIEnv*,jclass,jint pants) {
+    gSelectedPantsStyle=std::clamp(static_cast<int>(pants),0,1);
+}
+extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetEquipment(JNIEnv*,jclass,jint beard,jint helmet,jint backpack,jint vest) {
     gEquippedBeard=std::clamp(static_cast<int>(beard),0,3);
     gEquippedHelmet=std::clamp(static_cast<int>(helmet),0,3);
@@ -2230,16 +2242,17 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         if(gSpectatorTarget>=0)cameraSubject=gBots[static_cast<size_t>(gSpectatorTarget)].pos;
     }
+    const float airborneFollow=(!gSpectatorMode&&gDropState==2)?gJumpHeight:0.0f;
     Vec3 eye{
         cameraSubject.x+std::sin(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)+std::cos(gCameraYaw)*shoulder,
-        cameraSubject.y+(gSpectatorMode?5.0f:cameraHeight)+gJumpHeight*0.40f,
+        cameraSubject.y+(gSpectatorMode?5.0f:cameraHeight)+airborneFollow,
         cameraSubject.z+std::cos(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)-std::sin(gCameraYaw)*shoulder
     };
     const float lookAhead=aimHeld?28.0f:0.0f;
     const float aimVertical=aimHeld?(gCameraPitch-0.36f)*6.0f:0.0f;
     Vec3 target{
         cameraSubject.x-std::sin(gCameraYaw)*(gSpectatorMode?0.0f:lookAhead),
-        cameraSubject.y+(gSpectatorMode?1.1f:(aimHeld?1.38f+aimVertical:1.0f))+gJumpHeight*0.40f,
+        cameraSubject.y+(gSpectatorMode?1.1f:(aimHeld?1.38f+aimVertical:1.0f))+airborneFollow,
         cameraSubject.z-std::cos(gCameraYaw)*(gSpectatorMode?0.0f:lookAhead)
     };
     Mat4 view=lookAt(eye,target,{0,1,0});
