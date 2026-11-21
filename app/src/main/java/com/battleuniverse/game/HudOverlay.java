@@ -890,9 +890,9 @@ public final class HudOverlay extends View {
 
     private void drawTeam(Canvas c){
         panel(c,888,124,362,218,0x9B0B1D2C,0x337AA0B2,19);
-        eyebrow(c,913,153,"SUA EQUIPE");
-        text(c,"ESQUADRÃO DE OPERAÇÃO",913,183,16,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        String[] slots={"VOCÊ  •  "+CHARACTER_NAMES[character],"OPERADOR DE CENA  •  DEMO 01","OPERADOR DE CENA  •  DEMO 02","ESQUADRÃO REAL  •  NA PARTIDA"};
+        eyebrow(c,913,153,"ELENCO DO LOBBY");
+        text(c,"OPERADORES DO CENÁRIO",913,183,16,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        String[] slots={"VOCÊ  •  "+CHARACTER_NAMES[character],"OPERADOR DE CENA  •  DEMO 01","OPERADOR DE CENA  •  DEMO 02","BOTS IA  •  AO INICIAR"};
         for(int i=0;i<4;i++){
             float y=207+i*30;circle(c,925,y-4,7,i==0?0xFF38A9BA:0xFF35586A,0xFF8DDDE6);
             text(c,slots[i],945,y,10,i==0?Color.WHITE:0xFFB3C7D1,Typeface.DEFAULT_BOLD);
