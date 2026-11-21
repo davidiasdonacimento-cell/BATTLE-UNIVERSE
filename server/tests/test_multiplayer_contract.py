@@ -47,7 +47,7 @@ class MultiplayerRouteContractTests(unittest.TestCase):
         self.assertIsNotNone(build_router)
         # Bot identity is represented by a bot participant ID and a NULL player_id
         # in MatchParticipant, not by a fabricated account.
-        self.assertIsNone(main.Base.metadata.tables["match_participants"].c["player_id"].nullable is False)
+        self.assertTrue(main.Base.metadata.tables["match_participants"].c["player_id"].nullable)
 
 
 if __name__ == "__main__":
