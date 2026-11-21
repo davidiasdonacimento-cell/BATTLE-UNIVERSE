@@ -178,6 +178,7 @@ int gTrainingScore=0, gWeaponType=-1;
 struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=false; bool ammoOnly=false; int kind=0; };
 std::array<GroundLoot,64> gGroundLoot{};
 int gPlayerHealth=100,gPlayerShield=0,gMedkits=0,gEliminations=0;
+bool gTrainingGodMode=false;
 int gDamageDealt=0,gDamageTaken=0,gAiEliminations=0;
 bool gMatchFinished=false,gSpectatorMode=false;
 int gSpectatorTarget=-1;
@@ -1572,6 +1573,7 @@ void updateDownedState(float dt) {
     else {gReviveProgress=0;if(gDownedTimer<=0){gDownedTimer=15.0f;setStatus("DERRUBADO • ESQUADRÃO AINDA PODE SOCORRER");}else setStatus("DERRUBADO • AGUARDANDO ALIADO • "+std::to_string(static_cast<int>(gDownedTimer))+"s");}
 }
 void applyPlayerDamage(int amount,const char* reason) {
+    if(gTrainingGodMode&&gSelectedMode==3){gPlayerHealth=100;gPlayerShield=100;return;}
     if(gPlayerDowned||gMatchFinished)return;
     const int absorbed=std::min(gPlayerShield,amount);gPlayerShield-=absorbed;amount-=absorbed;
     gPlayerHealth=std::max(0,gPlayerHealth-amount);gDamageTaken+=absorbed+amount;
@@ -1901,6 +1903,12 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetMap(JNIEnv*,jclass,jint id
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint id) {
     gSelectedMode=std::clamp(static_cast<int>(id),0,3);
+    if(gSelectedMode!=3)gTrainingGodMode=false;
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetGodMode(JNIEnv*,jclass,jboolean enabled) {
+    gTrainingGodMode=(enabled==JNI_TRUE&&gSelectedMode==3);
+    if(gTrainingGodMode){gPlayerHealth=100;gPlayerShield=100;gPlayerDowned=false;gMatchFinished=false;}
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetQuality(JNIEnv*,jclass,jint value) {
