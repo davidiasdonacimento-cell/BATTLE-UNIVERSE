@@ -175,7 +175,7 @@ float gDownedTimer=0.0f,gReviveProgress=0.0f;
 int gPlayerReviveTarget=-1;
 float gPlayerReviveProgress=0.0f;
 float gPulseCooldown=0, gPulseFlash=0, gDropTimer=0;
-float gZoneDamageTimer=0,gLookSensitivity=1.0f;
+float gZoneDamageTimer=0,gLookSensitivity=1.0f,gAimSensitivity=1.0f;
 constexpr float PLANE_COUNTDOWN_SECONDS=7.0f;
 constexpr float WORLD_LIMIT=148.0f;
 int gDropState=0; // 0 lobby, 1 inside transport plane, 2 parachute descent, 3 ground
@@ -1741,9 +1741,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetWardrobe(JNIEnv*,jclass,ji
     gSelectedSetStyle=std::clamp(static_cast<int>(set),0,4);
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_battleuniverse_game_GameSurfaceView_nativeSetLookSensitivity(JNIEnv*,jclass,jint value) {
-    const int level=std::clamp(static_cast<int>(value),0,2);
-    gLookSensitivity=level==0?0.65f:(level==1?1.0f:1.45f);
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetLookSensitivity(JNIEnv*,jclass,jfloat general,jfloat aiming) {
+    gLookSensitivity=std::clamp(static_cast<float>(general),0.25f,2.0f);
+    gAimSensitivity=std::clamp(static_cast<float>(aiming),0.25f,2.0f);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetContentData(JNIEnv*,jclass,jint buildLimit,jint resourceCount) {
@@ -1790,8 +1790,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     if(gPulseCooldown>0)gPulseCooldown=std::max(0.0f,gPulseCooldown-dt);
     if(gBuildCooldown>0)gBuildCooldown=std::max(0.0f,gBuildCooldown-dt);
     if(gPulseFlash>0)gPulseFlash=std::max(0.0f,gPulseFlash-dt);
-    gCameraYaw+=static_cast<float>(lookDX)*4.8f*gLookSensitivity;
-    gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f*gLookSensitivity,0.12f,0.85f);
+    const float activeSensitivity=aimHeld?gAimSensitivity:gLookSensitivity;
+    gCameraYaw+=static_cast<float>(lookDX)*4.8f*activeSensitivity;
+    gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f*activeSensitivity,0.12f,0.85f);
 
     if(gSpectatorMode){moveX=0.0f;moveY=0.0f;buttons=0;}
     const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
