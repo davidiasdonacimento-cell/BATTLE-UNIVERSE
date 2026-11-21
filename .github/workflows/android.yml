@@ -3,7 +3,7 @@ on:
   push:
     branches: [ main, integrated-season02-online-royale, feature/bermuda-map-hud-stability ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, feature/arena-modes-core ]
   workflow_dispatch:
 permissions:
   contents: write
