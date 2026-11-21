@@ -954,21 +954,24 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     Vec3 boots{0.055f,0.065f,0.075f};
     int shirtIndex=0,bootIndex=0,setIndex=0;
     if(!bot) {
-        static const std::array<Vec3,5> shirts{{
+        static const std::array<Vec3,8> shirts{{
             {0.035f,0.34f,0.43f},{0.10f,0.20f,0.28f},{0.35f,0.12f,0.48f},
-            {0.70f,0.74f,0.78f},{0.62f,0.30f,0.12f}
+            {0.70f,0.74f,0.78f},{0.62f,0.30f,0.12f},
+            {0.48f,0.12f,0.075f},{0.12f,0.22f,0.48f},{0.20f,0.36f,0.18f}
         }};
-        static const std::array<Vec3,5> trousers{{
+        static const std::array<Vec3,8> trousers{{
             {0.055f,0.095f,0.13f},{0.16f,0.20f,0.22f},{0.18f,0.12f,0.28f},
-            {0.30f,0.36f,0.40f},{0.30f,0.20f,0.10f}
+            {0.30f,0.36f,0.40f},{0.30f,0.20f,0.10f},
+            {0.18f,0.055f,0.035f},{0.055f,0.075f,0.19f},{0.09f,0.17f,0.075f}
         }};
-        static const std::array<Vec3,5> bootStyles{{
+        static const std::array<Vec3,8> bootStyles{{
             {0.16f,0.19f,0.21f},{0.12f,0.16f,0.20f},{0.18f,0.52f,0.58f},
-            {0.72f,0.76f,0.80f},{0.72f,0.48f,0.16f}
+            {0.72f,0.76f,0.80f},{0.72f,0.48f,0.16f},
+            {0.28f,0.075f,0.035f},{0.12f,0.19f,0.42f},{0.18f,0.25f,0.11f}
         }};
         shirtIndex=std::clamp(gSelectedShirtStyle,0,4);
         bootIndex=std::clamp(gSelectedBootStyle,0,4);
-        setIndex=std::clamp(gSelectedSetStyle,0,4);
+        setIndex=std::clamp(gSelectedSetStyle,0,7);
         if(setIndex>0) { shirtIndex=setIndex; bootIndex=setIndex; }
         shirt=shirts[static_cast<size_t>(shirtIndex)];
         pants=trousers[static_cast<size_t>(shirtIndex)];
@@ -996,9 +999,10 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSphere(localPoint(p,legWidth,0.12f+bob,-0.15f-swing*0.88f,yaw),
         {0.17f,0.11f,0.29f},boots,yaw);
     if(!bot&&shirtIndex>0) {
-        static const std::array<Vec3,5> accents{{
+        static const std::array<Vec3,8> accents{{
             {0.10f,0.72f,0.82f},{0.28f,0.92f,0.98f},{0.90f,0.35f,0.92f},
-            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f}
+            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f},
+            {1.0f,0.28f,0.08f},{0.32f,0.55f,1.0f},{0.48f,0.78f,0.28f}
         }};
         const Vec3 trim=accents[static_cast<size_t>(shirtIndex)];
         drawCube(localPoint(p,-legWidth,0.49f+bob,-0.105f,yaw),{0.105f,0.12f,0.045f},trim,yaw);
@@ -1018,9 +1022,10 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawCube(localPoint(p,0,1.13f+bob,-0.195f,yaw),{0.16f,0.10f,0.025f},
         {0.16f,0.22f,0.24f},yaw);
     if(!bot&&shirtIndex>0) {
-        static const std::array<Vec3,5> accents{{
+        static const std::array<Vec3,8> accents{{
             {0.10f,0.72f,0.82f},{0.28f,0.92f,0.98f},{0.90f,0.35f,0.92f},
-            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f}
+            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f},
+            {1.0f,0.28f,0.08f},{0.32f,0.55f,1.0f},{0.48f,0.78f,0.28f}
         }};
         const Vec3 trim=accents[static_cast<size_t>(shirtIndex)];
         const Vec3 darkTrim{0.035f,0.055f,0.075f};
@@ -1052,13 +1057,28 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
         drawSphere(localPoint(p,0.18f,1.82f+bob,0.04f,yaw),{0.09f,0.22f,0.10f},hair,yaw);
     }
     if(!bot&&setIndex>0) {
-        static const std::array<Vec3,5> accents{{
+        static const std::array<Vec3,8> accents{{
             {0.10f,0.72f,0.82f},{0.28f,0.92f,0.98f},{0.90f,0.35f,0.92f},
-            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f}
+            {0.32f,0.70f,0.98f},{0.95f,0.67f,0.28f},
+            {1.0f,0.28f,0.08f},{0.32f,0.55f,1.0f},{0.48f,0.78f,0.28f}
         }};
         const Vec3 trim=accents[static_cast<size_t>(setIndex)];
         drawSphere(localPoint(p,0,2.16f+bob,0.01f,yaw),{0.255f,0.075f,0.23f},trim,yaw);
         drawCube(localPoint(p,0,2.11f+bob,-0.17f,yaw),{0.23f,0.035f,0.12f},trim,yaw);
+    }
+    if(!bot&&setIndex>=5) {
+        static const std::array<Vec3,3> sigils{{
+            {1.0f,0.25f,0.07f},{0.30f,0.62f,1.0f},{0.55f,0.86f,0.30f}
+        }};
+        const Vec3 accent=sigils[static_cast<size_t>(setIndex-5)];
+        // Três silhuetas originais com ombreiras, placas e faixas próprias.
+        drawSphere(localPoint(p,-0.34f,1.49f+bob,0.0f,yaw),{0.18f,0.15f,0.20f},shirt,yaw);
+        drawSphere(localPoint(p,0.34f,1.49f+bob,0.0f,yaw),{0.18f,0.15f,0.20f},shirt,yaw);
+        drawCube(localPoint(p,0,1.40f+bob,-0.292f,yaw),{0.17f,0.23f,0.035f},accent,yaw);
+        drawCube(localPoint(p,-0.37f,1.22f+bob,-0.08f,yaw),{0.08f,0.25f,0.10f},accent,yaw);
+        drawCube(localPoint(p,0.37f,1.22f+bob,-0.08f,yaw),{0.08f,0.25f,0.10f},accent,yaw);
+        drawCube(localPoint(p,-0.12f,0.48f+bob,-0.10f,yaw),{0.10f,0.26f,0.055f},accent,yaw);
+        drawCube(localPoint(p,0.12f,0.48f+bob,-0.10f,yaw),{0.10f,0.26f,0.055f},accent,yaw);
     }
     drawSphere(localPoint(p,-0.082f,1.94f+bob,-0.184f,yaw),{0.038f,0.027f,0.025f},{0.95f,0.96f,0.92f},yaw);
     drawSphere(localPoint(p,0.082f,1.94f+bob,-0.184f,yaw),{0.038f,0.027f,0.025f},{0.95f,0.96f,0.92f},yaw);
@@ -1841,7 +1861,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetWardrobe(JNIEnv*,jclass,jint shirt,jint boots,jint set) {
     gSelectedShirtStyle=std::clamp(static_cast<int>(shirt),0,4);
     gSelectedBootStyle=std::clamp(static_cast<int>(boots),0,4);
-    gSelectedSetStyle=std::clamp(static_cast<int>(set),0,4);
+    gSelectedSetStyle=std::clamp(static_cast<int>(set),0,7);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetEquipment(JNIEnv*,jclass,jint beard,jint helmet,jint backpack,jint vest) {
