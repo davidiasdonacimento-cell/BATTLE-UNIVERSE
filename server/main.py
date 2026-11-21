@@ -266,10 +266,12 @@ def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str,
         raise HTTPException(422, "Use 3 a 18 letras, números ou _ no nickname.")
     if db.scalar(select(Player.id).where(Player.username == username)) is not None:
         raise HTTPException(409, "Esse nickname já está em uso.")
+    recovery_code = new_recovery_code()
     player = Player(username=username, password_hash=password_hash.hash(body.password), profile={})
     db.add(player)
     db.flush()
     db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+    db.add(RecoveryCredential(player_id=player.id, code_hash=recovery_digest(recovery_code)))
     db.add(player)
     try:
         db.commit()
@@ -281,7 +283,7 @@ def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str,
         raise HTTPException(503, "Não foi possível criar a conta agora.")
     return {"access_token": issue_token(str(player.id), username, "player", ACCESS_TOKEN_MINUTES),
             "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60,
-            "player": {"id": player.id, "username": player.username, "profile": {}}}
+            "player": {"id": player.id, "username": player.username, "profile": {}}, "recovery_code": recovery_code}
 
 @app.post("/v1/accounts/login")
 def login(body: LoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
@@ -292,6 +294,9 @@ def login(body: LoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
     control = db.get(AccountControl, player.id)
     if control and control.state != "active":
         raise HTTPException(403, "Esta conta está suspensa ou encerrada.")
+    if db.get(PlayerWallet, player.id) is None:
+        db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+        db.commit()
     return {"access_token": issue_token(str(player.id), username, "player", ACCESS_TOKEN_MINUTES),
             "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60, "player": player_payload(player)}
 
@@ -445,7 +450,7 @@ def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depen
         return {"claimed": False, "reward_day": day, "coins": existing.coins,
                 "diamonds": existing.diamonds,
                 "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
-    wallet = db.get(PlayerWallet, player.id)
+    wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
         db.add(wallet)
@@ -486,9 +491,9 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
                 "prize_name": existing.prize_name, "duplicate": existing.duplicate,
                 "diamonds_spent": existing.diamonds_spent, "diamonds_balance": existing.balance_after,
                 "replayed": True}
-    wallet = db.get(PlayerWallet, player.id)
+    wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
+        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
         db.add(wallet)
         db.flush()
     if wallet.diamonds < ROYALE_COST:
