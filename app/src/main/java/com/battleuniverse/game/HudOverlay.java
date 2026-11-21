@@ -491,7 +491,7 @@ public final class HudOverlay extends View {
         title(c,"COFRE",270,224);
         subtitle(c,"COLEÇÃO e MODA em seções empilhadas. Cada prévia mostra somente a peça.",270,252);
         panel(c,270,266,570,40,0xAE193040,0x335D8495,13);
-        text(c,"◆ "+formatDiamonds(profile.getDiamonds())+" DIAMANTES   •   ● "+formatDiamonds(profile.getCoins())+" MOEDAS",288,292,11,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"◆ "+formatDiamonds(onlineDiamonds>=0?onlineDiamonds:profile.getDiamonds())+" DIAMANTES",288,292,11,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         pill(c,270,312,150,29,cofreTab==0?"COLEÇÃO  ✓":"COLEÇÃO",cofreTab==0?0xFF176A75:0x553B6172,Color.WHITE);
         pill(c,430,312,150,29,cofreTab==1?"MODA  ✓":"MODA",cofreTab==1?0xFF176A75:0x553B6172,Color.WHITE);
         String[][] labels=cofreTab==0
@@ -652,7 +652,6 @@ public final class HudOverlay extends View {
             Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"NÍVEL "+level+"  •  "+xp+" XP",382,374,13,0xFF9FC0CF,Typeface.DEFAULT_BOLD);
         text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,399,15,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS",382,420,11,0xFF82E5DC,Typeface.DEFAULT_BOLD);
         text(c,"PARTIDAS "+profile.getMatchesPlayed()+"  •  VITÓRIAS "+profile.getWins()
             +"  •  ELIMS "+profile.getEliminations(),292,440,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
         text(c,prefs.getBoolean("code_100k_redeemed",false)
@@ -683,7 +682,7 @@ public final class HudOverlay extends View {
         title(c,"ROUPAS E COSMÉTICOS",270,224);
         subtitle(c,"Camisas, botas e conjuntos completos. Cada item mostra seu preço antes da compra.",270,252);
         panel(c,270,266,570,48,0xA91A3040,0x335D8495,14);
-        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds())+"   ● "+formatDiamonds(profile.getCoins()),292,297,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"SALDO  ◆ "+formatDiamonds(onlineDiamonds>=0?onlineDiamonds:profile.getDiamonds())+" DIAMANTES",292,297,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         for(int i=0;i<SHOP_NAMES.length;i++) {
             int col=i%3,row=i/3;float x=270+col*192f,y=320+row*47f;
             boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
@@ -691,7 +690,7 @@ public final class HudOverlay extends View {
                 owned?0xFF4BD4C9:0x335D8495,10);
             circle(c,x+21,y+21,12,SHOP_COLORS[i],0xFFB5D6E1);
             text(c,SHOP_NAMES[i],x+39,y+17,7.2f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            String priceLabel=i<3?"● "+SHOP_PRICES[i]+" MOEDAS":"◆ "+SHOP_PRICES[i]+" DIAMANTES";
+            String priceLabel="◆ "+SHOP_PRICES[i]+" DIAMANTES";
             text(c,owned?"JÁ ADQUIRIDO":priceLabel,x+39,y+32,6.5f,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         }
         text(c,"Itens cosméticos diretos • sem roleta paga ou prêmio aleatório.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
@@ -1013,7 +1012,7 @@ public final class HudOverlay extends View {
             if(!prefs.getBoolean("match_reward_recorded",false)) {
                 prefs.edit().putBoolean("match_reward_recorded",true)
                     .putLong("last_match_reward_diamonds",0L).putLong("last_match_reward_xp",0L)
-                    .putLong("last_match_reward_coins",0L).commit();
+                    .remove("last_match_reward_coins").commit();
                 profile.recordMatch("match_"+sessionId,victory,kills,stats[0],0);
                 recordMissionProgressFromMatch();
             }
@@ -1025,12 +1024,11 @@ public final class HudOverlay extends View {
         }
         long diamonds=(victory?250L:60L)+kills*(victory?15L:10L);
         long xp=(victory?500L:120L)+kills*(victory?50L:25L);
-        long coins=(victory?120L:40L)+kills*5L;
-        if(!profile.claimOnce("match_reward_"+sessionId,"match_reward_recorded",coins,diamonds,xp)){
+        if(!profile.claimOnce("match_reward_"+sessionId,"match_reward_recorded",diamonds,xp)){
             return;
         }
         prefs.edit().putLong("last_match_reward_diamonds",diamonds)
-            .putLong("last_match_reward_xp",xp).putLong("last_match_reward_coins",coins).commit();
+            .putLong("last_match_reward_xp",xp).remove("last_match_reward_coins").commit();
         profile.recordMatch("match_"+sessionId,victory,kills,stats[0],game.getCollectedResources());
         recordMissionProgressFromMatch();
     }
@@ -1045,7 +1043,7 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         panel(c,275,220,330,104,0xCC123B39,0xFF45D6AE,16);
         text(c,mode==4?"DUELO OFFLINE":"RECOMPENSAS RECEBIDAS",296,247,10,0xFFB7EBDD,Typeface.DEFAULT_BOLD);
         text(c,mode==4?game.getEliminations()+"/5 ELIMINAÇÕES":"+"+prefs.getLong("last_match_reward_diamonds",0L)+" DIAMANTES",296,278,19,0xFFFFD36D,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,mode==4?"SEM CRÉDITO DE MOEDAS OU DIAMANTES OFFLINE":"+"+prefs.getLong("last_match_reward_xp",0L)+" XP  •  +"+prefs.getLong("last_match_reward_coins",0L)+" MOEDAS",296,302,mode==4?8:10,0xFF8BE6D1,Typeface.DEFAULT_BOLD);
+        text(c,mode==4?"DUELO DE TREINAMENTO":"+"+prefs.getLong("last_match_reward_xp",0L)+" XP",296,302,mode==4?8:10,0xFF8BE6D1,Typeface.DEFAULT_BOLD);
         panel(c,625,220,380,104,0xCC132B43,0xFF4B9BD0,16);
         text(c,mode==4?"PLACAR FINAL":"RESULTADO DA EQUIPE",648,247,10,0xFFAED8F0,Typeface.DEFAULT_BOLD);
         text(c,mode==4?"VOCÊ "+duelStats[0]+"  —  IA "+duelStats[1]:""+stats[3]+" OPONENTES RESTANTES",648,278,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -1090,10 +1088,10 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         if(missionProgress(index)<MISSION_GOALS[index]){toast("Continue jogando para concluir a missão.");return;}
         long day=prefs.getLong("missions_day",System.currentTimeMillis()/86400000L);
         if(!profile.claimOnce("mission_"+day+"_"+index,"mission_claimed_"+index,
-                100L+index*50L,MISSION_DIAMONDS[index],MISSION_XP[index])){
+                MISSION_DIAMONDS[index],MISSION_XP[index])){
             toast("A recompensa desta missão já foi registrada.");return;
         }
-        toast("Recompensa recebida: +"+(100L+index*50L)+" moedas, +"+MISSION_XP[index]+" XP e +"+MISSION_DIAMONDS[index]+" diamantes.");
+        toast("Recompensa recebida: +"+MISSION_XP[index]+" XP e +"+MISSION_DIAMONDS[index]+" diamantes locais.");
     }
     private void drawMissionsPage(Canvas c) {
         ensureDailyMissionWindow();
@@ -1128,7 +1126,7 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         String key="royale_tier_claimed_"+index;
         if(prefs.getBoolean(key,false)){toast("Esta recompensa já foi resgatada.");return;}
         if(level<ROYALE_LEVELS[index]){toast("Alcance o nível "+ROYALE_LEVELS[index]+" do passe.");return;}
-        if(!profile.claimOnce("royale_tier_"+index,key,200L+index*100L,ROYALE_REWARDS[index],0L)){
+        if(!profile.claimOnce("royale_tier_"+index,key,ROYALE_REWARDS[index],0L)){
             toast("Esta recompensa já foi registrada.");return;
         }
         toast("Recompensa Royale resgatada!");
@@ -1138,11 +1136,11 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         if(prefs.getLong("daily_reward_day",-1L)==day) {
             toast("A recompensa diária já foi coletada."); return;
         }
-        if(!profile.claimOnce("daily_reward_"+day,"daily_reward_claimed_"+day,300L,50L,100L)){
+        if(!profile.claimOnce("daily_reward_"+day,"daily_reward_claimed_"+day,50L,100L)){
             toast("A recompensa diária já foi registrada.");return;
         }
         prefs.edit().putLong("daily_reward_day",day).commit();
-        toast("+100 XP, +50 diamantes e +300 moedas virtuais!");
+        toast("+100 XP e +50 diamantes locais.");
     }
 
     private void showRedeemDialog() {
@@ -1189,14 +1187,14 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
             toast("Este item já está no seu inventário.");return false;
         }
         PlayerProfileStore.PurchaseResult result=index<3
-            ?profile.purchaseWithCoins(SHOP_KEYS[index],SHOP_PRICES[index])
+            ?profile.purchase(SHOP_KEYS[index],SHOP_PRICES[index])
             :profile.purchase(SHOP_KEYS[index],SHOP_PRICES[index]);
         if(result==PlayerProfileStore.PurchaseResult.INSUFFICIENT_FUNDS){
-            toast(index<3?"Moedas insuficientes.":"Diamantes insuficientes.");return false;
+            toast("Diamantes insuficientes.");return false;
         }
         if(result==PlayerProfileStore.PurchaseResult.ALREADY_OWNED){toast("Este item já está no seu inventário.");return false;}
         if(result!=PlayerProfileStore.PurchaseResult.PURCHASED){toast("Falha ao salvar a compra. Saldo preservado.");return false;}
-        toast(SHOP_NAMES[index]+" adquirido com "+(index<3?"moedas!":"diamantes!"));
+        toast(SHOP_NAMES[index]+" adquirido com diamantes!");
         return true;
     }
 
@@ -1285,17 +1283,17 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
 
     private void claimEventReward() {
         if(prefs.getBoolean("event_season_claimed",false)){toast("Recompensa do evento já coletada.");return;}
-        if(!profile.claimOnce("event_season_03","event_season_claimed",250L,75L,150L)){
+        if(!profile.claimOnce("event_season_03","event_season_claimed",75L,150L)){
             toast("Recompensa do evento já registrada.");return;
         }
-        toast("Evento concluído: +150 XP, +75 diamantes e +250 moedas.");
+        toast("Evento concluído: +150 XP e +75 diamantes locais.");
     }
     private void claimMailReward() {
         if(prefs.getBoolean("mail_welcome_claimed",false)){toast("Presente já coletado.");return;}
-        if(!profile.claimOnce("mail_welcome_01","mail_welcome_claimed",100L,50L,0L)){
+        if(!profile.claimOnce("mail_welcome_01","mail_welcome_claimed",50L,0L)){
             toast("Presente já registrado.");return;
         }
-        toast("Presente: +50 diamantes e +100 moedas virtuais.");
+        toast("Presente: +50 diamantes locais.");
     }
     private void claimAchievement(int index) {
         int[] goals={500,1500,3000};long[] rewards={50,100,200};
@@ -1303,10 +1301,10 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         if(index<0||index>=goals.length)return;
         if(prefs.getBoolean(keys[index],false)){toast("Conquista já resgatada.");return;}
         if(prefs.getLong("xp",0L)<goals[index]){toast("Ainda faltam pontos de experiência.");return;}
-        if(!profile.claimOnce("achievement_"+goals[index],keys[index],150L*(index+1),rewards[index],0L)){
+        if(!profile.claimOnce("achievement_"+goals[index],keys[index],rewards[index],0L)){
             toast("Conquista já registrada.");return;
         }
-        toast("Conquista: +"+rewards[index]+" diamantes e +"+(150L*(index+1))+" moedas.");
+        toast("Conquista: +"+rewards[index]+" diamantes locais.");
     }
 
     private void drawTeam(Canvas c){
@@ -1831,7 +1829,7 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
             }
         }else if(page==ROYALE){
             if(hit(x,y,642,276,186,29)){
-                if(dailyRewardAction!=null)dailyRewardAction.claim((claimed,coins,diamonds,message)->{
+                if(dailyRewardAction!=null)dailyRewardAction.claim((claimed,diamonds,message)->{
                     onlineDiamonds=diamonds;toast(message);invalidate();
                 });
                 else toast("Presente diário indisponível.");
