@@ -1,7 +1,7 @@
 # Google account and cloud save setup
 
 The game keeps an offline profile in SharedPreferences and syncs these fields to
-Cloud Firestore after Google authentication: nickname, XP, virtual diamonds,
+Cloud Firestore after username/password or Google authentication: nickname, XP, virtual diamonds,
 daily reward marker, 100K redemption marker, selected mode/map/character,
 graphics settings, sensitivity, and owned cosmetic items.
 
@@ -9,10 +9,13 @@ graphics settings, sensitivity, and owned cosmetic items.
 
 1. Create a Firebase project using a Google account you control.
 2. Add an Android app with package name `com.battleuniverse.game.debug`.
-3. Enable **Authentication > Sign-in method > Google**.
-4. Create a **Cloud Firestore** database.
-5. Add the SHA-1 fingerprint for the certificate that signs the APK you install.
-6. Download a fresh `google-services.json` after enabling Google sign-in.
+3. In **Authentication > Sign-in method**, enable **Email/Password**. This is required for the game's username + password login.
+4. (Optional) Enable **Google** only if you also want Google sign-in.
+5. Create a **Cloud Firestore** database.
+6. Add the SHA-1 fingerprint for the certificate that signs the APK you install.
+7. Download a fresh `google-services.json` after configuring the Android app.
+
+The username login uses Firebase Authentication's server-side unique account registration: the game converts a validated nickname into an internal, non-public email alias (`nickname@accounts.battleuniverse.app`). Firebase stores and verifies the password; the game does not keep the password in the profile or Firestore. Firebase's unique-email constraint prevents two accounts from claiming the same nickname. Players sign in using that nickname and password. Never create a public collection containing password data.
 
 ## 2. Add the configuration to GitHub Actions
 
@@ -24,8 +27,7 @@ The workflow currently builds the **debug** APK, whose application ID is
 In the repository's Actions secrets, add a secret named
 `FIREBASE_GOOGLE_SERVICES_JSON` containing the complete contents of that file.
 The Android workflow writes it to `app/google-services.json` only during the build.
-Without this secret, the app still builds and remains playable offline, but Google
-login is unavailable.
+Without this secret, the app still builds and remains playable offline, but username/password cloud accounts and Google login are unavailable. The profile remains local only.
 
 ## 3. Firestore security rules
 
@@ -50,7 +52,7 @@ back to a temporary debug key and in-place updates/Google sign-in can break.
 
 ## Important
 
-- The first successful Google login uploads the current local profile.
+- The first successful username/password or Google login uploads the current local profile.
 - Later installs/builds signed for the same Android app can sign into the same
   Google account and restore the cloud profile.
 - Offline play remains available. Changes made while signed in are queued by
