@@ -56,6 +56,8 @@ public final class ContentLoadingView extends View {
     private String brandStatus(String raw) {
         if(raw==null||raw.trim().isEmpty())return status;
         String value=raw.toUpperCase();
+        if(value.contains("ENCONTRADO"))return "PACOTE EXISTENTE ENCONTRADO • VALIDANDO...";
+        if(value.contains("SALVO"))return "PACOTE SALVO NO CELULAR • PRONTO PARA REUTILIZAR";
         if(value.contains("CONFERINDO")||value.contains("SHA-256"))return "VALIDANDO A INTEGRIDADE DO UNIVERSO...";
         if(value.contains("INSTALANDO")||value.contains("EXTRAINDO"))return "MONTANDO OS RECURSOS DO MUNDO...";
         if(value.contains("CONFIGURANDO")||value.contains("PREPARANDO")||value.contains("PACOTE"))return "SINCRONIZANDO A TEMPORADA 02...";
