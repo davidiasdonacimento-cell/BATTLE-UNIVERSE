@@ -187,9 +187,13 @@ def build_router(Base, db_session, current_player) -> APIRouter:
                 roster.append({"participant_id": bot_id, "player_id": None,
                                "name": name, "is_bot": True, "team_id": team_id})
         match.roster = roster
-        match.state["phase"] = "ready"
-        match.state["human_count"] = len(entries)
-        match.state["bot_count"] = MAX_PLAYERS - len(entries)
+        # Reassign JSONB as a whole: SQLAlchemy does not track in-place dict edits.
+        match.state = {
+            **(match.state or {}),
+            "phase": "ready",
+            "human_count": len(entries),
+            "bot_count": MAX_PLAYERS - len(entries),
+        }
         db.add(match)
         return match
 
