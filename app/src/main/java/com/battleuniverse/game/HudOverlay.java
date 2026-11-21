@@ -459,7 +459,7 @@ public final class HudOverlay extends View {
                 }else{
                     owned=prefs.getBoolean(SHOP_KEYS[11+item],false);active=selectedSet==item+1;
                 }
-                state=active?"EQUIPADO":owned?"EQUIPAR":"ROYALE";
+                state=active?"EQUIPADO":owned?"EQUIPAR":"NO ROYALE";
                 panel(c,x,y+7,100,56,active?0xFF176A75:0x77304758,active?0xFF58DDE6:0x335D8495,8);
                 drawCollectionPreview(c,x+17,y+28,types[section],variant,colors[section]);
                 text(c,labels[section][item],x+31,y+29,6.5f,Color.WHITE,Typeface.DEFAULT_BOLD);
@@ -669,7 +669,7 @@ public final class HudOverlay extends View {
             for(int item=0;item<optionCount;item++) {
                 float bx=x+12+item*step,by=y+77;
                 boolean active=selected[group]==item;
-                panel(c,bx,by,bx+cardWidth,by+52,active?0xFF176A75:0x77304758,
+                panel(c,bx,by,cardWidth,52,active?0xFF176A75:0x77304758,
                     active?0xFF58E0E8:0x335D8495,8);
                 circle(c,bx+cardWidth/2f,by+15,7,item==0?0xFF526775:accents[group],0xFFB5D6E1);
                 text(c,options[group][item],bx+cardWidth/2f,by+39,group==0?5.4f:6.5f,Color.WHITE,Typeface.DEFAULT_BOLD);
