@@ -154,10 +154,8 @@ def startup() -> None:
                 db.commit()
 
 def player_payload(player: Player) -> dict[str, Any]:
-    control = SessionLocal().get(AccountControl, player.id)
     return {"id": player.id, "username": player.username, "profile": player.profile or {},
-            "created_at": player.created_at.isoformat(), "updated_at": player.updated_at.isoformat(),
-            "state": control.state if control else "active"}
+            "created_at": player.created_at.isoformat(), "updated_at": player.updated_at.isoformat()}
 
 def issue_token(subject: str, username: str, role: str, minutes: int) -> str:
     now = datetime.now(timezone.utc)
@@ -337,7 +335,6 @@ def admin_delete_account(player_id: int, db: Session = Depends(db_session),
     control.state = "deleted"
     control.reason = "Encerrada pelo administrador"
     control.changed_at = datetime.now(timezone.utc)
-    player.username = f"deleted_{player.id}"
     player.password_hash = password_hash.hash(secrets.token_urlsafe(48))
     player.profile = {}
     audit(db, admin.username, "account_deleted", str(player_id), {"soft_delete": True})
