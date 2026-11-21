@@ -9,7 +9,7 @@ permissions:
   contents: write
 concurrency:
   group: battle-universe-android-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   build:
     name: Native Android RELEASE build and content pack
@@ -29,6 +29,39 @@ jobs:
         run: |
           python -m compileall -q server
           python -m unittest discover -s server/tests -v
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK, NDK and CMake
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.0.12077973 cmake;3.22.1'
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile and test DEBUG APKs before RELEASE signing
+        env:
+          ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
+          ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :admin:assembleDebug
+      - name: Verify DEBUG game APK
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          apk = Path("app/build/outputs/apk/debug/app-debug.apk")
+          assert apk.is_file() and apk.stat().st_size > 0, "APK DEBUG não foi gerado"
+          with ZipFile(apk) as z:
+              names = set(z.namelist())
+              assert "classes.dex" in names, "DEX ausente no APK DEBUG"
+              assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Engine ARM64 ausente"
+              assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Engine ARMv7 ausente"
+              assert z.testzip() is None, "APK DEBUG corrompido"
+          print(f"APK DEBUG verificado: {apk.stat().st_size} bytes")
+          PY
       - name: Build expanded Season 02 4K content package
         run: python scripts/build_content_pack.py
       - name: Verify external Season 02 package (1–5 GiB)
@@ -54,24 +87,6 @@ jobs:
               assert "manifest.json" in archive.namelist(), "Manifesto interno ausente"
           print(f"Season 02 externo validado: {size} bytes / SHA-256 {digest.hexdigest()}")
           PY
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Set up Android SDK, NDK and CMake
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.0.12077973 cmake;3.22.1'
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-      - name: Compile and test DEBUG APKs before RELEASE signing
-        env:
-          ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
-          ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :admin:assembleDebug
       - name: Configure required stable RELEASE signing
         env:
           BATTLE_UNIVERSE_KEYSTORE_BASE64: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_BASE64 }}
