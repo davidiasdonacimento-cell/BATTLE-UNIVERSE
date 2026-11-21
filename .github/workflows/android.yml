@@ -1,7 +1,7 @@
 name: BATTLE UNIVERSE Android
 on:
   push:
-    branches: [ main, integrated-season02-online-royale ]
+    branches: [ main, integrated-season02-online-royale, feature/bermuda-map-hud-stability ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
