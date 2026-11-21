@@ -15,6 +15,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,6 +26,13 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         void onAccountState(boolean serverConfigured,boolean signedIn,String username,String message);
         default void onDeviceIdentity(String deviceCode) {}
         default void onRecoveryCode(String recoveryCode) {}
+    }
+    public interface WalletListener { void onWallet(long coins,long diamonds,String message); }
+    public interface RoyaleListener {
+        void onResult(boolean success,String prizeId,String prizeName,boolean duplicate,long balance,String message);
+    }
+    public interface DailyRewardListener {
+        void onResult(boolean claimed,long coins,long diamonds,String message);
     }
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
@@ -85,6 +93,56 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         }catch(ApiException e){publish(true,isSignedIn(),getUsername(),e.getMessage());}
         catch(Exception e){publish(true,isSignedIn(),getUsername(),"Não foi possível conectar. Verifique a internet.");}});
     }
+    public void fetchWallet(WalletListener callback) {
+        if(!isSignedIn()){if(callback!=null)main.post(()->callback.onWallet(0,0,"Entre para consultar a carteira online."));return;}
+        network.execute(()->{
+            try {
+                JSONObject result=request("GET","/v1/accounts/me/wallet",null,session.getToken());
+                long coins=result.optLong("coins",0),diamonds=result.optLong("diamonds",0);
+                if(callback!=null)main.post(()->{if(!closed)callback.onWallet(coins,diamonds,"Carteira online atualizada.");});
+            } catch(Exception e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onWallet(0,0,"Não foi possível atualizar a carteira online.");});
+            }
+        });
+    }
+
+    public void spinRoyale(RoyaleListener callback) {
+        if(!isSignedIn()){if(callback!=null)main.post(()->callback.onResult(false,"","",false,0,"Entre na conta para usar o Royale online."));return;}
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();body.put("request_id",UUID.randomUUID().toString());
+                JSONObject result=request("POST","/v1/royale/spin",body,session.getToken());
+                boolean duplicate=result.optBoolean("duplicate",false);
+                String prizeId=result.optString("prize_id","");
+                String prizeName=result.optString("prize_name","");
+                long balance=result.optLong("diamonds_balance",0);
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(true,prizeId,prizeName,duplicate,balance,"Giro confirmado pelo servidor.");});
+            } catch(ApiException e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,"","",false,0,e.getMessage());});
+            } catch(Exception e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,"","",false,0,"Falha ao confirmar o giro no servidor.");});
+            }
+        });
+    }
+
+    public void claimDailyReward(DailyRewardListener callback) {
+        if(!isSignedIn()){if(callback!=null)main.post(()->callback.onResult(false,0,0,"Entre para resgatar a recompensa diária."));return;}
+        network.execute(()->{
+            try {
+                JSONObject result=request("POST","/v1/game/rewards/daily",new JSONObject(),session.getToken());
+                JSONObject wallet=result.optJSONObject("wallet");
+                long coins=wallet==null?0:wallet.optLong("coins",0);
+                long diamonds=wallet==null?0:wallet.optLong("diamonds",0);
+                boolean claimed=result.optBoolean("claimed",false);
+                String message=claimed?"Presente diário recebido: +250 moedas e +100 diamantes."
+                        :"O presente de hoje já foi resgatado.";
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(claimed,coins,diamonds,message);});
+            } catch(Exception e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,0,"Não foi possível resgatar o presente diário.");});
+            }
+        });
+    }
+
     public String getDeviceCode() {
         return prefs.getString("server_device_code", "");
     }
