@@ -1,14 +1,14 @@
 name: BATTLE UNIVERSE Android
 on:
   push:
-    branches: [ main ]
+    branches: [ main, integrated-season02-online-royale ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 permissions:
   contents: write
 concurrency:
-  group: battle-universe-android-main
+  group: battle-universe-android-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
@@ -47,14 +47,29 @@ jobs:
         run: python -m compileall -q server
       - name: Build expanded Season 02 4K content package
         run: python scripts/build_content_pack.py
-      - name: Embed Season 02 package inside APK
+      - name: Verify external Season 02 package (1–5 GiB)
         run: |
-          mkdir -p app/build/generated/season02Assets
-          cp build/battle-universe-season-02-pack.zip app/build/generated/season02Assets/season02.zip
-          cp build/content-pack-manifest.json app/build/generated/season02Assets/season02-manifest.json
-          test -s app/build/generated/season02Assets/season02.zip
-          test -s app/build/generated/season02Assets/season02-manifest.json
-          echo "Season 02 embedded asset: $(stat -c%s app/build/generated/season02Assets/season02.zip) bytes"
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import hashlib, json
+          pack = Path("build/battle-universe-season-02-pack.zip")
+          manifest_path = Path("build/content-pack-manifest.json")
+          assert pack.is_file() and manifest_path.is_file(), "Pacote externo ou manifesto ausente"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          size = pack.stat().st_size
+          assert manifest["version"] == 3, "Versão da Season 02 inesperada"
+          assert 1024**3 <= size <= 5*1024**3, f"Pacote fora de 1–5 GiB: {size}"
+          assert manifest["size_bytes"] == size, "Tamanho não confere com manifesto"
+          digest = hashlib.sha256()
+          with pack.open("rb") as stream:
+              for chunk in iter(lambda: stream.read(4*1024*1024), b""): digest.update(chunk)
+          assert digest.hexdigest() == manifest["sha256"], "SHA-256 externo inválido"
+          with ZipFile(pack) as archive:
+              assert archive.testzip() is None, "ZIP externo corrompido"
+              assert "manifest.json" in archive.namelist(), "Manifesto interno ausente"
+          print(f"Season 02 externo validado: {size} bytes / SHA-256 {digest.hexdigest()}")
+          PY
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -93,32 +108,25 @@ jobs:
               assert "classes.dex" in names, "DEX do jogo ausente"
               assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Biblioteca ARM64 ausente"
               assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Biblioteca ARMv7 ausente"
-              assert "assets/season02.zip" in names, "ZIP da Season 02 não foi incorporado ao APK"
-              assert "assets/season02-manifest.json" in names, "Manifesto embutido ausente"
-              pack_info = json.loads(z.read("assets/season02-manifest.json"))
-              pack_bytes = z.read("assets/season02.zip")
-              assert len(pack_bytes) == pack_info["size_bytes"], "Tamanho do pacote embutido diverge do manifesto"
-              assert hashlib.sha256(pack_bytes).hexdigest() == pack_info["sha256"], "SHA-256 do pacote embutido inválido"
-              from io import BytesIO
-              with ZipFile(BytesIO(pack_bytes)) as pack:
-                  assert pack.testzip() is None, "ZIP da Season 02 embutido está corrompido"
-                  assert "manifest.json" in pack.namelist(), "Manifesto interno da Season 02 ausente"
-              assert game.stat().st_size > 400_000_000, "APK do jogo não contém o pacote completo da Season 02"
+              assert "assets/season02.zip" not in names, "APK ainda contém o ZIP pesado da Season 02"
+              assert "assets/season02-manifest.json" not in names, "APK ainda contém manifesto do pacote externo"
+              assert game.stat().st_size < 300_000_000, "APK excessivamente grande: verificar conteúdo embutido"
               assert z.testzip() is None, "APK do jogo corrompido"
           with ZipFile(admin) as z:
               assert "classes.dex" in z.namelist(), "DEX do admin ausente"
               assert z.testzip() is None, "APK administrativo corrompido"
-          print(f"Jogo com Season 02 embutida: {game.stat().st_size} bytes; Admin: {admin.stat().st_size} bytes")
+          print(f"APK enxuto sem Season 02 embutida: {game.stat().st_size} bytes; Admin: {admin.stat().st_size} bytes")
           PY
           ls -lh app/build/outputs/apk/debug/app-debug.apk build/admin-debug.apk
           ls -lh build/battle-universe-season-02-pack.zip
-          test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 262144000
+          test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 1073741824
+          test $(stat -c%s build/battle-universe-season-02-pack.zip) -le 5368709120
       - name: Publish verified Season 02 4K data pack
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: data-pack-v2
+          tag_name: data-pack-v3
           name: Battle Universe — Conteúdo Expandido 4K
           body: |
             Pacote expandido do Battle Universe.
