@@ -156,3 +156,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Moldura, emblema e título adquiridos passam a aparecer no cabeçalho do perfil. Moedas também são concedidas por recompensas locais de partida, missões, evento, correio, passe e conquistas.
 - O inventário apresenta as duas últimas movimentações da carteira. A sincronização Firestore inclui o saldo de moedas e o histórico.
 - Validação realizada até agora: a classe `PlayerProfileStore.java` compilou isoladamente com `javac` usando uma interface `SharedPreferences` de teste. Isso valida sintaxe dessa classe, mas NÃO substitui a compilação Gradle/Android. GitHub Actions ainda precisa confirmar o APK completo; não houve teste físico no Redmi 12.
+
+
+## Estatísticas de carreira e histórico de partidas — código publicado em 2026-11-21 (build pendente)
+- O perfil registra partidas concluídas, vitórias, eliminações, dano causado e recursos coletados; cada partida usa um ID de sessão para evitar contagem duplicada.
+- O histórico local mantém as 30 partidas mais recentes e é incluído na sincronização da conta Firestore.
+- Perfil e painel do lobby exibem partidas, vitórias e eliminações a partir da mesma fonte compartilhada.
+- O registro de estatísticas é idempotente e pode ser repetido após uma falha sem somar novamente a mesma partida.
+- Limite: estatísticas atuais vêm do modo local existente; ainda não representam partidas online, temporadas ranqueadas ou placares de servidor. Build Android completa e teste físico permanecem pendentes.
