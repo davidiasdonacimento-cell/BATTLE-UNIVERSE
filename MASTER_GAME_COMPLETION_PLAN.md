@@ -178,7 +178,7 @@ Estados oficiais: **planejado**, **em desenvolvimento**, **implementado**, **com
 A fase 2 (fundação de dados e serviços) está **em desenvolvimento**, não concluída. Código já publicado:
 - `PlayerProfileStore`: contrato local compartilhado de perfil/carteiras, migração de esquema, compras atômicas, resgates idempotentes e ledger limitado.
 - `HudOverlay`: lobby/perfil/loja/inventário conectados à mesma fonte; saldo de moedas e diamantes; cosméticos de perfil com preço fixo em moedas; histórico de carteira e atalho funcional para missões.
-- `AccountSyncManager`: persistência/restauração de moedas, ledger, sensibilidades, missões e marcos do passe no Firestore.
+- `AccountSyncManager`: persistência/restauração local e sincronização de moedas, ledger, sensibilidades, missões e marcos do passe pela API própria FastAPI + PostgreSQL.
 - A base ainda é local/offline e não substitui validação autoritativa no servidor. Não habilitar multiplayer, compras online ou saldos seguros até construir o serviço autoritativo.
 - Critérios restantes antes de promover esta fase: build Gradle/NDK, testes automatizados de migração/idempotência/conflitos, verificação de sincronização em duas instalações e teste físico no Redmi 12.
 
@@ -187,7 +187,7 @@ A fase 2 (fundação de dados e serviços) está **em desenvolvimento**, não co
 A fase 2 agora inclui, além do contrato de perfil/carteiras:
 - estatísticas persistentes de partidas e histórico local limitado;
 - ID de sessão e proteção contra contagem repetida;
-- sincronização Firestore dos contadores, histórico e carteiras;
+- sincronização dos contadores, histórico e carteiras pela API própria FastAPI + PostgreSQL;
 - apresentação de estatísticas no lobby e perfil.
 A fase permanece em desenvolvimento até build Android, testes automatizados, teste de sincronização entre instalações e validação física.
 
