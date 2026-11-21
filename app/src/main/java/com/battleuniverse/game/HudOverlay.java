@@ -90,7 +90,7 @@ public final class HudOverlay extends View {
         void claim(DailyRewardResult callback);
     }
     public interface DailyRewardResult {
-        void onResult(boolean claimed,long coins,long diamonds,String message);
+        void onResult(boolean claimed,long diamonds,String message);
     }
     public interface PromoCodeAction {
         void redeem(String code,PromoCodeResult callback);
@@ -103,7 +103,7 @@ public final class HudOverlay extends View {
     private UsernameAccountAction usernameAccountAction;
     private Runnable accountSyncAction, accountSignOutAction, recoveryCodeAction;
     private String deviceIdentity="";
-    private long onlineCoins=-1L,onlineDiamonds=-1L;
+    private long onlineDiamonds=-1L;
     private RoyaleSpinAction royaleSpinAction;
     private DailyRewardAction dailyRewardAction;
     private PromoCodeAction promoCodeAction;
@@ -1833,7 +1833,7 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         }else if(page==ROYALE){
             if(hit(x,y,642,276,186,29)){
                 if(dailyRewardAction!=null)dailyRewardAction.claim((claimed,coins,diamonds,message)->{
-                    onlineCoins=coins;onlineDiamonds=diamonds;toast(message);invalidate();
+                    onlineDiamonds=diamonds;toast(message);invalidate();
                 });
                 else toast("Presente diário indisponível.");
                 return;
@@ -1928,8 +1928,8 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         }
     }
 
-    public void setOnlineWallet(long coins,long diamonds) {
-        onlineCoins=Math.max(0L,coins);onlineDiamonds=Math.max(0L,diamonds);invalidate();
+    public void setOnlineWallet(long diamonds) {
+        onlineDiamonds=Math.max(0L,diamonds);invalidate();
     }
     public void setRoyaleSpinAction(RoyaleSpinAction action) { royaleSpinAction=action; }
     public void setDailyRewardAction(DailyRewardAction action) { dailyRewardAction=action; }
