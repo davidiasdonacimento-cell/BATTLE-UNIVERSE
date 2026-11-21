@@ -145,6 +145,7 @@ public final class MainActivity extends Activity {
         hud.setRecoveryCodeAction(()->accountSync.rotateRecoveryCode());
         hud.setRoyaleSpinAction((requestId,callback)->accountSync.spinRoyale(requestId,callback::onResult));
         hud.setDailyRewardAction(callback->accountSync.claimDailyReward(callback::onResult));
+        hud.setPromoCodeAction((code,callback)->accountSync.redeemPromoCode(code,callback::onResult));
         accountSync.fetchWallet((coins,diamonds,message)->{
             if(hud!=null)hud.setOnlineWallet(coins,diamonds);
         });
