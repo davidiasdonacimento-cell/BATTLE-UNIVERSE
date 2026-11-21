@@ -2217,7 +2217,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         moving=moveLength>0.08f;
         if(moving) {
             dx/=std::max(1.0f,moveLength);dz/=std::max(1.0f,moveLength);
-            const float speed=gPlayerDowned?0.85f:(gCrouched?2.35f:((buttons&BUTTON_RUN)?8.0f:5.2f));
+            const float speed=gPlayerDowned?(gSelectedMode==4?0.0f:0.85f):(gCrouched?2.35f:((buttons&BUTTON_RUN)?8.0f:5.2f));
             const float nx=std::clamp(gPlayer.x+dx*speed*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
             const float nz=std::clamp(gPlayer.z+dz*speed*dt,-WORLD_LIMIT+1.0f,WORLD_LIMIT-1.0f);
             moveWithCollision(gPlayer,nx,nz,0.42f);
@@ -2315,7 +2315,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
                 setStatus("GLADIADORES • PLACAR "+std::to_string(gEliminations)+" - "+std::to_string(gDuelBotScore)+" • DUELO REINICIADO");
             }
         }
-        updateDownedState(dt);
+        if(gSelectedMode!=4)updateDownedState(dt);
         // Reviver controlado pelo jogador: mantenha USAR pressionado perto do aliado caído.
         if(!interactHeld){gPlayerReviveTarget=-1;gPlayerReviveProgress=0.0f;}
         if(interactHeld&&!gPlayerDowned&&(gSelectedMode==1||gSelectedMode==2)) {
