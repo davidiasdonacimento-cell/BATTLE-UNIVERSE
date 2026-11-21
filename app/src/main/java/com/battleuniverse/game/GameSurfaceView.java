@@ -8,7 +8,7 @@ import java.util.Arrays;
 public final class GameSurfaceView extends GLSurfaceView {
     private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64, CROUCH=128, KIT=256;
     private volatile float moveX,moveY,lookDX,lookDY;
-    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1,duelWeapon=1;
+    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=2,duelWeapon=1;
     private volatile float lookSensitivity=1.0f,aimSensitivity=1.0f;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile int shirtStyle,bootStyle,setStyle,pantsStyle;
@@ -47,7 +47,7 @@ public final class GameSurfaceView extends GLSurfaceView {
         queueEvent(()->nativeSetCharacter(characterId));
     }
     public void setMap(int id) {
-        mapId=Math.max(0,Math.min(7,id));
+        mapId=0;
         queueEvent(()->nativeSetMap(mapId));
     }
     public void setMatchMode(int id) {
