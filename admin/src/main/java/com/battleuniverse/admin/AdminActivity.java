@@ -61,7 +61,10 @@ public final class AdminActivity extends Activity {
     }
 
     private void message(String text) { runOnUiThread(() -> status.setText(text)); }
-    private void work(String label, Runnable job) {
+    @FunctionalInterface
+    private interface Work { void run() throws Exception; }
+
+    private void work(String label, Work job) {
         message(label);
         io.execute(() -> { try { job.run(); } catch (Exception e) { message("Erro: " + safe(e.getMessage())); } });
     }
