@@ -1728,6 +1728,13 @@ public final class HudOverlay extends View {
                 return;
             }
         }else if(page==ROYALE){
+            if(hit(x,y,642,276,186,29)){
+                if(dailyRewardAction!=null)dailyRewardAction.claim((claimed,coins,diamonds,message)->{
+                    onlineCoins=coins;onlineDiamonds=diamonds;toast(message);invalidate();
+                });
+                else toast("Presente diário indisponível.");
+                return;
+            }
             for(int i=0;i<6;i++){
                 float rx=270+(i%3)*192f,ry=326+(i/3)*151f;
                 if(!hit(x,y,rx,ry,174,132))continue;
