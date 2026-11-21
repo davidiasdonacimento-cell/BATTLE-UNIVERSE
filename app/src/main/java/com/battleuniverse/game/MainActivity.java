@@ -143,7 +143,7 @@ public final class MainActivity extends Activity {
                 accountSync.getUsername(),"Conta BATTLE UNIVERSE autenticada.");
         hud.setDeviceIdentity(accountSync.getDeviceCode());
         hud.setRecoveryCodeAction(()->accountSync.rotateRecoveryCode());
-        hud.setRoyaleSpinAction(callback->accountSync.spinRoyale(callback::onResult));
+        hud.setRoyaleSpinAction((requestId,callback)->accountSync.spinRoyale(requestId,callback::onResult));
         hud.setDailyRewardAction(callback->accountSync.claimDailyReward(callback::onResult));
         accountSync.fetchWallet((coins,diamonds,message)->{
             if(hud!=null)hud.setOnlineWallet(coins,diamonds);
