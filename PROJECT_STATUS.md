@@ -244,3 +244,15 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Gladiadores é offline. Não concede moedas/diamantes por resultado local e não finge ser multiplayer online.
 - MODMENU2 permanece acessível nas Configurações. God Mode continua restrito à sessão Treinamento offline; trocar de modo ou selecionar Online desativa o estado ativo. Nenhuma função de vantagem online ou edição de carteira foi adicionada.
 - Estado de comprovação: código enviado somente à branch feature/arena-modes-core; build CI, APK e teste físico ainda pendentes. Não mesclado na main.
+
+
+## Lobby MAX inspirado em UX de battle royale — 2026-11-21
+**Estado: alterações de interface publicadas na branch; compilação e teste físico pendentes.**
+
+- Referência funcional estudada: lobby com perfil/moeda no topo, atalhos por categoria, acesso persistente a amigos/equipe, navegação inferior e ação principal de partida. O BATTLE UNIVERSE mantém identidade, textos, ícones e composição próprios.
+- `HudOverlay`: tela inicial reorganizada em menu lateral (Loja, Royale, Missões, Eventos e Amigos), painel de equipe com vagas explicitamente vazias (sem simular jogadores conectados), atalhos inferiores (Cofre, Personagens, Roupas e Perfil) e painel de modo/mapa/entrada na partida.
+- O cabeçalho do lobby exibe somente diamantes, em alinhamento com a decisão de usar uma única moeda. Isso altera a apresentação do lobby; não declara concluída a migração de todos os fluxos econômicos.
+- O fundo 2D foi reduzido para uma vinheta translúcida para deixar a cena 3D da engine mais visível.
+- Os alvos de toque do novo layout foram atualizados junto com os elementos desenhados. As páginas de destino reutilizam telas já existentes; convites e presença online continuam indisponíveis enquanto o serviço multiplayer não existir.
+- Commit: `6042a3bc4d66dabd66b500fb2b28ae5743dc22cf` na branch `feature/bermuda-map-hud-stability`, PR #6.
+- Próxima validação obrigatória: workflow Gradle/NDK, checagem de sobreposição/áreas de toque, captura da tela em aparelho e teste funcional no Redmi 12. Até isso ocorrer, a alteração está apenas publicada no código, não validada no aparelho.
