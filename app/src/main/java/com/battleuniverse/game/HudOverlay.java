@@ -203,34 +203,40 @@ public final class HudOverlay extends View {
         else if(page==PREMATCH)drawPreMatch(c);
     }
     private void drawHome(Canvas c){
-        eyebrow(c,272,174,"BATTLE UNIVERSE BR 1.4.0  /  SEASON 03");
-        text(c,"SUA PRÓXIMA",272,224,37,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"JORNADA COMEÇA AQUI.",272,267,37,0xFF55DDE7,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"Monte sua equipe, escolha o destino e entre na batalha.",274,296,14,0xFFB3C8D4,Typeface.DEFAULT);
-        panel(c,270,328,275,112,0xC9183040,0x557AA9BC,18);
-        panel(c,558,328,292,112,0xC9183040,0x557AA9BC,18);
-        eyebrow(c,290,357,"MODO DE JOGO");
-        text(c,MODE_NAMES[mode],290,390,21,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,mode==0?"Você + 29 bots IA • 30 participantes":mode==1?"Você + 1 aliado • 28 bots IA":mode==2?"Você + 3 aliados • 26 bots IA":"Treinamento livre • alvos IA",290,417,11,0xFF9DB6C5,Typeface.DEFAULT);
-        chevron(c,515,385);
-        eyebrow(c,578,357,"MAPA SELECIONADO");
-        text(c,MAP_NAMES[map],578,390,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,MAP_DETAILS[map],578,417,11,0xFF9DB6C5,Typeface.DEFAULT);
-        chevron(c,817,385);
-        pill(c,270,442,164,24,onlineMode?"OFFLINE":"OFFLINE SELECIONADO",
-            onlineMode?0x553B6172:0xFF176A75,Color.WHITE);
-        pill(c,442,442,200,24,onlineMode?"ONLINE • SERVIDOR PENDENTE":"ONLINE • INDISPONÍVEL",
-            onlineMode?0xFF7A4D25:0x553B6172,Color.WHITE);
-        gradientButton(c,270,472,342,78,"JOGAR AGORA","ENTRAR NA PARTIDA",0xFFFFB45E,0xFFE97543);
-        text(c,"▶",292,520,21,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
-        panel(c,628,472,222,78,0xB9183040,0x557AA9BC,17);
-        text(c,"◆ PASSE DE TEMPORADA",650,498,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
-        text(c,"MENU ROYALE",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,onlineMode?"ONLINE AINDA NÃO DISPONÍVEL • SERVIDOR MULTIPLAYER PENDENTE":
-            "30 participantes offline • 1 jogador + 29 bots IA.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
-        panel(c,270,608,580,58,0x70152B3A,0x225B8296,14);
-        stat(c,292,642,"30","PARTICIPANTES");stat(c,468,642,"29","BOTS IA");
-        stat(c,665,642,onlineMode?"PEND.":"OFF",onlineMode?"ONLINE NÃO ATIVO":"MODO OFFLINE");
+        eyebrow(c,270,174,"BATTLE UNIVERSE BR 1.4.0  •  TEMPORADA 03");
+        text(c,"CENTRAL DE",270,216,25,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"OPERAÇÕES",270,246,25,0xFF55DDE7,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Escolha seu destino e prepare a partida.",272,267,10,0xFFB3C8D4,Typeface.DEFAULT);
+
+        panel(c,270,286,245,76,0xC9183040,0x557AA9BC,15);
+        eyebrow(c,288,309,"MODO DE JOGO");
+        text(c,MODE_NAMES[mode],288,337,16,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,mode==0?"1 jogador + 29 bots IA":mode==1?"Dupla • 1 aliado + bots":
+            mode==2?"Esquadrão • 3 aliados + bots":"Treinamento livre",288,352,8,0xFF9DB6C5,Typeface.DEFAULT);
+        chevron(c,491,327);
+
+        panel(c,270,372,245,76,0xC9183040,0x557AA9BC,15);
+        eyebrow(c,288,395,"MAPA SELECIONADO");
+        text(c,MAP_NAMES[map],288,423,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,MAP_DETAILS[map],288,438,8,0xFF9DB6C5,Typeface.DEFAULT);
+        chevron(c,491,413);
+
+        pill(c,270,458,115,24,"OFFLINE",onlineMode?0x553B6172:0xFF176A75,Color.WHITE);
+        pill(c,392,458,123,24,"ONLINE",onlineMode?0xFF7A4D25:0x553B6172,Color.WHITE);
+        gradientButton(c,270,493,245,62,"JOGAR AGORA","PREPARAR PARTIDA",0xFFFFB45E,0xFFE97543);
+        text(c,"▶",287,531,19,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
+        panel(c,270,565,245,61,0xB9183040,0x557AA9BC,15);
+        text(c,"◆ MENU ROYALE",289,590,11,0xFF76E7CF,Typeface.DEFAULT_BOLD);
+        text(c,"Passe, recompensas e sorteios",289,610,9,0xFFB3C8D4,Typeface.DEFAULT);
+
+        // Área central deliberadamente livre para o operador e seus modelos 3D de apoio.
+        p.setColor(0x3339D7E8);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.0f);
+        c.drawOval(530,536,870,606,p);p.setStyle(Paint.Style.FILL);
+        pill(c,565,176,270,27,"OPERADOR EM DESTAQUE  •  "+CHARACTER_NAMES[character],
+            0xAA123D4A,0xFF9BEAF4);
+        text(c,onlineMode?"ONLINE BLOQUEADO • SERVIDOR NÃO CONFIGURADO":
+            "30 PARTICIPANTES OFFLINE • 1 JOGADOR + 29 BOTS IA",
+            542,643,9,onlineMode?0xFFFFC27A:0xFF9CB5C2,Typeface.DEFAULT_BOLD);
     }
     private void drawCharacters(Canvas c){
         eyebrow(c,270,175,"PERSONALIZAÇÃO • MODELO DO LOBBY");
@@ -1193,24 +1199,24 @@ public final class HudOverlay extends View {
             if(hit(x,y,27,ny,196,29)){page=NAV_PAGES[i];return;}
         }
         if(page==HOME){
-            if(hit(x,y,270,442,164,24)){
+            if(hit(x,y,270,458,115,24)){
                 onlineMode=false;prefs.edit().putBoolean("online_mode",false).apply();
                 toast("MODO OFFLINE SELECIONADO.");return;
             }
-            if(hit(x,y,442,442,200,24)){
+            if(hit(x,y,392,458,123,24)){
                 onlineMode=true;prefs.edit().putBoolean("online_mode",true).apply();
                 toast("ONLINE AINDA PRECISA DE UM SERVIDOR DE PARTIDAS.");return;
             }
-            if(hit(x,y,270,328,275,112)){page=MODES_PAGE;return;}
-            if(hit(x,y,558,328,292,112)){page=MAPS_PAGE;return;}
-            if(hit(x,y,270,472,342,78)){
+            if(hit(x,y,270,286,245,76)){page=MODES_PAGE;return;}
+            if(hit(x,y,270,372,245,76)){page=MAPS_PAGE;return;}
+            if(hit(x,y,270,493,245,62)){
                 if(onlineMode){
                     toast("ONLINE INDISPONÍVEL: SERVIDOR MULTIPLAYER AINDA NÃO CONFIGURADO. SELECIONE OFFLINE.");
                     return;
                 }
                 page=PREMATCH;return;
             }
-            if(hit(x,y,628,472,222,78)){page=ROYALE;return;}
+            if(hit(x,y,270,565,245,61)){page=ROYALE;return;}
         }else if(page==PREMATCH){
             if(hit(x,y,270,636,170,34)){page=HOME;return;}
             if(hit(x,y,862,636,350,34)){beginOfflineMatch();return;}
