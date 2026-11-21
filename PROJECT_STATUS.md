@@ -117,3 +117,12 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - `terrainPositionBlocked()` impede a movimentação de entrar nas áreas íngremes/ocupadas correspondentes às formas principais, além das colisões de construções já existentes.
 - Limite técnico importante: o terreno ainda é composto por primitivas low-poly sobre uma superfície-base plana; não é um heightmap contínuo com inclinações caminháveis. As áreas de relevo alto são tratadas como obstáculos, não como encostas que o personagem escala. Rios/canais são representação visual e ainda precisam de regras próprias de travessia/água. Não declarar os mapas como totalmente finalizados.
 - Compilação Android e teste visual após este commit ainda pendentes; o sucesso do workflow anterior não valida esta alteração.
+
+
+## Relevo contínuo de mapas — malhas 3D e altura do movimento (build pendente)
+- Cada um dos oito mapas agora tem uma malha de terreno triangulada própria, gerada por grade 64×64 com alturas e normais calculadas por vértice, enviada à GPU como VBO.
+- Perfis de relevo: morros tropicais; terraços urbanos; dunas; cristas glaciais; taludes industriais; colinas e vale; crateras lunares; crateras e ruínas.
+- A malha recebe coloração específica por mapa e faz transição de costa para abaixo do nível do oceano, evitando prolongar uma plataforma quadrada plana sobre a água.
+- O movimento no solo atualiza a altura vertical do personagem conforme a função de terreno do mapa. A colisão existente continua bloqueando as áreas íngremes definidas.
+- Limites: esta versão usa terreno procedural low-poly e aproximações matemáticas; não é um sistema completo de navegação em encostas, física de água, interiores ou destruição. Pontos de loot e alguns objetos antigos ainda precisam ser ajustados individualmente à altura do terreno.
+- A compilação após os commits de relevo e teste visual no Redmi 12 ainda precisam ser confirmados. Não instalar até o workflow terminar e o APK correto ser validado.
