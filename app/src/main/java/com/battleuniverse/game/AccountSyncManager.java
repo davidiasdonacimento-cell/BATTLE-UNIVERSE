@@ -67,7 +67,8 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private final AccountSessionStore session;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final ExecutorService network=Executors.newSingleThreadExecutor();
-    private final Runnable saveRunnable=this::saveProfile;
+    // The debounce callback runs on the UI thread; network I/O must be queued on the executor.
+    private final Runnable saveRunnable=this::enqueueSaveProfile;
     private final String baseUrl;
     private volatile boolean closed;
     private final AtomicBoolean recoveryBusy=new AtomicBoolean(false);
@@ -297,7 +298,13 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
     public void syncNow(){if(!isConfigured())publish(false,false,"","Servidor ainda não configurado.");
         else if(!isSignedIn())publish(true,false,"","Entre na conta para sincronizar.");
-        else saveProfile();}
+        else enqueueSaveProfile();}
+
+    private void enqueueSaveProfile(){
+        if(closed||!isSignedIn())return;
+        try { network.execute(this::saveProfile); }
+        catch(java.util.concurrent.RejectedExecutionException ignored) { }
+    }
     private JSONObject collectProfile()throws Exception{
         JSONObject out=new JSONObject();Map<String,?> all=prefs.getAll();
         for(String key:PROFILE_KEYS){Object v=all.get(key);if(v instanceof String||v instanceof Number||v instanceof Boolean)out.put(key,v);}
@@ -319,7 +326,14 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             request("PATCH","/v1/accounts/me/profile",body,session.getToken());
             publish(true,true,getUsername(),"Configurações da conta sincronizadas.");
         }catch(ApiException e){if(e.code==401)session.clear();publish(true,isSignedIn(),getUsername(),e.getMessage());}
-        catch(Exception e){publish(true,isSignedIn(),getUsername(),"Falha ao sincronizar. Dados locais preservados.");}
+        catch(Exception e){
+            String kind=e.getClass().getSimpleName();
+            String detail=e.getMessage()==null?"":e.getMessage().trim();
+            if(detail.length()>90)detail=detail.substring(0,90);
+            String reason=detail.isEmpty()?kind:kind+": "+detail;
+            publish(true,isSignedIn(),getUsername(),"Falha ao sincronizar ("+reason+"). Dados locais preservados; nova tentativa em 15 segundos.");
+            if(!closed&&isSignedIn())main.postDelayed(saveRunnable,15000L);
+        }
     }
     private JSONObject request(String method,String path,JSONObject body,String token)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(baseUrl+path).openConnection();
