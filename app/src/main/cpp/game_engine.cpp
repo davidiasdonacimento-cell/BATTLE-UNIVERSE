@@ -174,7 +174,7 @@ std::array<TrainingTarget,TARGET_COUNT> gTargets{{
 std::array<int,4> gWeaponAmmo{{0,0,0,0}};
 std::array<bool,4> gWeaponOwned{{false,false,false,false}};
 int gTrainingScore=0, gWeaponType=-1;
-struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=true; bool ammoOnly=false; int kind=0; };
+struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=false; bool ammoOnly=false; int kind=0; };
 std::array<GroundLoot,64> gGroundLoot{};
 int gPlayerHealth=100,gPlayerShield=0,gMedkits=0,gEliminations=0;
 int gDamageDealt=0,gDamageTaken=0,gAiEliminations=0;
