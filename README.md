@@ -80,3 +80,12 @@ Esta versão ainda não é um jogo AAA completo. A partida é local contra adver
 - Repositório: https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE
 - Ações e APK: https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/actions
 - Dados da Temporada 02: https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/tag/data-pack-v2
+
+
+## Servidor de contas próprio e BATTLE UNIVERSE ADMIN
+
+A arquitetura atual usa FastAPI + PostgreSQL para contas por nickname/senha, com senhas protegidas por Argon2 e sessões JWT. O aplicativo de administração é um APK Android nativo separado, no módulo `admin`.
+
+O painel permite pesquisar contas, alterar nickname e nome de exibição do personagem, suspender/reativar, encerrar conta, atualizar o nome global do jogo e nomes de personagens, além de consultar auditoria. O acesso administrativo é provisionado no servidor por variáveis privadas; não existe senha administrativa embutida no APK.
+
+Leia `ADMIN_SERVER_GUIDE.md` antes de implantar. O backend precisa de PostgreSQL e variáveis privadas no Render. O cliente do jogo ainda precisa consumir as configurações globais e passar por teste de integração. A compilação dos dois APKs é acompanhada no GitHub Actions.
