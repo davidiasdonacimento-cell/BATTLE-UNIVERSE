@@ -1,424 +1,128 @@
 package com.battleuniverse.game;
-
 import android.app.Activity;
 import android.content.SharedPreferences;
-import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.Looper;
-
-import androidx.credentials.Credential;
-import androidx.credentials.CredentialManager;
-import androidx.credentials.CredentialManagerCallback;
-import androidx.credentials.CustomCredential;
-import androidx.credentials.GetCredentialRequest;
-import androidx.credentials.GetCredentialResponse;
-import androidx.credentials.exceptions.GetCredentialException;
-
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.auth.AuthCredential;
-import com.google.firebase.auth.AuthResult;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseAuthException;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.auth.GoogleAuthProvider;
-import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FieldValue;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.SetOptions;
-
-import java.util.HashMap;
+import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-/**
- * Google login + cloud save.
- *
- * The local SharedPreferences remain the offline cache. A Google account
- * identifies the player's cloud document, so the same progress can be restored
- * after installing another build of the same game.
- */
+/** Native Android client for the BATTLE UNIVERSE FastAPI/PostgreSQL account service. */
 public final class AccountSyncManager implements SharedPreferences.OnSharedPreferenceChangeListener {
-    public interface Listener {
-        void onAccountState(boolean firebaseConfigured, boolean signedIn,
-                            String email, String message);
-    }
-
-    private static final String COLLECTION = "players";
-    private static final String USERNAME_DOMAIN = "@accounts.battleuniverse.app";
-    private static final String[] PROFILE_KEYS = {
-        "nickname", "xp", "diamonds", "coins", "coins_wallet_initialized",
-        "profile_schema_version", "economy_ledger", "daily_reward_day", "code_100k_redeemed",
-        "mode", "map", "character", "quality", "music", "effects",
-        "look_sensitivity", "sensitivity_general", "sensitivity_aim",
-        "shop_frame_neon", "shop_emblem_bloob",
-        "shop_title_champion", "selected_shirt", "selected_boots", "selected_set",
-        "invert_camera_y", "show_minimap", "haptics", "online_mode",
-        "local_friend_1", "event_season_claimed", "mail_welcome_claimed",
-        "achievement_500", "achievement_1500", "achievement_3000",
-        "missions_day", "mission_matches", "mission_eliminations", "mission_crystals",
-        "mission_claimed_0", "mission_claimed_1", "mission_claimed_2",
-        "royale_tier_claimed_0", "royale_tier_claimed_1", "royale_tier_claimed_2",
-        "royale_tier_claimed_3", "royale_tier_claimed_4", "royale_tier_claimed_5",
-        "royale_spin_count", "royale_last_reward",
-        "last_match_reward_coins", "last_match_reward_diamonds", "last_match_reward_xp",
-        "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
-        "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result",
-        "match_history",
-        "wear_shirt_tactical", "wear_shirt_neon", "wear_shirt_frost", "wear_shirt_desert",
-        "wear_boots_combat", "wear_boots_neon", "wear_boots_frost", "wear_boots_gold",
-        "wear_set_aurora", "wear_set_champion", "wear_set_orbit", "wear_set_desert"
+    public interface Listener{void onAccountState(boolean serverConfigured,boolean signedIn,String username,String message);}
+    private static final String[] PROFILE_KEYS={
+        "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
+        "invert_camera_y","show_minimap","haptics","selected_mode","selected_map","selected_character",
+        "selected_shirt","selected_boots","selected_set","wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost",
+        "wear_shirt_desert","wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
+        "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert"
     };
-
-    private final Activity activity;
     private final SharedPreferences prefs;
     private final Listener listener;
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final Executor mainExecutor = command -> mainHandler.post(command);
-    private final Runnable saveRunnable = this::saveProfile;
-
-    private FirebaseAuth auth;
-    private FirebaseFirestore firestore;
-    private CredentialManager credentialManager;
-    private boolean configured;
-    private boolean applyingCloud;
-    private boolean prefsListenerRegistered;
-    private boolean closed;
-    private String statusMessage = "Crie uma conta BATTLE UNIVERSE para guardar seu progresso.";
-
-    public AccountSyncManager(Activity activity, SharedPreferences prefs, Listener listener) {
-        this.activity = activity;
-        this.prefs = prefs;
-        this.listener = listener;
-        initializeFirebase();
+    private final AccountSessionStore session;
+    private final Handler main=new Handler(Looper.getMainLooper());
+    private final ExecutorService network=Executors.newSingleThreadExecutor();
+    private final Runnable saveRunnable=this::saveProfile;
+    private final String baseUrl;
+    private volatile boolean closed;
+    private boolean listening,applying;
+    private String status="";
+    public AccountSyncManager(Activity activity,SharedPreferences prefs,Listener listener){
+        this.prefs=prefs;this.listener=listener;session=new AccountSessionStore(activity);
+        String url=BuildConfig.ACCOUNT_API_BASE_URL==null?"":BuildConfig.ACCOUNT_API_BASE_URL.trim();
+        while(url.endsWith("/"))url=url.substring(0,url.length()-1);baseUrl=url;
+        publish(isConfigured(),isSignedIn(),getUsername(),isConfigured()?"Servidor de contas configurado.":"Servidor ainda não configurado neste APK.");
     }
-
-    private void initializeFirebase() {
-        try {
-            // Firebase is the account/cloud backend; Google sign-in is not required.
-            if (FirebaseApp.getApps(activity).isEmpty()) {
-                configured = false;
-                publish(false, "", "Servidor de contas não configurado neste APK.");
-                return;
-            }
-            FirebaseApp app = FirebaseApp.getInstance();
-            auth = FirebaseAuth.getInstance(app);
-            firestore = FirebaseFirestore.getInstance(app);
-            configured = true;
-            publish(false, "", "Crie uma conta ou entre com nome e senha.");
-        } catch (Exception e) {
-            configured = false;
-            publish(false, "", "Não foi possível iniciar o serviço de conta.");
-        }
+    public boolean isConfigured(){return baseUrl.startsWith("https://")||(BuildConfig.DEBUG&&baseUrl.startsWith("http://"));}
+    public boolean isSignedIn(){return isConfigured()&&!session.getToken().isEmpty()&&session.getExpiresAt()>System.currentTimeMillis()/1000L;}
+    public String getUsername(){return session.getUsername();}
+    public void restoreExistingSession(){
+        if(!isConfigured()||closed)return;
+        if(!isSignedIn()){if(!session.getToken().isEmpty())session.clear();publish(true,false,"","Entre uma vez para manter sua conta conectada neste aparelho.");return;}
+        network.execute(()->{try{
+            JSONObject r=request("GET","/v1/accounts/me",null,session.getToken()),p=r.optJSONObject("player");
+            if(p==null)throw new ApiException(502,"Resposta inválida do servidor.");
+            String name=p.optString("username",getUsername());session.save(session.getToken(),name,session.getExpiresAt());
+            applyProfile(p.optJSONObject("profile"));registerListener();publish(true,true,name,"Login restaurado automaticamente.");
+        }catch(ApiException e){if(e.code==401)session.clear();publish(true,false,"",e.code==401?"Sessão expirada. Entre novamente.":e.getMessage());
+        }catch(Exception e){publish(true,true,getUsername(),"Servidor indisponível. Sessão mantida neste aparelho; tente novamente com internet.");}});
     }
-
-    public boolean isSignedIn() {
-        return configured && auth != null && auth.getCurrentUser() != null;
+    public void authenticateUsername(String raw,String password,boolean create){
+        if(!isConfigured()){publish(false,false,"","Servidor ainda não configurado neste APK.");return;}
+        String name=raw==null?"":raw.trim().toLowerCase(Locale.ROOT);
+        if(!name.matches("[a-z0-9_]{3,18}")){publish(true,false,"","Use 3 a 18 letras, números ou _ no nickname.");return;}
+        if(password==null||password.length()<8||password.length()>72){publish(true,false,"","A senha precisa ter de 8 a 72 caracteres.");return;}
+        publish(true,isSignedIn(),name,create?"Criando conta...":"Entrando na conta...");
+        final String submitted=password;
+        network.execute(()->{try{
+            JSONObject body=new JSONObject();body.put("username",name);body.put("password",submitted);
+            JSONObject r=request("POST",create?"/v1/accounts/register":"/v1/accounts/login",body,null);
+            String token=r.optString("access_token","");int seconds=r.optInt("expires_in",0);JSONObject player=r.optJSONObject("player");
+            if(token.isEmpty()||seconds<=0||player==null)throw new ApiException(502,"Sessão inválida retornada pelo servidor.");
+            session.save(token,player.optString("username",name),System.currentTimeMillis()/1000L+seconds);
+            applyProfile(player.optJSONObject("profile"));registerListener();
+            publish(true,true,name,create?"Conta criada e sessão protegida neste aparelho.":"Login realizado; sessão salva para atualizações.");
+            if(create)saveProfile();
+        }catch(ApiException e){publish(true,isSignedIn(),getUsername(),e.getMessage());}
+        catch(Exception e){publish(true,isSignedIn(),getUsername(),"Não foi possível conectar. Verifique a internet.");}});
     }
-
-    public boolean isConfigured() {
-        return configured;
+    public void signOut(){session.clear();if(listening){prefs.unregisterOnSharedPreferenceChangeListener(this);listening=false;}
+        publish(isConfigured(),false,"","Você saiu. A conta continua salva no servidor.");}
+    private void registerListener(){if(!listening&&!closed){prefs.registerOnSharedPreferenceChangeListener(this);listening=true;}}
+    @Override public void onSharedPreferenceChanged(SharedPreferences p,String key){
+        if(closed||applying||!isSignedIn())return;for(String allowed:PROFILE_KEYS)if(allowed.equals(key)){
+            main.removeCallbacks(saveRunnable);main.postDelayed(saveRunnable,1000L);return;}
     }
-
-    /** Restores the Firebase session automatically after an app update/restart. */
-    public void restoreExistingSession() {
-        if (!configured || closed) return;
-        FirebaseUser user = auth.getCurrentUser();
-        if (user == null) {
-            publish(true, "", "Crie uma conta ou entre com nome e senha para sincronizar.");
-            return;
-        }
-        loadCloudProfile(user);
+    public void syncNow(){if(!isConfigured())publish(false,false,"","Servidor ainda não configurado.");
+        else if(!isSignedIn())publish(true,false,"","Entre na conta para sincronizar.");
+        else saveProfile();}
+    private JSONObject collectProfile()throws Exception{
+        JSONObject out=new JSONObject();Map<String,?> all=prefs.getAll();
+        for(String key:PROFILE_KEYS){Object v=all.get(key);if(v instanceof String||v instanceof Number||v instanceof Boolean)out.put(key,v);}
+        return out;
     }
-
-    public void authenticateUsername(String rawUsername, String password, boolean createAccount) {
-        if (!configured || auth == null || firestore == null) {
-            publish(false, "", "Servidor de contas não configurado neste APK.");
-            return;
-        }
-        String username = rawUsername == null ? "" : rawUsername.trim().toLowerCase(java.util.Locale.ROOT);
-        if (!username.matches("[a-z0-9_]{3,18}")) {
-            publish(true, "", "Use 3 a 18 letras, números ou _.");
-            return;
-        }
-        if (password == null || password.length() < 8 || password.length() > 72) {
-            publish(true, "", "A senha precisa ter de 8 a 72 caracteres.");
-            return;
-        }
-        String internalEmail = username + USERNAME_DOMAIN;
-        publish(true, username, createAccount ? "Criando sua conta..." : "Entrando na conta...");
-        if (createAccount) {
-            auth.createUserWithEmailAndPassword(internalEmail, password)
-                .addOnCompleteListener(activity, task -> finishUsernameAuth(task, username));
-        } else {
-            auth.signInWithEmailAndPassword(internalEmail, password)
-                .addOnCompleteListener(activity, task -> finishUsernameAuth(task, username));
-        }
+    private void applyProfile(JSONObject profile){
+        if(profile==null||closed)return;applying=true;SharedPreferences.Editor ed=prefs.edit();Map<String,?> old=prefs.getAll();
+        for(String key:PROFILE_KEYS){if(!profile.has(key)||profile.isNull(key))continue;Object v=profile.opt(key),prior=old.get(key);
+            if(v instanceof Boolean)ed.putBoolean(key,(Boolean)v);
+            else if(v instanceof Number)ed.putInt(key,((Number)v).intValue());
+            else if(v instanceof String&&(prior==null||prior instanceof String))ed.putString(key,(String)v);}
+        ed.commit();applying=false;
     }
-
-    private void finishUsernameAuth(com.google.android.gms.tasks.Task<AuthResult> task, String username) {
-        if (closed) return;
-        if (!task.isSuccessful()) {
-            String code="";
-            Exception failure=task.getException();
-            if(failure instanceof FirebaseAuthException)code=((FirebaseAuthException)failure).getErrorCode();
-            String message;
-            if("ERROR_EMAIL_ALREADY_IN_USE".equals(code))
-                message="Esse nome já está cadastrado. Use ENTRAR para acessar.";
-            else if("ERROR_OPERATION_NOT_ALLOWED".equals(code))
-                message="Login por e-mail/senha está desativado no Firebase. Ative Email/Password.";
-            else if("ERROR_INVALID_CREDENTIAL".equals(code)||"ERROR_USER_NOT_FOUND".equals(code)||"ERROR_WRONG_PASSWORD".equals(code))
-                message="Nome ou senha incorretos. Confira os dados e tente novamente.";
-            else if("ERROR_TOO_MANY_REQUESTS".equals(code))
-                message="Muitas tentativas. Aguarde um pouco antes de tentar novamente.";
-            else if("ERROR_NETWORK_REQUEST_FAILED".equals(code))
-                message="Sem conexão com o servidor. Verifique a internet.";
-            else message="Falha na conta. Confira a configuração Firebase, a conexão e os dados.";
-            publish(true, "", message);
-            return;
-        }
-        prefs.edit().putString("account_username", username).apply();
-        FirebaseUser user = auth.getCurrentUser();
-        if (user != null) loadCloudProfile(user);
+    private void saveProfile(){
+        if(closed||!isSignedIn())return;try{JSONObject body=new JSONObject();body.put("profile",collectProfile());
+            request("PATCH","/v1/accounts/me/profile",body,session.getToken());
+            publish(true,true,getUsername(),"Configurações da conta sincronizadas.");
+        }catch(ApiException e){if(e.code==401)session.clear();publish(true,isSignedIn(),getUsername(),e.getMessage());}
+        catch(Exception e){publish(true,isSignedIn(),getUsername(),"Falha ao sincronizar. Dados locais preservados.");}
     }
-
-    public void signOut() {
-        if (auth != null) auth.signOut();
-        if (prefsListenerRegistered) {
-            prefs.unregisterOnSharedPreferenceChangeListener(this);
-            prefsListenerRegistered = false;
-        }
-        publish(configured, "", "Você saiu da conta. O progresso local continua neste aparelho.");
+    private JSONObject request(String method,String path,JSONObject body,String token)throws Exception{
+        HttpURLConnection c=(HttpURLConnection)new URL(baseUrl+path).openConnection();
+        c.setRequestMethod(method);c.setConnectTimeout(12000);c.setReadTimeout(15000);c.setRequestProperty("Accept","application/json");
+        if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");}
+        if(token!=null&&!token.isEmpty())c.setRequestProperty("Authorization","Bearer "+token);
+        try{
+            if(body!=null){byte[] bytes=body.toString().getBytes(StandardCharsets.UTF_8);try(OutputStream o=c.getOutputStream()){o.write(bytes);}}
+            int code=c.getResponseCode();InputStream stream=code>=200&&code<300?c.getInputStream():c.getErrorStream();
+            ByteArrayOutputStream buffer=new ByteArrayOutputStream();if(stream!=null)try(InputStream in=stream){
+                byte[] chunk=new byte[4096];int n;while((n=in.read(chunk))!=-1)buffer.write(chunk,0,n);}
+            String text=buffer.toString(StandardCharsets.UTF_8.name());JSONObject json=text.isEmpty()?new JSONObject():new JSONObject(text);
+            if(code<200||code>=300)throw new ApiException(code,json.optString("detail","Erro de comunicação com o servidor."));
+            return json;
+        }finally{c.disconnect();}
     }
-
-    public String getUsername() {
-        return prefs.getString("account_username", "");
+    private void publish(boolean configured,boolean signed,String username,String message){
+        status=message==null?"":message;if(listener==null||closed)return;
+        main.post(()->{if(!closed)listener.onAccountState(configured,signed,username==null?"":username,status);});
     }
-
-    public void signInWithGoogle() {
-        if (!configured || credentialManager == null) {
-            publish(false, "", "Falta configurar o Firebase e o cliente OAuth do jogo.");
-            return;
-        }
-
-        int resourceId = activity.getResources().getIdentifier(
-            "default_web_client_id", "string", activity.getPackageName());
-        if (resourceId == 0) {
-            publish(false, "", "O cliente OAuth Web não está no google-services.json.");
-            return;
-        }
-
-        try {
-            GetGoogleIdOption googleOption = new GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(activity.getString(resourceId))
-                .build();
-
-            GetCredentialRequest request = new GetCredentialRequest.Builder()
-                .addCredentialOption(googleOption)
-                .build();
-
-            publish(true, "", "Abrindo a seleção da conta Google...");
-            credentialManager.getCredentialAsync(
-                activity,
-                request,
-                new CancellationSignal(),
-                mainExecutor,
-                new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                    @Override public void onResult(GetCredentialResponse response) {
-                        handleCredential(response.getCredential());
-                    }
-
-                    @Override public void onError(GetCredentialException error) {
-                        publish(true, "", "Login cancelado ou indisponível. Tente novamente.");
-                    }
-                }
-            );
-        } catch (Exception e) {
-            publish(true, "", "Não foi possível abrir o login Google.");
-        }
-    }
-
-    private void handleCredential(Credential credential) {
-        if (!(credential instanceof CustomCredential)
-                || !GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-                    .equals(credential.getType())) {
-            publish(true, "", "O Google não retornou uma credencial compatível.");
-            return;
-        }
-
-        try {
-            GoogleIdTokenCredential googleCredential =
-                GoogleIdTokenCredential.createFrom(((CustomCredential) credential).getData());
-            AuthCredential firebaseCredential =
-                GoogleAuthProvider.getCredential(googleCredential.getIdToken(), null);
-
-            auth.signInWithCredential(firebaseCredential)
-                .addOnCompleteListener(activity, task -> {
-                    if (closed) return;
-                    if (!task.isSuccessful()) {
-                        publish(true, "", "Falha ao validar a conta Google. Confira a configuração OAuth.");
-                        return;
-                    }
-                    FirebaseUser user = auth.getCurrentUser();
-                    if (user != null) loadCloudProfile(user);
-                });
-        } catch (Exception e) {
-            publish(true, "", "Não foi possível validar a conta Google.");
-        }
-    }
-
-    private DocumentReference profileDocument(FirebaseUser user) {
-        return firestore.collection(COLLECTION).document(user.getUid());
-    }
-
-    private void loadCloudProfile(FirebaseUser user) {
-        if (closed || user == null) return;
-        publish(true, getUsername(), "Buscando seu progresso salvo na nuvem...");
-
-        profileDocument(user).get()
-            .addOnSuccessListener(activity, snapshot -> {
-                if (closed) return;
-
-                if (snapshot.exists()) {
-                    applyCloudProfile(snapshot);
-                    registerPrefsListener();
-                    publish(true, getUsername(), "Progresso recuperado da nuvem.");
-                } else {
-                    // First Google login: preserve and upload the current local profile.
-                    registerPrefsListener();
-                    publish(true, getUsername(), "Criando seu primeiro salvamento na nuvem...");
-                    saveProfile();
-                }
-            })
-            .addOnFailureListener(activity, error -> {
-                if (!closed) {
-                    publish(true, user.getEmail(),
-                        "Conta conectada, mas não consegui baixar o progresso. Verifique a internet e as regras Firestore.");
-                }
-            });
-    }
-
-    private void applyCloudProfile(DocumentSnapshot snapshot) {
-        Map<String, Object> data = snapshot.getData();
-        if (data == null) return;
-
-        applyingCloud = true;
-        SharedPreferences.Editor editor = prefs.edit();
-
-        for (String key : PROFILE_KEYS) {
-            Object value = data.get(key);
-            if (value == null) continue;
-
-            if (value instanceof String) {
-                editor.putString(key, (String) value);
-            } else if ("xp".equals(key) || "diamonds".equals(key) || "coins".equals(key)
-                    || "daily_reward_day".equals(key) || "missions_day".equals(key)
-                    || "last_match_reward_coins".equals(key)
-                    || "last_match_reward_diamonds".equals(key) || "last_match_reward_xp".equals(key)) {
-                if (value instanceof Number) editor.putLong(key, ((Number) value).longValue());
-            } else if ("mode".equals(key) || "map".equals(key) || "character".equals(key)
-                    || "quality".equals(key) || "look_sensitivity".equals(key)
-                    || "selected_shirt".equals(key) || "selected_boots".equals(key)
-                    || "selected_set".equals(key) || "profile_schema_version".equals(key)
-                    || "sensitivity_general".equals(key) || "sensitivity_aim".equals(key)
-                    || "mission_matches".equals(key) || "mission_eliminations".equals(key)
-                    || "mission_crystals".equals(key) || "royale_spin_count".equals(key)
-                    || "matches_played".equals(key) || "match_wins".equals(key)
-                    || "match_kills".equals(key) || "match_damage".equals(key)
-                    || "match_resources".equals(key) || "last_match_kills".equals(key)
-                    || "last_match_damage".equals(key) || "last_match_resources".equals(key)) {
-                if (value instanceof Number) editor.putInt(key, ((Number) value).intValue());
-            } else if (value instanceof Boolean) {
-                editor.putBoolean(key, (Boolean) value);
-            }
-        }
-
-        editor.commit();
-        applyingCloud = false;
-    }
-
-    private void registerPrefsListener() {
-        if (prefsListenerRegistered || closed) return;
-        prefs.registerOnSharedPreferenceChangeListener(this);
-        prefsListenerRegistered = true;
-    }
-
-    @Override public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        if (closed || applyingCloud || !isSignedIn()) return;
-        for (String allowed : PROFILE_KEYS) {
-            if (allowed.equals(key)) {
-                mainHandler.removeCallbacks(saveRunnable);
-                mainHandler.postDelayed(saveRunnable, 900L);
-                return;
-            }
-        }
-    }
-
-    /** Manually retries a cloud save from the profile page. */
-    public void syncNow() {
-        if (!configured) {
-            publish(false, "", "Falta configurar o Firebase para salvar na nuvem.");
-            return;
-        }
-        if (!isSignedIn()) {
-            publish(configured, "", "Entre com nome e senha para sincronizar seu progresso.");
-            return;
-        }
-        saveProfile();
-    }
-
-    private Map<String, Object> collectProfile() {
-        Map<String, ?> all = prefs.getAll();
-        Map<String, Object> profile = new HashMap<>();
-        profile.put("schemaVersion", 2);
-        for (String key : PROFILE_KEYS) {
-            Object value = all.get(key);
-            if (value instanceof String || value instanceof Number || value instanceof Boolean) {
-                profile.put(key, value);
-            }
-        }
-        return profile;
-    }
-
-    private void saveProfile() {
-        if (closed || !isSignedIn()) return;
-        FirebaseUser user = auth.getCurrentUser();
-        if (user == null) return;
-
-        Map<String, Object> profile = collectProfile();
-        profile.put("username", getUsername());
-        profile.put("displayName", user.getDisplayName() == null ? "" : user.getDisplayName());
-        profile.put("updatedAt", FieldValue.serverTimestamp());
-
-        profileDocument(user).set(profile, SetOptions.merge())
-            .addOnSuccessListener(activity, unused -> {
-                if (!closed) publish(true, getUsername(), "Conta BATTLE UNIVERSE sincronizada.");
-            })
-            .addOnFailureListener(activity, error -> {
-                if (!closed) publish(true, getUsername(),
-                    "Não foi possível enviar o progresso. Ele continua salvo localmente.");
-            });
-    }
-
-    private void publish(boolean ready, String email, String message) {
-        statusMessage = message == null ? "" : message;
-        if (listener == null || closed) return;
-        boolean signed = isSignedIn();
-        String visibleEmail = email == null ? "" : email;
-        mainHandler.post(() -> {
-            if (!closed) listener.onAccountState(ready, signed, visibleEmail, statusMessage);
-        });
-    }
-
-    public void close() {
-        closed = true;
-        mainHandler.removeCallbacks(saveRunnable);
-        if (prefsListenerRegistered) {
-            prefs.unregisterOnSharedPreferenceChangeListener(this);
-            prefsListenerRegistered = false;
-        }
-    }
+    public void close(){closed=true;main.removeCallbacks(saveRunnable);if(listening){prefs.unregisterOnSharedPreferenceChangeListener(this);listening=false;}network.shutdownNow();}
+    private static final class ApiException extends Exception{final int code;ApiException(int c,String m){super(m);code=c;}}
 }
