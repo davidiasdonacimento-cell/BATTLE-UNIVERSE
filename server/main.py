@@ -106,16 +106,6 @@ class ProfileBody(BaseModel):
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
 
-class AdminLoginBody(BaseModel):
-    username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=12, max_length=128)
-
-class AccountEditBody(BaseModel):
-    username: str | None = Field(default=None, min_length=3, max_length=18, pattern=r"^[A-Za-z0-9_]+$")
-    character_name: str | None = Field(default=None, min_length=1, max_length=32)
-    state: str | None = Field(default=None, pattern=r"^(active|suspended)$")
-    reason: str | None = Field(default=None, max_length=240)
-
 class GameSettingsBody(BaseModel):
     game_name: str = Field(min_length=2, max_length=40)
     character_names: dict[str, str] = Field(default_factory=dict)
@@ -190,19 +180,6 @@ def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bea
     if claims.get("role") != "owner" or claims.get("sub") != "owner-device":
         raise HTTPException(403, "Aparelho não autorizado para configurar o jogo.")
     return "owner-device"
-
-def current_admin(credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-                  db: Session = Depends(db_session)) -> AdminUser:
-    claims = token_claims(credentials)
-    if claims.get("role") != "admin":
-        raise HTTPException(403, "Acesso administrativo necessário.")
-    try:
-        admin = db.get(AdminUser, int(claims["sub"]))
-    except (ValueError, TypeError):
-        admin = None
-    if admin is None or not admin.active:
-        raise HTTPException(403, "Administrador inativo.")
-    return admin
 
 @app.get("/health")
 def health() -> dict[str, str]:
@@ -308,118 +285,3 @@ def owner_put_settings(body: GameSettingsBody, db: Session = Depends(db_session)
     db.commit()
     return {"settings": values, "saved": True}
 
-@app.post("/v1/admin/login")
-def admin_login(body: AdminLoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
-    admin = db.scalar(select(AdminUser).where(AdminUser.username == body.username.strip().lower()))
-    if admin is None or not admin.active or not password_hash.verify(body.password, admin.password_hash):
-        raise HTTPException(401, "Credenciais administrativas inválidas.")
-    return {"access_token": issue_token(str(admin.id), admin.username, "admin", ADMIN_TOKEN_MINUTES),
-            "token_type": "bearer", "expires_in": ADMIN_TOKEN_MINUTES * 60,
-            "admin": {"id": admin.id, "username": admin.username}}
-
-@app.get("/v1/admin/overview")
-def admin_overview(db: Session = Depends(db_session), admin: AdminUser = Depends(current_admin)):
-    total = db.scalar(select(func.count(Player.id))) or 0
-    suspended = db.scalar(select(func.count(AccountControl.player_id)).where(AccountControl.state == "suspended")) or 0
-    deleted = db.scalar(select(func.count(AccountControl.player_id)).where(AccountControl.state == "deleted")) or 0
-    return {"accounts_total": total, "accounts_suspended": suspended, "accounts_deleted": deleted,
-            "admin": admin.username}
-
-@app.get("/v1/admin/accounts")
-def admin_accounts(search: str = Query(default="", max_length=40), limit: int = Query(default=50, ge=1, le=100),
-                   offset: int = Query(default=0, ge=0), db: Session = Depends(db_session),
-                   admin: AdminUser = Depends(current_admin)):
-    stmt = select(Player).order_by(Player.id.desc()).limit(limit).offset(offset)
-    if search.strip():
-        stmt = select(Player).where(Player.username.ilike(f"%{search.strip()}%")).order_by(Player.id.desc()).limit(limit).offset(offset)
-    players = db.scalars(stmt).all()
-    rows = []
-    for p in players:
-        ctl = db.get(AccountControl, p.id)
-        rows.append({"id": p.id, "username": p.username, "character_name": (p.profile or {}).get("character_display_name", ""),
-                     "state": ctl.state if ctl else "active", "created_at": p.created_at.isoformat()})
-    return {"accounts": rows, "limit": limit, "offset": offset}
-
-@app.patch("/v1/admin/accounts/{player_id}")
-def admin_edit_account(player_id: int, body: AccountEditBody, db: Session = Depends(db_session),
-                       admin: AdminUser = Depends(current_admin)):
-    player = db.get(Player, player_id)
-    if player is None:
-        raise HTTPException(404, "Conta não encontrada.")
-    changes = {}
-    if body.username is not None:
-        new_name = body.username.lower()
-        conflict = db.scalar(select(Player.id).where(Player.username == new_name, Player.id != player_id))
-        if conflict:
-            raise HTTPException(409, "Esse nickname já está em uso.")
-        changes["username"] = {"from": player.username, "to": new_name}
-        player.username = new_name
-    if body.character_name is not None:
-        profile = dict(player.profile or {})
-        profile["character_display_name"] = body.character_name.strip()
-        player.profile = profile
-        changes["character_name"] = body.character_name.strip()
-    if body.state is not None:
-        control = db.get(AccountControl, player_id) or AccountControl(player_id=player_id)
-        control.state = body.state
-        control.reason = (body.reason or "").strip()
-        control.changed_at = datetime.now(timezone.utc)
-        db.add(control)
-        changes["state"] = body.state
-    player.updated_at = datetime.now(timezone.utc)
-    audit(db, admin.username, "account_update", str(player_id), changes)
-    db.add(player); db.commit(); db.refresh(player)
-    return {"account": {"id": player.id, "username": player.username,
-                        "character_name": (player.profile or {}).get("character_display_name", ""),
-                        "state": body.state or "active"}, "updated": changes}
-
-@app.delete("/v1/admin/accounts/{player_id}")
-def admin_delete_account(player_id: int, db: Session = Depends(db_session),
-                         admin: AdminUser = Depends(current_admin)):
-    player = db.get(Player, player_id)
-    if player is None:
-        raise HTTPException(404, "Conta não encontrada.")
-    control = db.get(AccountControl, player_id) or AccountControl(player_id=player_id)
-    control.state = "deleted"
-    control.reason = "Encerrada pelo administrador"
-    control.changed_at = datetime.now(timezone.utc)
-    player.password_hash = password_hash.hash(secrets.token_urlsafe(48))
-    player.profile = {}
-    audit(db, admin.username, "account_deleted", str(player_id), {"soft_delete": True})
-    db.add(control); db.add(player); db.commit()
-    return {"deleted": True, "player_id": player_id, "mode": "soft_delete"}
-
-@app.get("/v1/admin/settings")
-def get_game_settings(db: Session = Depends(db_session), admin: AdminUser = Depends(current_admin)):
-    rows = db.scalars(select(GameSetting)).all()
-    settings = {row.key: row.value for row in rows}
-    return {"game_name": settings.get("game_name", "BATTLE UNIVERSE"),
-            "character_names": settings.get("character_names", {})}
-
-@app.put("/v1/admin/settings")
-def put_game_settings(body: GameSettingsBody, db: Session = Depends(db_session),
-                      admin: AdminUser = Depends(current_admin)):
-    if len(body.character_names) > 100:
-        raise HTTPException(413, "Limite de nomes de personagens excedido.")
-    clean_names = {}
-    for key, value in body.character_names.items():
-        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,48}", key) or not value.strip() or len(value.strip()) > 32:
-            raise HTTPException(422, "ID ou nome de personagem inválido.")
-        clean_names[key] = value.strip()
-    values = {"game_name": body.game_name.strip(), "character_names": clean_names}
-    for key, value in values.items():
-        row = db.get(GameSetting, key) or GameSetting(key=key, value=value)
-        row.value = value
-        row.updated_at = datetime.now(timezone.utc)
-        db.add(row)
-    audit(db, admin.username, "game_settings_update", "global", values)
-    db.commit()
-    return {"settings": values, "saved": True}
-
-@app.get("/v1/admin/audit")
-def admin_audit(limit: int = Query(default=50, ge=1, le=100), db: Session = Depends(db_session),
-                admin: AdminUser = Depends(current_admin)):
-    rows = db.scalars(select(AdminAudit).order_by(AdminAudit.id.desc()).limit(limit)).all()
-    return {"events": [{"id": r.id, "admin": r.admin_username, "action": r.action,
-                        "target": r.target, "details": r.details, "created_at": r.created_at.isoformat()}
-                       for r in rows]}
