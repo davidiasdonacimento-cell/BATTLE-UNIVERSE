@@ -109,11 +109,11 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         });
     }
 
-    public void spinRoyale(RoyaleListener callback) {
+    public void spinRoyale(String requestId,RoyaleListener callback) {
         if(!isSignedIn()){if(callback!=null)main.post(()->callback.onResult(false,"","",false,0,"Entre na conta para usar o Royale online."));return;}
         network.execute(()->{
             try {
-                JSONObject body=new JSONObject();body.put("request_id",UUID.randomUUID().toString());
+                JSONObject body=new JSONObject();body.put("request_id",requestId==null||requestId.isEmpty()?UUID.randomUUID().toString():requestId);
                 JSONObject result=request("POST","/v1/royale/spin",body,session.getToken());
                 boolean duplicate=result.optBoolean("duplicate",false);
                 String prizeId=result.optString("prize_id","");
