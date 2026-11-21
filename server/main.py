@@ -484,7 +484,8 @@ def migrate_legacy_wallet_once(db: Session, player: Player, wallet: PlayerWallet
 
 @app.get("/v1/accounts/me/wallet")
 def get_wallet(db: Session = Depends(db_session), player: Player = Depends(current_player)):
-    wallet = db.get(PlayerWallet, player.id)
+    wallet = db.scalar(select(PlayerWallet).where(
+        PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
         db.add(wallet)
