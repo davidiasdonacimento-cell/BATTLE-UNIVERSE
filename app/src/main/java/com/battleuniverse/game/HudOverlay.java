@@ -27,7 +27,7 @@ import java.util.UUID;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18, DEV_MENU=19;
+        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18, DEV_MENU=19, ONLINE_LOBBY=20;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "COFRE","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
@@ -74,6 +74,14 @@ public final class HudOverlay extends View {
     private boolean music=true, effects=true, forwarding, resultSpectating;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
     private boolean onlineMode, tacticalMapVisible;
+    public interface MultiplayerQueueAction {
+        void joinQueue(int mode, int mapId);
+        void cancelQueue();
+    }
+    private MultiplayerQueueAction multiplayerQueueAction;
+    private JSONObject multiplayerState = new JSONObject();
+    private String multiplayerMessage = "Entre na fila para encontrar uma partida.";
+    private boolean multiplayerMatched;
     private float scale=1, offsetX, offsetY;
     private String toast="";
     public interface UsernameAccountAction {
@@ -292,6 +300,7 @@ public final class HudOverlay extends View {
         else if(page==MAIL)drawMailPage(c);
         else if(page==ACHIEVEMENTS)drawAchievementsPage(c);
         else if(page==PREMATCH)drawPreMatch(c);
+        else if(page==ONLINE_LOBBY)drawOnlineLobby(c);
         else if(page==DEV_MENU)drawDevMenu(c);
     }
     private void drawHome(Canvas c){
@@ -435,6 +444,60 @@ public final class HudOverlay extends View {
         pill(c,1038,572,150,25,"SERVIDOR: LOCAL",0x553A6B7C,0xFFB9E8EF);
         pill(c,270,636,170,34,"VOLTAR AO LOBBY",0x553B6172,0xFFBBD0D9);
         gradientButton(c,862,636,350,34,"INICIAR PARTIDA","CARREGAR AVIÃO E MAPA",0xFFFFB45E,0xFFE97543);
+    }
+    private void drawOnlineLobby(Canvas c) {
+        eyebrow(c,270,145,"BATTLE UNIVERSE • MATCHMAKING ONLINE");
+        title(c,"LOBBY DA PARTIDA",270,190);
+        subtitle(c,"Sala autenticada • dados recebidos diretamente da API de partidas.",270,218);
+        panel(c,270,238,942,380,0xC9162938,0x557AA9BC,18);
+        String state = multiplayerState.optString("state", "queued");
+        boolean found = "matched".equals(state) || multiplayerState.has("match_id");
+        int humans = multiplayerState.optInt("human_count", 0);
+        int bots = multiplayerState.optInt("bot_count", 0);
+        int remaining = multiplayerState.optInt("remaining_seconds", 30);
+        panel(c,292,260,898,74,0xAA123D4A,0x6654DCE5,13);
+        text(c,found?"PARTIDA ENCONTRADA":"PROCURANDO JOGADORES",316,289,16,Color.WHITE,
+            Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,multiplayerMessage,316,313,10,0xFFB9DCE5,Typeface.DEFAULT_BOLD);
+        pill(c,1000,278,166,28,found?"SALA CONFIRMADA":"BUSCA • "+remaining+"s",
+            found?0xFF176A75:0xFF78512B,Color.WHITE);
+        JSONObject match = multiplayerState.optJSONObject("match");
+        JSONObject root = found && match != null ? match : multiplayerState;
+        org.json.JSONArray roster = root.optJSONArray("roster");
+        if (roster == null) roster = multiplayerState.optJSONArray("roster");
+        if (roster == null) roster = new org.json.JSONArray();
+        if (found) {
+            humans = root.optInt("human_count", humans);
+            bots = root.optInt("bot_count", bots);
+        } else {
+            humans = root.optInt("human_players_searching", humans);
+        }
+        text(c,"HUMANOS: "+humans+"   •   BOTS IA: "+bots+"   •   LIMITE: 30",300,365,11,
+            0xFF72DCE6,Typeface.DEFAULT_BOLD);
+        for(int i=0;i<30;i++) {
+            int col=i%6,row=i/6;
+            float x=300+col*145f,y=382+row*42f;
+            if(i<roster.length()) {
+                JSONObject player=roster.optJSONObject(i);
+                if(player==null)player=new JSONObject();
+                boolean bot=player.optBoolean("is_bot",false);
+                boolean connected=player.optBoolean("connected",true);
+                panel(c,x,y,134,34,bot?0x664B3825:0x66304455,
+                    bot?0x668B7046:0x335D8495,8);
+                String name=player.optString("name",bot?"IA":"JOGADOR");
+                if(name.length()>14)name=name.substring(0,14);
+                text(c,(bot?"IA • ":"● ")+name,x+8,y+14,8.2f,
+                    bot?0xFFFFD18A:(connected?0xFFB9E8EF:0xFFFFA0A0),Typeface.DEFAULT_BOLD);
+                text(c,"EQUIPE "+(player.optInt("team_id",0)+1),x+8,y+27,7,0xFF91AEBB,Typeface.DEFAULT);
+            } else {
+                panel(c,x,y,134,34,0x33243B4D,0x224F7182,8);
+                text(c,"VAGA DISPONÍVEL",x+8,y+21,7.5f,0xFF718B99,Typeface.DEFAULT_BOLD);
+            }
+        }
+        text(c,found?"A API confirmou a sala e sua lista de participantes.":"A API procura humanos por até 30 segundos antes de criar bots.",
+            300,600,9,0xFF9DB6C5,Typeface.DEFAULT);
+        pill(c,270,636,190,34,"VOLTAR AO LOBBY",0x553B6172,0xFFBBD0D9);
+        pill(c,1010,636,202,34,"CANCELAR / SAIR",0xFF713D3D,Color.WHITE);
     }
     private void beginOfflineMatch(){
         ensureDailyMissionWindow();
@@ -1608,13 +1671,19 @@ public final class HudOverlay extends View {
             }
             if(hit(x,y,180,462,124,31)){
                 onlineMode=true;prefs.edit().putBoolean("online_mode",true).apply();
-                toast("ONLINE AINDA PRECISA DE UM SERVIDOR DE PARTIDAS.");return;
+                toast("ONLINE SELECIONADO. A fila usa sua sessão da conta.");return;
             }
             if(hit(x,y,44,238,260,68)){page=MODES_PAGE;return;}
             if(hit(x,y,44,352,260,68)){page=MAPS_PAGE;return;}
             if(hit(x,y,44,512,260,66)){
                 if(onlineMode){
-                    toast("ONLINE INDISPONÍVEL: SERVIDOR MULTIPLAYER AINDA NÃO CONFIGURADO. SELECIONE OFFLINE.");
+                    if(mode==3){toast("TREINAMENTO NÃO POSSUI FILA ONLINE.");return;}
+                    if(multiplayerQueueAction==null){toast("API de partidas não conectada neste aparelho.");return;}
+                    multiplayerState=new JSONObject();
+                    multiplayerMatched=false;
+                    multiplayerMessage="Conectando à API autenticada...";
+                    page=ONLINE_LOBBY;
+                    multiplayerQueueAction.joinQueue(mode,map);
                     return;
                 }
                 page=PREMATCH;return;
@@ -1627,6 +1696,9 @@ public final class HudOverlay extends View {
         }else if(page==PREMATCH){
             if(hit(x,y,270,636,170,34)){page=HOME;return;}
             if(hit(x,y,862,636,350,34)){beginOfflineMatch();return;}
+        }else if(page==ONLINE_LOBBY){
+            if(hit(x,y,270,636,190,34)){if(multiplayerQueueAction!=null)multiplayerQueueAction.cancelQueue();page=HOME;return;}
+            if(hit(x,y,1010,636,202,34)){if(multiplayerQueueAction!=null)multiplayerQueueAction.cancelQueue();page=HOME;return;}
         }else if(page==CHARACTERS){
             for(int i=0;i<4;i++)if(hit(x,y,282,320+i*72f,166,62)){
                 character=i;game.setCharacter(i);prefs.edit().putInt("character",i).apply();
@@ -1885,6 +1957,16 @@ public final class HudOverlay extends View {
         usernameAccountAction=authAction;
         accountSyncAction=syncAction;
         accountSignOutAction=signOutAction;
+    }
+    public void setMultiplayerQueueAction(MultiplayerQueueAction action) {
+        multiplayerQueueAction=action;
+    }
+    public void onMultiplayerQueueUpdate(JSONObject state, String message) {
+        multiplayerState=state==null?new JSONObject():state;
+        multiplayerMessage=message==null?"":message;
+        multiplayerMatched="matched".equals(multiplayerState.optString("state"))
+            ||multiplayerState.has("match_id")&&multiplayerState.optJSONArray("roster")!=null;
+        invalidate();
     }
     public void setGoogleAccountStatus(boolean configured, boolean signedIn,
                                        String username, String message) {
