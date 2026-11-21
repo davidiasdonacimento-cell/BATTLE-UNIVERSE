@@ -51,7 +51,7 @@ public final class GameSurfaceView extends GLSurfaceView {
         queueEvent(()->nativeSetMap(mapId));
     }
     public void setMatchMode(int id) {
-        matchMode=Math.max(0,Math.min(3,id));
+        matchMode=Math.max(0,Math.min(4,id));
         queueEvent(()->nativeSetMode(matchMode));
     }
     public void setQuality(int value) {
