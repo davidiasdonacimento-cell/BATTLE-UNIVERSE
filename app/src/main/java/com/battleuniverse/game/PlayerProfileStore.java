@@ -49,6 +49,62 @@ public final class PlayerProfileStore {
     public int getLevel() { return (int) Math.min(30L, 1L + getXp() / 500L); }
     public long getLevelProgress() { return getXp() % 500L; }
 
+    public int getMatchesPlayed() { return Math.max(0, prefs.getInt("matches_played", 0)); }
+    public int getWins() { return Math.max(0, prefs.getInt("match_wins", 0)); }
+    public int getEliminations() { return Math.max(0, prefs.getInt("match_kills", 0)); }
+
+    /** Records one completed local match and its statistics once per session ID. */
+    public boolean recordMatch(String matchId, boolean victory, int eliminations,
+                               int damage, int resources) {
+        if (matchId == null || matchId.trim().isEmpty()) return false;
+        synchronized (LOCK) {
+            String safeId = safeKey(matchId);
+            String marker = "match_stats_tx_" + safeId;
+            if (prefs.getBoolean(marker, false) || containsMatchHistoryId(safeId)) return false;
+            int kills = Math.max(0, eliminations);
+            int dealt = Math.max(0, damage);
+            int collected = Math.max(0, resources);
+            SharedPreferences.Editor edit = prefs.edit()
+                    .putInt("matches_played", getMatchesPlayed() + 1)
+                    .putInt("match_wins", getWins() + (victory ? 1 : 0))
+                    .putInt("match_kills", getEliminations() + kills)
+                    .putInt("match_damage", Math.max(0, prefs.getInt("match_damage", 0)) + dealt)
+                    .putInt("match_resources", Math.max(0, prefs.getInt("match_resources", 0)) + collected)
+                    .putInt("last_match_kills", kills)
+                    .putInt("last_match_damage", dealt)
+                    .putInt("last_match_resources", collected)
+                    .putString("last_match_result", victory ? "VITÓRIA" : "ELIMINAÇÃO")
+                    .putBoolean(marker, true);
+            appendMatchHistory(edit, safeId, victory, kills, dealt, collected);
+            return edit.commit();
+        }
+    }
+
+    private boolean containsMatchHistoryId(String id) {
+        String history = prefs.getString("match_history", "");
+        if (history.isEmpty()) return false;
+        String prefix = id + "|";
+        for (String row : history.split("\\n")) if (row.startsWith(prefix)) return true;
+        return false;
+    }
+
+    private void appendMatchHistory(SharedPreferences.Editor edit, String id, boolean victory,
+                                    int kills, int damage, int resources) {
+        String old = prefs.getString("match_history", "");
+        String[] rows = old.isEmpty() ? new String[0] : old.split("\\n");
+        StringBuilder next = new StringBuilder();
+        int start = Math.max(0, rows.length - 29);
+        for (int i = start; i < rows.length; i++) {
+            if (rows[i].isEmpty()) continue;
+            if (next.length() > 0) next.append('\n');
+            next.append(rows[i]);
+        }
+        if (next.length() > 0) next.append('\n');
+        next.append(id).append('|').append(victory ? "W" : "L").append('|')
+                .append(kills).append('|').append(damage).append('|').append(resources);
+        edit.putString("match_history", next.toString());
+    }
+
     /** Atomically grants a local reward once, updating wallet, XP and claim marker together. */
     public boolean claimOnce(String transactionId, String legacyMarker,
                              long coins, long diamonds, long xp) {
