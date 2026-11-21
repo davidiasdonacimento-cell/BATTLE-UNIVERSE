@@ -229,7 +229,7 @@ A fase permanece em desenvolvimento até build Android, testes automatizados, te
 ## Armazenamento persistente do pacote Season 02 — 2026-11-21
 - O instalador Android salva o ZIP verificado em `Downloads/Battle Universe/battle-universe-season-02-pack.zip` no Android 10+ usando MediaStore, sem pedir permissão ampla de armazenamento.
 - Antes de iniciar outro download, procura o arquivo salvo, confere tamanho e SHA-256 com o manifesto remoto e reutiliza o ZIP válido para extrair novamente.
-- O ZIP não é apagado depois da instalação; permanece disponível no armazenamento compartilhado para futuras reinstalações/atualizações. A cópia de trabalho privada continua sendo usada para extração segura e instalação atômica.
+- O ZIP não é apagado depois da instalação; permanece disponível no armazenamento compartilhado para futuras reinstalações/atualizações. A cópia de trabalho privada continua sendo usada para extração segura e instalação atômica e é apagada após o sucesso; a cópia compartilhada permanece. O cálculo de espaço livre considera o ZIP privado, o ZIP salvo e até 3 GiB de conteúdo extraído.
 - Se o arquivo público não existir ou falhar na integridade, o instalador baixa uma nova cópia e substitui o arquivo salvo.
 - Em Android 7–9, a cópia fica no diretório externo específico do aplicativo, sem permissão ampla.
-- Estado: código publicado nos commits `1903fef` e `7c7ce21`; compilação Android e teste físico ainda pendentes. Não declarar a função validada no aparelho até concluir esses testes.
+- Estado: código publicado nos commits `1903fef`, `7c7ce21`, `af92026` e `6e51c0c`; compilação Android e teste físico ainda pendentes. Não declarar a função validada no aparelho até concluir esses testes.
