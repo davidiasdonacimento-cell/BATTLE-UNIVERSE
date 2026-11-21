@@ -8,7 +8,7 @@ import java.util.Arrays;
 public final class GameSurfaceView extends GLSurfaceView {
     private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64, CROUCH=128, KIT=256;
     private volatile float moveX,moveY,lookDX,lookDY;
-    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1;
+    private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1,duelWeapon=1;
     private volatile float lookSensitivity=1.0f,aimSensitivity=1.0f;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile int shirtStyle,bootStyle,setStyle,pantsStyle;
@@ -51,8 +51,14 @@ public final class GameSurfaceView extends GLSurfaceView {
         queueEvent(()->nativeSetMap(mapId));
     }
     public void setMatchMode(int id) {
-        matchMode=Math.max(0,Math.min(3,id));
+        matchMode=Math.max(0,Math.min(4,id));
+        if(matchMode!=3)trainingGodMode=false;
         queueEvent(()->nativeSetMode(matchMode));
+        if(matchMode!=3)queueEvent(()->nativeSetGodMode(false));
+    }
+    public void setDuelWeapon(int id) {
+        duelWeapon=Math.max(0,Math.min(3,id));
+        queueEvent(()->nativeSetDuelWeapon(duelWeapon));
     }
     public void setQuality(int value) {
         quality=Math.max(0,Math.min(2,value));
@@ -253,6 +259,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetCharacter(int id);
     private static native void nativeSetMap(int id);
     private static native void nativeSetMode(int id);
+    private static native void nativeSetDuelWeapon(int id);
     private static native void nativeSetGodMode(boolean enabled);
     private static native void nativeSetQuality(int value);
     private static native void nativeSetLookSensitivity(float general,float aiming);
@@ -276,6 +283,7 @@ public final class GameSurfaceView extends GLSurfaceView {
                 javax.microedition.khronos.egl.EGLConfig config) {
             nativeInit();
             nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
+            nativeSetDuelWeapon(duelWeapon);
             nativeSetGodMode(trainingGodMode);
             nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
             nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
