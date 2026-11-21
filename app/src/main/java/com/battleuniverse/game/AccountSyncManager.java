@@ -350,7 +350,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private Map<String, Object> collectProfile() {
         Map<String, ?> all = prefs.getAll();
         Map<String, Object> profile = new HashMap<>();
-        profile.put("schemaVersion", 1);
+        profile.put("schemaVersion", 2);
         for (String key : PROFILE_KEYS) {
             Object value = all.get(key);
             if (value instanceof String || value instanceof Number || value instanceof Boolean) {
