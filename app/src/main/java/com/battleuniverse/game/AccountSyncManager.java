@@ -3,6 +3,9 @@ import android.app.Activity;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
+import android.provider.Settings;
+import android.content.Context;
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -10,6 +13,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -17,7 +21,11 @@ import java.util.concurrent.Executors;
 
 /** Native Android client for the BATTLE UNIVERSE FastAPI/PostgreSQL account service. */
 public final class AccountSyncManager implements SharedPreferences.OnSharedPreferenceChangeListener {
-    public interface Listener{void onAccountState(boolean serverConfigured,boolean signedIn,String username,String message);}
+    public interface Listener {
+        void onAccountState(boolean serverConfigured,boolean signedIn,String username,String message);
+        default void onDeviceIdentity(String deviceCode) {}
+        default void onRecoveryCode(String recoveryCode) {}
+    }
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
         "invert_camera_y","show_minimap","haptics","selected_mode","selected_map","selected_character",
@@ -28,6 +36,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name"
     };
     private final SharedPreferences prefs;
+    private final Context appContext;
     private final Listener listener;
     private final AccountSessionStore session;
     private final Handler main=new Handler(Looper.getMainLooper());
@@ -38,7 +47,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private boolean listening,applying;
     private String status="";
     public AccountSyncManager(Activity activity,SharedPreferences prefs,Listener listener){
-        this.prefs=prefs;this.listener=listener;session=new AccountSessionStore(activity);
+        this.prefs=prefs;this.listener=listener;this.appContext=activity.getApplicationContext();session=new AccountSessionStore(activity);
         String url=BuildConfig.ACCOUNT_API_BASE_URL==null?"":BuildConfig.ACCOUNT_API_BASE_URL.trim();
         while(url.endsWith("/"))url=url.substring(0,url.length()-1);baseUrl=url;
         publish(isConfigured(),isSignedIn(),getUsername(),isConfigured()?"Servidor de contas configurado.":"Servidor ainda não configurado neste APK.");
@@ -53,7 +62,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             JSONObject r=request("GET","/v1/accounts/me",null,session.getToken()),p=r.optJSONObject("player");
             if(p==null)throw new ApiException(502,"Resposta inválida do servidor.");
             String name=p.optString("username",getUsername());session.save(session.getToken(),name,session.getExpiresAt());
-            applyProfile(p.optJSONObject("profile"));syncGameSettings(session.getToken());registerListener();publish(true,true,name,"Login restaurado automaticamente.");
+            applyProfile(p.optJSONObject("profile"));syncGameSettings(session.getToken());registerListener();registerDevice(session.getToken());publish(true,true,name,"Login restaurado automaticamente.");
         }catch(ApiException e){if(e.code==401)session.clear();publish(true,false,"",e.code==401?"Sessão expirada. Entre novamente.":e.getMessage());
         }catch(Exception e){publish(true,true,getUsername(),"Servidor indisponível. Sessão mantida neste aparelho; tente novamente com internet.");}});
     }
@@ -70,12 +79,92 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             String token=r.optString("access_token","");int seconds=r.optInt("expires_in",0);JSONObject player=r.optJSONObject("player");
             if(token.isEmpty()||seconds<=0||player==null)throw new ApiException(502,"Sessão inválida retornada pelo servidor.");
             session.save(token,player.optString("username",name),System.currentTimeMillis()/1000L+seconds);
-            applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();
+            applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();registerDevice(token);
             publish(true,true,name,create?"Conta criada e sessão protegida neste aparelho.":"Login realizado; sessão salva para atualizações.");
             if(create)saveProfile();
         }catch(ApiException e){publish(true,isSignedIn(),getUsername(),e.getMessage());}
         catch(Exception e){publish(true,isSignedIn(),getUsername(),"Não foi possível conectar. Verifique a internet.");}});
     }
+    public String getDeviceCode() {
+        return prefs.getString("server_device_code", "");
+    }
+
+    private String stableInstallId() throws Exception {
+        String androidId=Settings.Secure.getString(appContext.getContentResolver(),Settings.Secure.ANDROID_ID);
+        if(androidId==null||androidId.trim().isEmpty())throw new Exception("Identificador Android indisponível.");
+        String material=appContext.getPackageName()+"|"+androidId+"|BATTLE_UNIVERSE_DEVICE_V1";
+        byte[] digest=MessageDigest.getInstance("SHA-256").digest(material.getBytes(StandardCharsets.UTF_8));
+        StringBuilder out=new StringBuilder();
+        for(byte value:digest)out.append(String.format(Locale.US,"%02x",value&0xff));
+        return out.toString();
+    }
+
+    private void registerDevice(String token) {
+        if(closed||token==null||token.isEmpty())return;
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();
+                body.put("install_id",stableInstallId());
+                String label=(Build.MANUFACTURER+" "+Build.MODEL).trim();
+                if(label.length()>40)label=label.substring(0,40);
+                body.put("device_label",label.isEmpty()?"Android":label);
+                JSONObject result=request("POST","/v1/accounts/me/devices/register",body,token);
+                String code=result.optString("device_id","");
+                if(!code.isEmpty()){
+                    prefs.edit().putString("server_device_code",code).apply();
+                    if(listener!=null)main.post(()->{if(!closed)listener.onDeviceIdentity(code);});
+                }
+            } catch(Exception ignored) {
+                // Device registration is retried on the next authenticated launch.
+            }
+        });
+    }
+
+    public void rotateRecoveryCode() {
+        if(!isSignedIn()){publish(isConfigured(),false,"","Entre na conta para gerar um código de recuperação.");return;}
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();body.put("confirm",true);
+                JSONObject result=request("POST","/v1/accounts/me/recovery-code/rotate",body,session.getToken());
+                String code=result.optString("recovery_code","");
+                if(code.isEmpty())throw new ApiException(502,"O servidor não retornou o código de recuperação.");
+                if(listener!=null)main.post(()->{if(!closed)listener.onRecoveryCode(code);});
+                publish(true,true,getUsername(),"Código novo gerado. Guarde-o agora; o anterior foi invalidado.");
+            } catch(Exception e) {
+                publish(true,isSignedIn(),getUsername(),"Não foi possível gerar o código de recuperação. Tente novamente.");
+            }
+        });
+    }
+
+    public void recoverAccount(String rawUsername,String recoveryCode) {
+        String name=rawUsername==null?"":rawUsername.trim().toLowerCase(Locale.ROOT);
+        String code=recoveryCode==null?"":recoveryCode.trim();
+        if(!isConfigured()){publish(false,false,"","Servidor de contas não configurado.");return;}
+        if(!name.matches("[a-z0-9_]{3,18}")||code.length()<20||code.length()>80){
+            publish(true,false,"","Nickname ou código de recuperação inválido.");return;
+        }
+        publish(true,false,name,"Validando código de recuperação...");
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();body.put("username",name);body.put("recovery_code",code);
+                JSONObject result=request("POST","/v1/accounts/recover",body,null);
+                String token=result.optString("access_token","");int seconds=result.optInt("expires_in",0);
+                JSONObject player=result.optJSONObject("player");
+                String replacement=result.optString("new_recovery_code","");
+                if(token.isEmpty()||seconds<=0||player==null||replacement.isEmpty())
+                    throw new ApiException(502,"Resposta de recuperação incompleta.");
+                session.save(token,player.optString("username",name),System.currentTimeMillis()/1000L+seconds);
+                applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();registerDevice(token);
+                if(listener!=null)main.post(()->{if(!closed)listener.onRecoveryCode(replacement);});
+                publish(true,true,name,"Conta recuperada. Salve o novo código de recuperação.");
+            } catch(ApiException e) {
+                publish(true,false,"",e.getMessage());
+            } catch(Exception e) {
+                publish(true,false,"","Falha ao recuperar a conta. Verifique a conexão e tente novamente.");
+            }
+        });
+    }
+
     private void syncGameSettings(String token) {
         try {
             JSONObject data=request("GET","/v1/game/settings",null,token);
