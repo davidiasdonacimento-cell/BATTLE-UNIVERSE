@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -52,6 +53,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private final Runnable saveRunnable=this::saveProfile;
     private final String baseUrl;
     private volatile boolean closed;
+    private final AtomicBoolean recoveryBusy=new AtomicBoolean(false);
     private boolean listening,applying;
     private String status="";
     public AccountSyncManager(Activity activity,SharedPreferences prefs,Listener listener){
@@ -183,6 +185,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
 
     public void rotateRecoveryCode() {
         if(!isSignedIn()){publish(isConfigured(),false,"","Entre na conta para gerar um código de recuperação.");return;}
+        if(!recoveryBusy.compareAndSet(false,true))return;
         network.execute(()->{
             try {
                 JSONObject body=new JSONObject();body.put("confirm",true);
@@ -193,6 +196,8 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 publish(true,true,getUsername(),"Código novo gerado. Guarde-o agora; o anterior foi invalidado.");
             } catch(Exception e) {
                 publish(true,isSignedIn(),getUsername(),"Não foi possível gerar o código de recuperação. Tente novamente.");
+            } finally {
+                recoveryBusy.set(false);
             }
         });
     }
@@ -204,6 +209,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         if(!name.matches("[a-z0-9_]{3,18}")||code.length()<20||code.length()>80){
             publish(true,false,"","Nickname ou código de recuperação inválido.");return;
         }
+        if(!recoveryBusy.compareAndSet(false,true))return;
         publish(true,false,name,"Validando código de recuperação...");
         network.execute(()->{
             try {
@@ -222,6 +228,8 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 publish(true,false,"",e.getMessage());
             } catch(Exception e) {
                 publish(true,false,"","Falha ao recuperar a conta. Verifique a conexão e tente novamente.");
+            } finally {
+                recoveryBusy.set(false);
             }
         });
     }
