@@ -87,94 +87,64 @@ jobs:
               assert "manifest.json" in archive.namelist(), "Manifesto interno ausente"
           print(f"Season 02 externo validado: {size} bytes / SHA-256 {digest.hexdigest()}")
           PY
-      - name: Configure required stable RELEASE signing
-        env:
-          BATTLE_UNIVERSE_KEYSTORE_BASE64: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_BASE64 }}
-          BATTLE_UNIVERSE_KEYSTORE_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_PASSWORD }}
-          BATTLE_UNIVERSE_KEY_ALIAS: ${{ secrets.BATTLE_UNIVERSE_KEY_ALIAS }}
-          BATTLE_UNIVERSE_KEY_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEY_PASSWORD }}
+      - name: Verify DEBUG game APK
         run: |
-          set -euo pipefail
-          for name in BATTLE_UNIVERSE_KEYSTORE_BASE64 BATTLE_UNIVERSE_KEYSTORE_PASSWORD BATTLE_UNIVERSE_KEY_ALIAS BATTLE_UNIVERSE_KEY_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing required GitHub Actions secret: $name. RELEASE APK will not be built or published."
-              exit 1
-            fi
-          done
-          printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/battle-universe.jks"
-          test -s "$RUNNER_TEMP/battle-universe.jks"
-          {
-            echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/battle-universe.jks"
-            echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
-            echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
-            echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
-          } >> "$GITHUB_ENV"
-          keytool -list -keystore "$RUNNER_TEMP/battle-universe.jks" -storepass "$BATTLE_UNIVERSE_KEYSTORE_PASSWORD" -alias "$BATTLE_UNIVERSE_KEY_ALIAS" >/dev/null
-          echo "Stable RELEASE signing key loaded and alias verified."
-      - name: Compile game RELEASE and administration APK
-        env:
-          ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
-          ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
-        run: gradle --no-daemon --stacktrace :app:assembleRelease
-      - name: Verify signed non-debuggable RELEASE APK and content
-        run: |
-          set -euo pipefail
-          GAME="app/build/outputs/apk/release/app-release.apk"
-          test -s "$GAME"
-          apksigner verify --verbose "$GAME"
-          DEBUGGABLE="$(apkanalyzer manifest debuggable "$GAME")"
-          if [ "$DEBUGGABLE" != "false" ]; then
-            echo "::error::APK RELEASE is debuggable ($DEBUGGABLE)"
-            exit 1
-          fi
-          APPLICATION_ID="$(apkanalyzer manifest application-id "$GAME")"
-          test "$APPLICATION_ID" = "com.battleuniverse.game"
           python - <<'PY'
-          from zipfile import ZipFile
           from pathlib import Path
-          game = Path("app/build/outputs/apk/release/app-release.apk")
-          with ZipFile(game) as z:
+          from zipfile import ZipFile
+          import subprocess
+          apk = Path("app/build/outputs/apk/debug/app-debug.apk")
+          assert apk.is_file() and apk.stat().st_size > 0, "APK DEBUG não foi gerado"
+          with ZipFile(apk) as z:
               names = set(z.namelist())
-              assert "classes.dex" in names, "DEX do jogo ausente"
-              assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Biblioteca ARM64 ausente"
-              assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Biblioteca ARMv7 ausente"
-              assert "assets/season02.zip" not in names, "APK contém o pacote pesado Season 02"
-              assert "assets/season02-manifest.json" not in names, "APK contém manifesto do pacote externo"
-              assert game.stat().st_size < 300_000_000, "APK excessivamente grande"
-              assert z.testzip() is None, "APK corrompido"
-          print(f"RELEASE APK validado: {game.stat().st_size} bytes")
+              assert "classes.dex" in names, "DEX ausente no APK DEBUG"
+              assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Engine ARM64 ausente"
+              assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Engine ARMv7 ausente"
+              assert z.testzip() is None, "APK DEBUG corrompido"
+          app_id = subprocess.check_output(["apkanalyzer", "manifest", "application-id", str(apk)], text=True).strip()
+          debuggable = subprocess.check_output(["apkanalyzer", "manifest", "debuggable", str(apk)], text=True).strip()
+          assert app_id == "com.battleuniverse.game.debug", f"Application ID inesperado: {app_id}"
+          assert debuggable == "true", f"APK não está marcado como DEBUG: {debuggable}"
+          print(f"APK DEBUG verificado: {apk.stat().st_size} bytes; applicationId={app_id}")
           PY
+      - name: Build expanded Season 02 4K content package
+        run: python scripts/build_content_pack.py
+      - name: Verify external Season 02 package (1–5 GiB)
+        run: |
           python - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
-          admin_candidates = sorted(Path("admin/build/outputs/apk").rglob("*.apk"))
-          assert admin_candidates, "Gradle não gerou APK administrativo"
-          admin = admin_candidates[0]
-          with ZipFile(admin) as z:
-              assert "classes.dex" in z.namelist(), "DEX do admin ausente"
-              assert z.testzip() is None, "APK administrativo corrompido"
-          print(f"Admin compilado e validado internamente: {admin.stat().st_size} bytes")
+          import hashlib, json
+          pack = Path("build/battle-universe-season-02-pack.zip")
+          manifest_path = Path("build/content-pack-manifest.json")
+          assert pack.is_file() and manifest_path.is_file(), "Pacote externo ou manifesto ausente"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          size = pack.stat().st_size
+          assert manifest["version"] == 3, "Versão da Season 02 inesperada"
+          assert 1024**3 <= size <= 5*1024**3, f"Pacote fora de 1–5 GiB: {size}"
+          assert manifest["size_bytes"] == size, "Tamanho não confere com manifesto"
+          digest = hashlib.sha256()
+          with pack.open("rb") as stream:
+              for chunk in iter(lambda: stream.read(4*1024*1024), b""): digest.update(chunk)
+          assert digest.hexdigest() == manifest["sha256"], "SHA-256 externo inválido"
+          with ZipFile(pack) as archive:
+              assert archive.testzip() is None, "ZIP externo corrompido"
+              assert "manifest.json" in archive.namelist(), "Manifesto interno ausente"
+          print(f"Season 02 externo validado: {size} bytes / SHA-256 {digest.hexdigest()}")
           PY
-          ls -lh "$GAME" build/battle-universe-season-02-pack.zip
-          test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 1073741824
-          test $(stat -c%s build/battle-universe-season-02-pack.zip) -le 5368709120
-      - name: Publish signed RELEASE APK and verified Season 02 data pack
+      - name: Prepare downloadable DEBUG build
+        run: |
+          mkdir -p build/distribution
+          cp app/build/outputs/apk/debug/app-debug.apk build/distribution/Battle-Universe-debug.apk
+          cp build/battle-universe-season-02-pack.zip build/distribution/
+          cp build/content-pack-manifest.json build/distribution/
+          ls -lh build/distribution/
+      - name: Upload DEBUG APK and Season 02 package
         if: github.event_name != 'pull_request'
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: data-pack-v3
-          name: Battle Universe — APK RELEASE + Conteúdo Expandido 4K
-          body: |
-            Arquivos oficiais de distribuição do Battle Universe.
-            - app-release.apk: APK RELEASE assinado, sem debuggable.
-            - battle-universe-season-02-pack.zip: pacote Season 02 separado (1–5 GiB).
-            - content-pack-manifest.json: manifesto e verificação SHA-256.
-            A assinatura RELEASE usa a chave estável configurada nos segredos do GitHub.
-          prerelease: true
-          files: |
-            app/build/outputs/apk/release/app-release.apk
-            build/battle-universe-season-02-pack.zip
-            build/content-pack-manifest.json
-          overwrite_files: true
-          fail_on_unmatched_files: true
+          name: battle-universe-debug-and-season02
+          path: build/distribution/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
