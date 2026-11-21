@@ -1711,7 +1711,7 @@ void firePulse() {
     }
     if(hitTarget<0&&hitBot<0) {
         const char* names[]={"DESERT EAGLE","MINI UZI","XM8","UMP"};
-        std::ostringstream out;out<<names[std::clamp(gWeaponType,0,6)]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
+        std::ostringstream out;out<<names[std::clamp(gWeaponType,0,3)]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
         setStatus(out.str());
     }
 }
@@ -2180,7 +2180,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         if(lootIndex>=0) {
             GroundLoot& loot=gGroundLoot[static_cast<size_t>(lootIndex)];
-            const size_t type=static_cast<size_t>(std::clamp(loot.weaponType,0,6));
+            const size_t type=static_cast<size_t>(std::clamp(loot.weaponType,0,3));
             if(loot.kind==2) {
                 if(gMedkits>=3)setStatus("LIMITE DE KITS MÉDICOS ATINGIDO");
                 else {++gMedkits;setStatus("KIT MÉDICO COLETADO • "+std::to_string(gMedkits)+" DISPONÍVEIS");loot.active=false;}
