@@ -1,0 +1,47 @@
+import os
+import re
+import sys
+import unittest
+from pathlib import Path
+
+os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://test:test@127.0.0.1:5432/battle_universe_test")
+os.environ.setdefault("JWT_SECRET", "test-only-secret-that-is-long-enough-for-unit-tests")
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import main
+
+
+class AccountIdentityTests(unittest.TestCase):
+    def test_recovery_code_has_128_bits_and_human_grouping(self):
+        code = main.new_recovery_code()
+        self.assertRegex(code, r"^[A-F0-9]{8}(-[A-F0-9]{8}){3}$")
+        self.assertEqual(len(main.recovery_digest(code)), 64)
+
+    def test_recovery_digest_ignores_group_separators_and_case(self):
+        code = "A1B2C3D4-E5F60718-192A3B4C-5D6E7F80"
+        compact = code.replace("-", "").lower()
+        self.assertEqual(main.recovery_digest(code), main.recovery_digest(compact))
+
+    def test_device_code_is_public_and_not_recovery_secret(self):
+        code = main.make_device_code()
+        self.assertRegex(code, r"^BU-[A-F0-9]{5}-[A-F0-9]{5}$")
+        self.assertNotEqual(code, main.new_recovery_code())
+
+    def test_royale_probabilities_are_exactly_one_hundred_percent(self):
+        self.assertEqual(sum(item["weight"] for item in main.ROYALE_PRIZES), 100)
+        self.assertEqual(len({item["id"] for item in main.ROYALE_PRIZES}), 5)
+        self.assertEqual(len({item["profile_key"] for item in main.ROYALE_PRIZES}), 5)
+
+    def test_royale_prize_profile_keys_match_existing_catalog(self):
+        expected = {
+            "wear_shirt_tactical",
+            "wear_boots_combat",
+            "wear_set_aurora",
+            "wear_beard_old",
+            "wear_pants_angelical",
+        }
+        self.assertEqual({item["profile_key"] for item in main.ROYALE_PRIZES}, expected)
+
+
+if __name__ == "__main__":
+    unittest.main()
