@@ -25,7 +25,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "wear_shirt_desert","wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
         "wear_set_volcano","wear_set_nebula","wear_set_cerrado",
-        "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest"
+        "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","character_display_name"
     };
     private final SharedPreferences prefs;
     private final Listener listener;
@@ -53,7 +53,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             JSONObject r=request("GET","/v1/accounts/me",null,session.getToken()),p=r.optJSONObject("player");
             if(p==null)throw new ApiException(502,"Resposta inválida do servidor.");
             String name=p.optString("username",getUsername());session.save(session.getToken(),name,session.getExpiresAt());
-            applyProfile(p.optJSONObject("profile"));registerListener();publish(true,true,name,"Login restaurado automaticamente.");
+            applyProfile(p.optJSONObject("profile"));syncGameSettings(session.getToken());registerListener();publish(true,true,name,"Login restaurado automaticamente.");
         }catch(ApiException e){if(e.code==401)session.clear();publish(true,false,"",e.code==401?"Sessão expirada. Entre novamente.":e.getMessage());
         }catch(Exception e){publish(true,true,getUsername(),"Servidor indisponível. Sessão mantida neste aparelho; tente novamente com internet.");}});
     }
@@ -70,12 +70,27 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             String token=r.optString("access_token","");int seconds=r.optInt("expires_in",0);JSONObject player=r.optJSONObject("player");
             if(token.isEmpty()||seconds<=0||player==null)throw new ApiException(502,"Sessão inválida retornada pelo servidor.");
             session.save(token,player.optString("username",name),System.currentTimeMillis()/1000L+seconds);
-            applyProfile(player.optJSONObject("profile"));registerListener();
+            applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();
             publish(true,true,name,create?"Conta criada e sessão protegida neste aparelho.":"Login realizado; sessão salva para atualizações.");
             if(create)saveProfile();
         }catch(ApiException e){publish(true,isSignedIn(),getUsername(),e.getMessage());}
         catch(Exception e){publish(true,isSignedIn(),getUsername(),"Não foi possível conectar. Verifique a internet.");}});
     }
+    private void syncGameSettings(String token) {
+        try {
+            JSONObject data=request("GET","/v1/game/settings",null,token);
+            String gameName=data.optString("game_name","BATTLE UNIVERSE");
+            JSONObject names=data.optJSONObject("character_names");
+            SharedPreferences.Editor edit=prefs.edit().putString("server_game_name",gameName);
+            if(names!=null)edit.putString("server_character_names",names.toString());
+            String accountName=data.optString("account_character_name","");
+            if(!accountName.isEmpty())edit.putString("character_display_name",accountName);
+            edit.apply();
+        } catch(Exception ignored) {
+            // Keep last known settings; account and offline profile remain usable.
+        }
+    }
+
     public void signOut(){session.clear();if(listening){prefs.unregisterOnSharedPreferenceChangeListener(this);listening=false;}
         publish(isConfigured(),false,"","Você saiu. A conta continua salva no servidor.");}
     private void registerListener(){if(!listening&&!closed){prefs.registerOnSharedPreferenceChangeListener(this);listening=true;}}
