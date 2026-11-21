@@ -133,13 +133,15 @@ public final class MultiplayerApiClient {
     }
 
     public void cancelQueue() {
-        final String ticket = ticketId;
-        final String activeMatch = matchId;
         ++pollGeneration;
         polling = false;
         matchPolling = false;
         io.execute(() -> {
             try {
+                // Read identifiers inside the serialized worker so a cancel tap
+                // racing the initial POST still cancels the ticket it just created.
+                String activeMatch = matchId;
+                String ticket = ticketId;
                 if (!activeMatch.isEmpty()) request("DELETE", "/v1/matches/" + activeMatch + "/leave", null);
                 else if (!ticket.isEmpty()) request("DELETE", "/v1/matches/queue/" + ticket, null);
                 ticketId = "";
