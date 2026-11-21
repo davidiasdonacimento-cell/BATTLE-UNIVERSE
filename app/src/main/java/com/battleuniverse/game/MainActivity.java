@@ -29,7 +29,7 @@ public final class MainActivity extends Activity {
     private void startContentSetup() {
         loadingView=new ContentLoadingView(this);
         setContentView(loadingView);
-        loadingView.setProgress(0,0,"PREPARANDO INSTALAÇÃO...");
+        loadingView.setProgress(0,0,"CONFIGURANDO A PRIMEIRA ENTRADA...");
         if(installer!=null)installer.shutdown();
         installer=new ContentPackInstaller(this,new ContentPackInstaller.Listener() {
             @Override public void onProgress(long downloaded,long total,String status) {
@@ -39,7 +39,7 @@ public final class MainActivity extends Activity {
                 if(loadingView!=null)loadingView.setFileProgress(fileName,index,count,done,size);
             }
             @Override public void onSuccess() {
-                if(loadingView!=null)loadingView.setStatus("CONTEÚDO VALIDADO • REINICIANDO E ABRINDO A PARTIDA...");
+                if(loadingView!=null)loadingView.setStatus("THE VISION • UNIVERSO CONFIGURADO • ABRINDO O JOGO...");
                 mainHandler.postDelayed(()->{
                     if(!isFinishing()&&ContentPackInstaller.isInstalled(MainActivity.this)) recreate();
                     else if(!isFinishing()) startContentSetup();
