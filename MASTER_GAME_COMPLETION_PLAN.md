@@ -35,7 +35,7 @@ Estados oficiais: **planejado**, **em desenvolvimento**, **implementado**, **com
 ### Contratos entre sistemas
 - Perfil: UID estável, nickname, nível, XP, estatísticas, preferências e identificadores de cosméticos.
 - Inventário: IDs estáveis de itens, quantidade, propriedade, origem, estado equipado e versão.
-- Economia: carteira com tipos de moeda separados, ledger imutável de transações, idempotência e validação no servidor quando online.
+- Economia: carteira única exclusivamente de diamantes, ledger imutável, idempotência e validação obrigatória no servidor.
 - Partida: ID, modo, mapa, regras, roster, equipes, estado, eventos, resultado e recompensas.
 - Configurações: valores tipados, limites, versão de esquema e aplicação real nos subsistemas.
 - Conteúdo: IDs e caminhos de assets estáveis; nunca depender da ordem de arquivos em diretório.
@@ -46,7 +46,7 @@ Estados oficiais: **planejado**, **em desenvolvimento**, **implementado**, **com
 ### A. Lobby e navegação
 - Cena 3D própria, iluminação, ambiente, câmera, personagem central de corpo inteiro, animações de idle e gestos, rotação/zoom controlados.
 - Navegação por páginas com estados consistentes, voltar, foco, transições, carregamento, erros e confirmação de ações.
-- Perfil, moedas, diamantes, nível, XP, notificações, equipe, amigos, eventos e botão Jogar conectados às fontes de dados corretas.
+- Perfil, diamantes, nível, XP, notificações, equipe, amigos, eventos e botão Jogar conectados às fontes de dados corretas.
 - Layout adaptável à resolução e proporção do Redmi 12; zonas seguras, toque e multitouch.
 - Nenhum cartão de demonstração pode ser apresentado como jogador real ou recurso online.
 
@@ -79,13 +79,13 @@ Estados oficiais: **planejado**, **em desenvolvimento**, **implementado**, **com
 - Não liberar botão ONLINE como funcional antes de existir servidor implantado, monitorado e testado com pelo menos dois clientes reais.
 
 ### E. Economia, loja e recompensas
-- Carteiras separadas para moedas e diamantes virtuais; saldo sempre derivado do ledger.
-- Loja com catálogo, preço, moeda, disponibilidade, prévia, confirmação, compra, recibo e entrega ao inventário.
+- Uma única carteira de diamantes virtuais; ouro/moedas foram removidos. Saldo sempre derivado do ledger do servidor.
+- Loja com catálogo, preço exclusivamente em diamantes, disponibilidade, prévia, confirmação, compra, recibo e entrega ao inventário.
 - Operações de compra e recompensa idempotentes; não debitar duas vezes nem entregar duas vezes.
 - Códigos promocionais com validade, limite por conta, auditoria e resposta clara.
 - Royale/sorteios: probabilidades exibidas, soma validada em 100%, histórico e compensação de duplicados; qualquer uso de moeda paga exige revisão de regras da plataforma e transparência.
 - Recompensas diárias, missões, eventos, passe, conquistas e correio com condições verificáveis e prevenção de resgate repetido.
-- Offline usa carteira local claramente identificada; sincronização online precisa resolver conflitos sem criar saldo.
+- A API PostgreSQL é a fonte de verdade da carteira. Cache local é somente leitura/visualização; nenhuma recompensa offline pode alterar o saldo online.
 
 ### F. Perfil, social e progressão
 - Conta, nickname, avatar, moldura, títulos, estatísticas, histórico, XP, nível, patentes e temporadas.
@@ -177,8 +177,8 @@ Estados oficiais: **planejado**, **em desenvolvimento**, **implementado**, **com
 ## Registro de execução — fundação compartilhada iniciada em 2026-11-21
 A fase 2 (fundação de dados e serviços) está **em desenvolvimento**, não concluída. Código já publicado:
 - `PlayerProfileStore`: contrato local compartilhado de perfil/carteiras, migração de esquema, compras atômicas, resgates idempotentes e ledger limitado.
-- `HudOverlay`: lobby/perfil/loja/inventário conectados à mesma fonte; saldo de moedas e diamantes; cosméticos de perfil com preço fixo em moedas; histórico de carteira e atalho funcional para missões.
-- `AccountSyncManager`: persistência/restauração local e sincronização de moedas, ledger, sensibilidades, missões e marcos do passe pela API própria FastAPI + PostgreSQL.
+- `HudOverlay`: lobby/perfil/loja/inventário apresentam uma única moeda, diamantes; compras e recompensas online precisam ser confirmadas pela API.
+- `AccountSyncManager`: persistência/restauração de sessão e sincronização da carteira única de diamantes, ledger, sensibilidades, missões e marcos do passe pela API própria FastAPI + PostgreSQL.
 - A base ainda é local/offline e não substitui validação autoritativa no servidor. Não habilitar multiplayer, compras online ou saldos seguros até construir o serviço autoritativo.
 - Critérios restantes antes de promover esta fase: build Gradle/NDK, testes automatizados de migração/idempotência/conflitos, verificação de sincronização em duas instalações e teste físico no Redmi 12.
 
