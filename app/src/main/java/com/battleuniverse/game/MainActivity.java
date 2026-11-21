@@ -15,6 +15,7 @@ public final class MainActivity extends Activity {
     private ContentPackInstaller installer;
     private ContentLoadingView loadingView;
     private AccountSyncManager accountSync;
+    private MultiplayerApiClient multiplayerApi;
     private SharedPreferences profilePrefs;
     private EntryGateView entryGate;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
@@ -132,6 +133,18 @@ public final class MainActivity extends Activity {
         int[] settings=ContentPackInstaller.readIslandSettings(this);
         gameSurface.setContentPackData(settings[0],settings[1]);
         hud=new HudOverlay(this,gameSurface,profilePrefs);
+        if(multiplayerApi!=null)multiplayerApi.close();
+        multiplayerApi=new MultiplayerApiClient(this,(state,message)->{
+            if(hud!=null)hud.onMultiplayerQueueUpdate(state,message);
+        });
+        hud.setMultiplayerQueueAction(new HudOverlay.MultiplayerQueueAction() {
+            @Override public void joinQueue(int selectedMode,int selectedMap) {
+                if(multiplayerApi!=null)multiplayerApi.joinQueue(selectedMode,selectedMap);
+            }
+            @Override public void cancelQueue() {
+                if(multiplayerApi!=null)multiplayerApi.cancelQueue();
+            }
+        });
         hud.setUsernameAccountActions((username,password,createAccount)->{
             if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
         },()->{
@@ -181,6 +194,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onDestroy() {
         if(installer!=null)installer.shutdown();
+        if(multiplayerApi!=null)multiplayerApi.close();
         if(accountSync!=null)accountSync.close();
         super.onDestroy();
     }
