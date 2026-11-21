@@ -29,6 +29,7 @@ public final class MultiplayerApiClient {
     private volatile Listener listener;
     private volatile boolean closed;
     private volatile boolean polling;
+    private volatile boolean matchPolling;
     private volatile String ticketId = "";
     private volatile String matchId = "";
     private long pollGeneration;
@@ -71,6 +72,7 @@ public final class MultiplayerApiClient {
                 ticketId = result.optString("ticket_id", "");
                 if ("matched".equals(result.optString("state"))) {
                     matchId = result.optString("match_id", "");
+                    matchPolling = true;
                     publish(result, "Partida encontrada. Carregando lobby...");
                     fetchMatch(generation);
                 } else if (!ticketId.isEmpty()) {
@@ -98,6 +100,7 @@ public final class MultiplayerApiClient {
                 if ("matched".equals(result.optString("state"))) {
                     matchId = result.optString("match_id", "");
                     polling = false;
+                    matchPolling = true;
                     publish(result, "Sala encontrada. Preparando participantes...");
                     fetchMatch(generation);
                     return;
@@ -120,6 +123,9 @@ public final class MultiplayerApiClient {
                 JSONObject result = request("GET", "/v1/matches/" + matchId, null);
                 result.put("state", "matched");
                 publish(result, "Lobby online conectado ao servidor.");
+                if (matchPolling && generation == pollGeneration && !closed) {
+                    main.postDelayed(() -> fetchMatch(generation), 2000L);
+                }
             } catch (Exception error) {
                 publish(new JSONObject(), "Sala encontrada, mas não foi possível carregar o lobby: " + safeMessage(error));
             }
@@ -131,6 +137,7 @@ public final class MultiplayerApiClient {
         final String activeMatch = matchId;
         ++pollGeneration;
         polling = false;
+        matchPolling = false;
         io.execute(() -> {
             try {
                 if (!activeMatch.isEmpty()) request("DELETE", "/v1/matches/" + activeMatch + "/leave", null);
@@ -201,6 +208,7 @@ public final class MultiplayerApiClient {
     public void close() {
         closed = true;
         polling = false;
+        matchPolling = false;
         ++pollGeneration;
         listener = null;
         io.shutdownNow();
