@@ -207,3 +207,12 @@ A fase permanece em desenvolvimento até build Android, testes automatizados, te
 - A tela de oficina permite selecionar/remover cada peça e o guarda-roupa mostra as sete skins completas.
 - Critério para fase de alta fidelidade: trocar os anexos procedurais por meshes otimizadas e UV/texturas/rig compatíveis, validar encaixe em todos os operadores e testar animação de corrida, salto, agachamento, mira e queda.
 - Endpoint autenticado `GET /v1/game/settings` distribui configurações globais; cliente salva a última configuração válida localmente para funcionamento offline.
+
+
+## Correção da carteira online e do código promocional — 2026-11-21
+- A carteira PostgreSQL passa a ser a fonte de verdade para saldo online; coins e diamonds foram removidos do contrato de gravação do perfil.
+- A primeira leitura de carteira migra uma vez os saldos legados do perfil para player_wallets e preserva no banco o resgate antigo 100K identificado pelo ledger.
+- O código 100K é validado no FastAPI, concedido no PostgreSQL e limitado a um resgate por conta.
+- A recompensa diária e a roleta já usam operações no servidor.
+- Ainda não há servidor autoritativo de partidas. Resultados e recompensas de partidas, missões, passe, eventos, correio, conquistas e compras que continuam no armazenamento local não devem ser tratados como saldo online.
+- Esta etapa só pode ser considerada operacional após deploy da API, testes automatizados, compilação Android e teste com conta real no aparelho.
