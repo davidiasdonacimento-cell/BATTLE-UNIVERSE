@@ -7,6 +7,7 @@ import android.text.InputType;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 import java.text.NumberFormat;
 import java.util.Locale;
 import android.graphics.Canvas;
@@ -81,6 +82,7 @@ public final class HudOverlay extends View {
     private UsernameAccountAction usernameAccountAction;
     private Runnable accountSyncAction, accountSignOutAction;
     private long toastUntil, lastTap;
+    private int collectionPage=0;
     private int royaleRevealItem=-1;
     private long royaleRevealUntil=0L;
 
@@ -414,32 +416,84 @@ public final class HudOverlay extends View {
         }
     }
     private void drawInventory(Canvas c){
-        eyebrow(c,270,175,"COLEÇÃO DO OPERADOR");title(c,"INVENTÁRIO",270,224);
-        subtitle(c,"Camisas, botas, conjuntos e itens de perfil já adquiridos.",270,252);
-        panel(c,270,270,570,58,0xAE193040,0x335D8495,15);
-        text(c,"◆ "+formatDiamonds(profile.getDiamonds())+" DIAMANTES   •   ● "+formatDiamonds(profile.getCoins())+" MOEDAS",292,306,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<SHOP_NAMES.length;i++) {
-            int col=i%3,row=i/3;float x=270+col*192f,y=340+row*57f;
-            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
-            panel(c,x,y,174,50,owned?0xB51A4650:0x771A3040,
-                owned?0xFF4BD4C9:0x335D8495,12);
-            circle(c,x+24,y+24,14,SHOP_COLORS[i],0xFFB5D6E1);
-            text(c,SHOP_NAMES[i],x+45,y+21,8,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,owned?"DESBLOQUEADO":"BLOQUEADO",x+45,y+37,7,
-                owned?0xFF83DCD5:0xFF91A9B7,Typeface.DEFAULT_BOLD);
-        }
-        panel(c,270,628,570,54,0x8E102536,0x335D8495,12);
-        text(c,"HISTÓRICO DA CARTEIRA • MOVIMENTAÇÕES MAIS RECENTES",286,647,8,0xFF70DDE6,Typeface.DEFAULT_BOLD);
-        String[] history=profile.getRecentLedgerEntries(2);
-        if(history.length==0) text(c,"Nenhuma movimentação registrada.",286,669,8,0xFF9CB4C1,Typeface.DEFAULT);
-        else {
-            String first=history[0].length()>78?history[0].substring(0,75)+"...":history[0];
-            text(c,first,286,665,8,Color.WHITE,Typeface.DEFAULT);
-            if(history.length>1) {
-                String second=history[1].length()>78?history[1].substring(0,75)+"...":history[1];
-                text(c,second,286,678,7,0xFF9CB4C1,Typeface.DEFAULT);
+        eyebrow(c,270,175,"COLEÇÃO VISUAL • PRÉVIA INDIVIDUAL DOS ITENS");
+        title(c,"MINHA COLEÇÃO",270,224);
+        subtitle(c,"Lista de cosméticos e equipamentos. Cada cartão mostra o próprio item, sem personagens.",270,252);
+        panel(c,270,266,570,42,0xAE193040,0x335D8495,13);
+        text(c,"◆ "+formatDiamonds(profile.getDiamonds())+" DIAMANTES   •   ● "+formatDiamonds(profile.getCoins())+" MOEDAS",288,292,11,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        String[] extras={"BARBA SOMBRA","BARBA VIGOR","BARBA ORION",
+            "CAPACETE TÁTICO","CAPACETE FROST","CAPACETE VISOR",
+            "MOCHILA CAMPO","MOCHILA ORBITAL","MOCHILA MÉDICA",
+            "COLETE TÁTICO","COLETE PESADO","COLETE TECNO"};
+        int total=extras.length+SHOP_NAMES.length;
+        int start=collectionPage*18,end=Math.min(total,start+18);
+        for(int index=start;index<end;index++){
+            int local=index-start,col=local%2,row=local/2;
+            float x=270+col*290f,y=316+row*38f;
+            int type,variant,color;String name,state;boolean active=false,owned=true;
+            if(index<extras.length){
+                int group=index/3;variant=index%3+1;
+                type=group;color=new int[]{0xFF9B806B,0xFF65A9C4,0xFF58A68A,0xFFB18A55}[group];
+                name=extras[index];
+                int equipped=group==0?equippedBeard:group==1?equippedHelmet:group==2?equippedBackpack:equippedVest;
+                active=equipped==variant;
+                state=active?"EQUIPADO":"EQUIPÁVEL";
+            }else{
+                int item=index-extras.length;name=SHOP_NAMES[item];color=SHOP_COLORS[item];
+                type=item<3?7:item<7?4:item<11?5:6;variant=item;
+                owned=prefs.getBoolean(SHOP_KEYS[item],false);
+                if(item>=3&&item<=6)active=selectedSet==0&&selectedShirt==item-2;
+                else if(item>=7&&item<=10)active=selectedSet==0&&selectedBoots==item-6;
+                else if(item>=11)active=selectedSet==item-10;
+                state=active?"EQUIPADO":owned?"DESBLOQUEADO":"VER NA LOJA";
             }
+            panel(c,x,y,278,34,active?0xB51A5964:owned?0xA91A3040:0x771A3040,
+                active?0xFF58DDE6:0x335D8495,9);
+            drawCollectionPreview(c,x+19,y+17,type,variant,color);
+            text(c,name,x+42,y+14,7.8f,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,state,x+42,y+27,6.8f,active?0xFF83DCD5:owned?0xFF9DB6C5:0xFFFFC66F,Typeface.DEFAULT_BOLD);
         }
+        pill(c,270,665,120,25,collectionPage==0?"PÁGINA 1 / 2":"VOLTAR À PÁG. 1",0x553B6172,Color.WHITE);
+        pill(c,710,665,130,25,collectionPage==0?"PRÓXIMA PÁGINA":"PÁGINA 2 / 2",0xFF176A75,Color.WHITE);
+        text(c,"Prévia de cada peça • sem miniaturas de personagens",430,682,7.5f,0xFF8FAAB8,Typeface.DEFAULT);
+    }
+
+    private void drawCollectionPreview(Canvas c,float cx,float cy,int type,int variant,int color){
+        p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(0xFF142B39);
+        c.drawRoundRect(cx-15,cy-15,cx+15,cy+15,7,7,p);
+        p.setColor(color);
+        if(type==0){
+            Path beard=new Path();beard.moveTo(cx-10,cy-6);beard.cubicTo(cx-7,cy-1,cx-7,cy+8,cx,cy+12);
+            beard.cubicTo(cx+7,cy+8,cx+7,cy-1,cx+10,cy-6);beard.cubicTo(cx+5,cy-2,cx-5,cy-2,cx-10,cy-6);
+            c.drawPath(beard,p);
+        }else if(type==1){
+            c.drawArc(cx-11,cy-10,cx+11,cy+10,180,180,false,p);c.drawRect(cx-11,cy,cx+11,cy+5,p);
+            c.drawRect(cx-13,cy+4,cx+13,cy+7,p);
+        }else if(type==2){
+            c.drawRoundRect(cx-9,cy-12,cx+9,cy+12,5,5,p);
+            p.setColor(0xFF142B39);c.drawRoundRect(cx-4,cy-3,cx+4,cy+5,2,2,p);
+        }else if(type==3){
+            Path vest=new Path();vest.moveTo(cx-10,cy-11);vest.lineTo(cx-3,cy-11);vest.lineTo(cx,cy-4);
+            vest.lineTo(cx+3,cy-11);vest.lineTo(cx+10,cy-11);vest.lineTo(cx+8,cy+11);
+            vest.lineTo(cx-8,cy+11);vest.close();c.drawPath(vest,p);
+            p.setColor(0xFF142B39);c.drawLine(cx,cy-3,cx,cy+10,p);
+        }else if(type==4){
+            Path shirt=new Path();shirt.moveTo(cx-6,cy-11);shirt.lineTo(cx-14,cy-5);shirt.lineTo(cx-10,cy+1);
+            shirt.lineTo(cx-7,cy-1);shirt.lineTo(cx-7,cy+11);shirt.lineTo(cx+7,cy+11);
+            shirt.lineTo(cx+7,cy-1);shirt.lineTo(cx+10,cy+1);shirt.lineTo(cx+14,cy-5);
+            shirt.lineTo(cx+6,cy-11);shirt.close();c.drawPath(shirt,p);
+        }else if(type==5){
+            Path boot=new Path();boot.moveTo(cx-7,cy-11);boot.lineTo(cx+4,cy-11);boot.lineTo(cx+4,cy+4);
+            boot.lineTo(cx+12,cy+8);boot.lineTo(cx+12,cy+12);boot.lineTo(cx-10,cy+12);
+            boot.lineTo(cx-10,cy+6);boot.lineTo(cx-7,cy+4);boot.close();c.drawPath(boot,p);
+        }else if(type==6){
+            Path set=new Path();set.moveTo(cx,cy-13);set.lineTo(cx+12,cy);set.lineTo(cx,cy+13);
+            set.lineTo(cx-12,cy);set.close();c.drawPath(set,p);
+        }else{
+            c.drawRoundRect(cx-10,cy-10,cx+10,cy+10,4,4,p);
+            p.setColor(0xFFFFFFFF);c.drawCircle(cx,cy,4,p);
+        }
+        p.setStyle(Paint.Style.FILL);
     }
 
     private void drawSensitivityBar(Canvas c,String label,int value,float y){
@@ -603,14 +657,14 @@ public final class HudOverlay extends View {
     private void drawRoyalePage(Canvas c) {
         eyebrow(c,270,175,"CENTRAL DE COLEÇÕES • BATTLE UNIVERSE");
         title(c,"MENU ROYALE",270,224);
-        subtitle(c,"Explore e organize os visuais, operadores e itens do seu universo.",270,252);
-        String[] names={"OPERADORES","ROUPAS E CONJUNTOS","ITENS DA COLEÇÃO",
+        subtitle(c,"Barbas, roupas, acessórios e itens visuais — sem seção de personagens.",270,252);
+        String[] names={"BARBAS 3D","ROUPAS E CONJUNTOS","MINHA COLEÇÃO",
             "CATÁLOGO DE VISUAIS","EVENTOS TEMÁTICOS","ARQUIVO DE RELÍQUIAS"};
-        String[] hints={"Escolha seu personagem","Vista camisas, botas e conjuntos",
-            "Consulte o que já desbloqueou","Veja os itens disponíveis na loja",
+        String[] hints={"Prévia das três barbas equipáveis","Vista camisas, botas e conjuntos",
+            "Lista com prévia individual de cada peça","Veja os itens disponíveis na loja",
             "Explore os conteúdos ativos","Skins clássicas e itens raros"};
         String[] marks={"01","02","03","04","05","06"};
-        int[] destinations={CHARACTERS,WARDROBE,INVENTORY,SHOP,EVENTS,ROYALE_SPIN};
+        int[] destinations={ACCESSORIES,WARDROBE,INVENTORY,SHOP,EVENTS,ROYALE_SPIN};
         int owned=0;
         for(String key:SHOP_KEYS)if(prefs.getBoolean(key,false))owned++;
         panel(c,270,270,570,54,0xAE193040,0x557AA9BC,14);
@@ -1368,6 +1422,42 @@ public final class HudOverlay extends View {
             }
             if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
+        }else if(page==INVENTORY){
+            if(hit(x,y,270,665,120,25)){collectionPage=0;return;}
+            if(hit(x,y,710,665,130,25)){collectionPage=collectionPage==0?1:0;return;}
+            String[] extras={"BARBA SOMBRA","BARBA VIGOR","BARBA ORION",
+                "CAPACETE TÁTICO","CAPACETE FROST","CAPACETE VISOR",
+                "MOCHILA CAMPO","MOCHILA ORBITAL","MOCHILA MÉDICA",
+                "COLETE TÁTICO","COLETE PESADO","COLETE TECNO"};
+            int start=collectionPage*18,end=Math.min(extras.length+SHOP_NAMES.length,start+18);
+            for(int index=start;index<end;index++){
+                int local=index-start,col=local%2,row=local/2;float ix=270+col*290f,iy=316+row*38f;
+                if(!hit(x,y,ix,iy,278,34))continue;
+                if(index<extras.length){
+                    int group=index/3,item=index%3+1;
+                    if(group==0)equippedBeard=item;else if(group==1)equippedHelmet=item;
+                    else if(group==2)equippedBackpack=item;else equippedVest=item;
+                    prefs.edit().putInt("equipped_beard",equippedBeard).putInt("equipped_helmet",equippedHelmet)
+                        .putInt("equipped_backpack",equippedBackpack).putInt("equipped_vest",equippedVest).apply();
+                    game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
+                    toast(extras[index]+" selecionada.");return;
+                }
+                int item=index-extras.length;
+                if(!prefs.getBoolean(SHOP_KEYS[item],false)){page=SHOP;toast("Item bloqueado. Consulte o catálogo da loja.");return;}
+                if(item>=3&&item<=6){
+                    selectedShirt=item-2;selectedSet=0;
+                    prefs.edit().putInt("selected_shirt",selectedShirt).putInt("selected_set",0).apply();
+                    game.setWardrobe(selectedShirt,selectedBoots,0);
+                }else if(item>=7&&item<=10){
+                    selectedBoots=item-6;selectedSet=0;
+                    prefs.edit().putInt("selected_boots",selectedBoots).putInt("selected_set",0).apply();
+                    game.setWardrobe(selectedShirt,selectedBoots,0);
+                }else if(item>=11){
+                    selectedSet=item-10;prefs.edit().putInt("selected_set",selectedSet).apply();
+                    game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
+                }
+                toast(SHOP_NAMES[item]+" selecionado.");return;
+            }
         }else if(page==SHOP){
             for(int i=0;i<SHOP_NAMES.length;i++){
                 float sx=270+(i%3)*192f,sy=322+(i/3)*56f;
@@ -1502,10 +1592,25 @@ public final class HudOverlay extends View {
     }
     public void setGoogleAccountStatus(boolean configured, boolean signedIn,
                                        String username, String message) {
+        String previous=googleMessage;
         googleConfigured=configured;
         googleSignedIn=signedIn;
         googleEmail=username==null?"":username;
         googleMessage=message==null?"":message;
+        String feedback=googleMessage.toLowerCase(Locale.ROOT);
+        boolean important=!googleMessage.equals(previous)&&(
+            feedback.contains("criando")||feedback.contains("entrando")||
+            feedback.contains("conta criada")||feedback.contains("login realizado")||
+            feedback.contains("nickname")||feedback.contains("senha")||
+            feedback.contains("não foi possível")||feedback.contains("indisponível")||
+            feedback.contains("expirada")||feedback.contains("inválida")||
+            feedback.contains("suspensa")||feedback.contains("falha")||
+            feedback.contains("erro")||feedback.contains("não configurado")||
+            feedback.contains("sessão"));
+        if(important){
+            Toast.makeText(getContext(),googleMessage,Toast.LENGTH_LONG).show();
+            toast(googleMessage);
+        }
         invalidate();
     }
     private void showUsernameAccountDialog() {
