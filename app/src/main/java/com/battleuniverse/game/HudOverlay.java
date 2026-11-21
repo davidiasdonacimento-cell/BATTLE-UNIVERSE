@@ -23,7 +23,7 @@ import android.view.HapticFeedbackConstants;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17;
+        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
@@ -63,6 +63,7 @@ public final class HudOverlay extends View {
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private int generalSensitivity=100, aimSensitivity=100;
     private int selectedShirt,selectedBoots,selectedSet;
+    private int equippedBeard,equippedHelmet,equippedBackpack,equippedVest;
     private boolean music=true, effects=true, forwarding, resultSpectating;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
     private boolean onlineMode, tacticalMapVisible;
@@ -101,9 +102,14 @@ public final class HudOverlay extends View {
         selectedShirt=prefs.getInt("selected_shirt",1);
         selectedBoots=prefs.getInt("selected_boots",1);
         selectedSet=prefs.getInt("selected_set",0);
+        equippedBeard=prefs.getInt("equipped_beard",0);
+        equippedHelmet=prefs.getInt("equipped_helmet",0);
+        equippedBackpack=prefs.getInt("equipped_backpack",0);
+        equippedVest=prefs.getInt("equipped_vest",0);
         ensureDailyMissionWindow();
         game.setInvertCameraY(invertCameraY);
         game.setCharacter(character); game.setMap(map); game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
+        game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
         game.setMatchMode(mode); game.setQuality(quality);
         game.setLookSensitivity(generalSensitivity/100.0f,aimSensitivity/100.0f); game.setGameScreen(false);
     }
@@ -209,6 +215,7 @@ public final class HudOverlay extends View {
         else if(page==ROYALE_SPIN)drawRoyaleSpinPage(c);
         else if(page==MISSIONS)drawMissionsPage(c);
         else if(page==WARDROBE)drawWardrobePage(c);
+        else if(page==ACCESSORIES)drawAccessoriesPage(c);
         else if(page==EVENTS)drawEventsPage(c);
         else if(page==FRIENDS)drawFriendsPage(c);
         else if(page==MAIL)drawMailPage(c);
@@ -502,7 +509,8 @@ public final class HudOverlay extends View {
     private void drawWardrobePage(Canvas c) {
         eyebrow(c,270,175,"PERSONALIZAÇÃO EQUIPÁVEL");title(c,"CAMISAS, BOTAS E CONJUNTOS",270,224);
         subtitle(c,"Toque em um item desbloqueado para vestir o operador 3D.",270,252);
-        pill(c,690,260,150,25,"REMOVER CONJUNTO",0x553B6172,0xFFD7E6ED);
+        pill(c,270,260,150,25,"REMOVER CONJUNTO",0x553B6172,0xFFD7E6ED);
+        pill(c,690,260,150,25,"ACESSÓRIOS 3D",0xFF176A75,0xFFD7E6ED);
         text(c,"CAMISAS",270,300,10,0xFF69DCE5,Typeface.DEFAULT_BOLD);
         String[] shirts={"TÁTICA","NEON","FROST","DESERTO"};
         for(int i=0;i<4;i++) {
@@ -540,6 +548,33 @@ public final class HudOverlay extends View {
                 active?0xFF176A75:owned?0xFF345D79:0x553B6172,Color.WHITE);
         }
         text(c,"KIT INICIAL LIBERADO: CAMISA TÁTICA + BOTAS DE COMBATE.",270,654,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
+    }
+
+    private void drawAccessoriesPage(Canvas c) {
+        eyebrow(c,270,175,"OFICINA DE EQUIPAMENTOS • MODELOS 3D");
+        title(c,"ACESSÓRIOS DO OPERADOR",270,224);
+        subtitle(c,"Barbas, capacetes, mochilas e coletes acompanham o corpo no lobby e na partida.",270,252);
+        pill(c,674,184,166,32,"VOLTAR ÀS ROUPAS",0x553B6172,0xFFD7E6ED);
+        String[] names={"BARBAS 3D","CAPACETES","MOCHILAS","COLETES"};
+        String[][] options={{"SEM","SOMBRA","VIGOR","ORION"},{"SEM","TÁTICO","FROST","VISOR"},
+            {"SEM","CAMPO","ORBITAL","MÉDICO"},{"SEM","TÁTICO","PESADO","TECNO"}};
+        int[] selected={equippedBeard,equippedHelmet,equippedBackpack,equippedVest};
+        int[] accents={0xFF9B806B,0xFF65A9C4,0xFF58A68A,0xFFB18A55};
+        for(int group=0;group<4;group++) {
+            int col=group%2,row=group/2;float x=270+col*292f,y=280+row*178f;
+            panel(c,x,y,272,158,0xB51A3040,0x557AA9BC,14);
+            eyebrow(c,x+16,y+25,names[group]);
+            text(c,"GEOMETRIA 3D • ENCAIXE NO CORPO",x+16,y+47,7.5f,0xFF9DB6C5,Typeface.DEFAULT);
+            for(int item=0;item<4;item++) {
+                float bx=x+12+item*63f,by=y+77;
+                boolean active=selected[group]==item;
+                panel(c,bx,by,58,52,active?0xFF176A75:0x77304758,
+                    active?0xFF58E0E8:0x335D8495,8);
+                circle(c,bx+29,by+15,7,item==0?0xFF526775:accents[group],0xFFB5D6E1);
+                text(c,options[group][item],bx+29,by+39,6.5f,Color.WHITE,Typeface.DEFAULT_BOLD);
+            }
+        }
+        text(c,"Cada peça pode ser removida sem alterar as outras categorias.",270,650,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
     }
 
     private void drawRoyalePage(Canvas c) {
@@ -1316,7 +1351,8 @@ public final class HudOverlay extends View {
                 if(hit(x,y,sx,sy,174,50)){purchaseShopItem(i);return;}
             }
         }else if(page==WARDROBE){
-            if(hit(x,y,690,260,150,25)) {
+            if(hit(x,y,690,260,150,25)){page=ACCESSORIES;return;}
+            if(hit(x,y,270,260,150,25)) {
                 selectedSet=0;selectedShirt=0;selectedBoots=0;
                 prefs.edit().putInt("selected_set",0).putInt("selected_shirt",0).putInt("selected_boots",0).apply();
                 game.setWardrobe(0,0,0);toast("Conjunto padrão equipado.");return;
@@ -1341,6 +1377,26 @@ public final class HudOverlay extends View {
                     prefs.edit().putInt("selected_set",selectedSet).apply();
                     game.setWardrobe(selectedShirt,selectedBoots,selectedSet);toast("Conjunto "+new String[]{"AURORA","CAMPEÃO","ORBITAL","DESERTO"}[i]+" equipado.");return;
                 }
+            }
+        }else if(page==ACCESSORIES){
+            if(hit(x,y,674,184,166,32)){page=WARDROBE;return;}
+            if(hit(x,y,270,280,272,158)||hit(x,y,562,280,272,158)
+                    ||hit(x,y,270,458,272,158)||hit(x,y,562,458,272,158)) {
+                int group=x<550?(y<450?0:2):(y<450?1:3);
+                float originX=(group%2==0?282f:574f);
+                int item=Math.max(0,Math.min(3,(int)((x-originX)/63f)));
+                if(group==0)equippedBeard=item;
+                else if(group==1)equippedHelmet=item;
+                else if(group==2)equippedBackpack=item;
+                else equippedVest=item;
+                prefs.edit().putInt("equipped_beard",equippedBeard)
+                    .putInt("equipped_helmet",equippedHelmet)
+                    .putInt("equipped_backpack",equippedBackpack)
+                    .putInt("equipped_vest",equippedVest).apply();
+                game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
+                String[] labels={"barba","capacete","mochila","colete"};
+                toast((item==0?"Removido: ":"Equipado: ")+labels[group]+" • opção "+item);
+                return;
             }
         }else if(page==ROYALE){
             for(int i=0;i<6;i++){
