@@ -1,0 +1,19 @@
+plugins { id "com.android.application" }
+
+android {
+    namespace "com.battleuniverse.admin"
+    compileSdk 35
+    defaultConfig {
+        applicationId "com.battleuniverse.admin"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+        def apiUrl = System.getenv("ADMIN_API_BASE_URL") ?: ""
+        buildConfigField "String", "ADMIN_API_BASE_URL", "\""+apiUrl+"\""
+    }
+    buildFeatures { buildConfig true }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    buildTypes { release { minifyEnabled false } }
+}
+dependencies {}
