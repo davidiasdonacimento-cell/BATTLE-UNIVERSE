@@ -775,7 +775,7 @@ public final class HudOverlay extends View {
             if(selected)text(c,"SELECIONADO",1090,y+15,7,0xFF8BE7DE,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
         }
         text(c,"Chances: 40% • 30% • 20% • 9% • 1%  |  Repetidos: +100 ◆",704,598,8,0xFFB7CED8,Typeface.DEFAULT);
-        text(c,"GIROS: "+prefs.getInt("royale_spin_count",0)+"  •  ÚLTIMO: "+shortText(prefs.getString("royale_last_reward","SEM GIROS"),44),704,618,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"GIROS: "+prefs.getInt("royale_spin_count",0)+"  •  ÚLTIMO: "+compactLabel(prefs.getString("royale_last_reward","SEM GIROS"),44),704,618,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         pill(c,698,652,220,30,"TESTAR ITEM",0xFF176A75,Color.WHITE);
         pill(c,938,652,256,30,royaleSpinning?"AGUARDE...":"GIRAR • 100 ◆",0xFF80551E,Color.WHITE);
         if(!royaleResultMessage.isEmpty()){
@@ -848,6 +848,12 @@ public final class HudOverlay extends View {
             royalePreviewOriginalBackpack,royalePreviewOriginalVest);
         game.setPantsStyle(royalePreviewOriginalPants);
         royalePreviewActive=false;
+    }
+
+    private String compactLabel(String value,int max) {
+        if(value==null)return "";
+        if(value.length()<=max)return value;
+        return value.substring(0,Math.max(0,max-1))+"…";
     }
 
     private void ensureStarterWardrobe() {
