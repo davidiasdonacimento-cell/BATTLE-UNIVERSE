@@ -1108,6 +1108,10 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
             drawSphere(localPoint(p,0.145f,1.825f+bob,-0.105f,yaw),{0.075f,0.125f,0.075f},beardColor,yaw);
             drawSphere(localPoint(p,0,1.875f+bob,-0.188f,yaw),{0.145f,0.045f,0.040f},beardColor,yaw);
         } else if(gEquippedBeard==3) {
+            // Barba Orion: formato arredondado original preservado.
+            drawSphere(localPoint(p,0,1.775f+bob,-0.185f,yaw),{0.085f,0.105f,0.065f},beardColor,yaw);
+            drawSphere(localPoint(p,0,1.865f+bob,-0.205f,yaw),{0.075f,0.035f,0.035f},beardColor,yaw);
+        } else if(gEquippedBeard==4) {
             // Barbinha do Velho: queixo marcado e bigode curto em volume 3D.
             drawSphere(localPoint(p,0,1.755f+bob,-0.176f,yaw),{0.125f,0.125f,0.085f},beardColor,yaw);
             drawSphere(localPoint(p,0,1.690f+bob,-0.142f,yaw),{0.095f,0.095f,0.075f},beardColor,yaw);
@@ -1880,7 +1884,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetPantsStyle(JNIEnv*,jclass,
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetEquipment(JNIEnv*,jclass,jint beard,jint helmet,jint backpack,jint vest) {
-    gEquippedBeard=std::clamp(static_cast<int>(beard),0,3);
+    gEquippedBeard=std::clamp(static_cast<int>(beard),0,4);
     gEquippedHelmet=std::clamp(static_cast<int>(helmet),0,3);
     gEquippedBackpack=std::clamp(static_cast<int>(backpack),0,3);
     gEquippedVest=std::clamp(static_cast<int>(vest),0,3);
