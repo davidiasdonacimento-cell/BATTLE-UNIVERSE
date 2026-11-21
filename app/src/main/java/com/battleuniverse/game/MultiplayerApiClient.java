@@ -128,14 +128,16 @@ public final class MultiplayerApiClient {
 
     public void cancelQueue() {
         final String ticket = ticketId;
+        final String activeMatch = matchId;
         ++pollGeneration;
         polling = false;
         io.execute(() -> {
             try {
-                if (!ticket.isEmpty()) request("DELETE", "/v1/matches/queue/" + ticket, null);
+                if (!activeMatch.isEmpty()) request("DELETE", "/v1/matches/" + activeMatch + "/leave", null);
+                else if (!ticket.isEmpty()) request("DELETE", "/v1/matches/queue/" + ticket, null);
                 ticketId = "";
                 matchId = "";
-                publish(new JSONObject(), "Você saiu da fila.");
+                publish(new JSONObject(), "Você saiu da fila/sala.");
             } catch (Exception error) {
                 publish(new JSONObject(), "Não foi possível cancelar a fila: " + safeMessage(error));
             }
