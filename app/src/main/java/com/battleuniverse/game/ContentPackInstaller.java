@@ -1,6 +1,12 @@
 package com.battleuniverse.game;
 
 import android.content.Context;
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.StatFs;
@@ -109,11 +115,19 @@ public final class ContentPackInstaller {
                 if(storage.getAvailableBytes()<needed)
                     throw new Exception("Espaço insuficiente para configurar o conteúdo. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
-                downloadArchive(archive,expectedSize);
+                boolean restored=restoreSavedArchive(archive,expectedSize);
+                if(!restored) downloadArchive(archive,expectedSize);
                 postProgress(expectedSize,expectedSize,"CONFERINDO A INTEGRIDADE DO CONTEÚDO...");
                 String actualHash=sha256(archive);
+                if(!actualHash.equals(expectedHash) && restored) {
+                    archive.delete();
+                    postProgress(0,expectedSize,"O ARQUIVO SALVO NÃO PASSOU NA VERIFICAÇÃO. BAIXANDO UMA CÓPIA NOVA...");
+                    downloadArchive(archive,expectedSize);
+                    actualHash=sha256(archive);
+                }
                 if(!actualHash.equals(expectedHash))
                     throw new Exception("A verificação SHA-256 do conteúdo integrado falhou.");
+                if(!restored) saveArchiveToDownloads(archive);
                 postProgress(0,1,"PREPARANDO OS RECURSOS DO UNIVERSO...");
                 deleteTree(staging);
                 if(!staging.mkdirs()&&!staging.isDirectory())
@@ -136,18 +150,112 @@ public final class ContentPackInstaller {
                     throw new Exception("Falha ao ativar os dados. A versão anterior foi preservada.");
                 }
                 deleteTree(backup);
-                archive.delete();
-                postProgress(1,1,"UNIVERSO CONFIGURADO • ABRINDO O BATTLE UNIVERSE...");
+                postProgress(1,1,"PACOTE SALVO NO CELULAR • UNIVERSO CONFIGURADO...");
+
                 main.post(()->{running=false;listener.onSuccess();});
             } catch(Exception error) {
-                if(expectedPackSize>0L && archive.isFile()
-                        && archive.length()>=expectedPackSize) archive.delete();
+                // Keep complete downloads for retry and future APK updates.
                 deleteTree(staging);
                 String message=error.getMessage()==null?
                     "Falha desconhecida durante a configuração.":error.getMessage();
                 main.post(()->{running=false;listener.onFailure(message);});
             }
         });
+    }
+
+
+    private static final String SAVED_ARCHIVE_NAME = "battle-universe-season-02-pack.zip";
+    private static final String SAVED_ARCHIVE_FOLDER = "Download/Battle Universe/";
+
+    /** Restore the public Downloads copy to the private working file without downloading it again. */
+    private boolean restoreSavedArchive(File output,long expectedSize) throws Exception {
+        if(Build.VERSION.SDK_INT>=29) {
+            Uri collection=MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+            String[] columns={MediaStore.Downloads._ID,MediaStore.Downloads.SIZE,MediaStore.Downloads.RELATIVE_PATH};
+            String selection=MediaStore.Downloads.DISPLAY_NAME+"=?";
+            try(Cursor cursor=appContext.getContentResolver().query(
+                    collection,columns,selection,new String[]{SAVED_ARCHIVE_NAME},
+                    MediaStore.Downloads.DATE_MODIFIED+" DESC")) {
+                if(cursor!=null) while(cursor.moveToNext()) {
+                    String relative=cursor.getString(2);
+                    if(relative==null||!SAVED_ARCHIVE_FOLDER.equals(relative)) continue;
+                    long size=cursor.getLong(1);
+                    if(size!=expectedSize) continue;
+                    Uri uri=Uri.withAppendedPath(collection,cursor.getString(0));
+                    try(InputStream in=new BufferedInputStream(appContext.getContentResolver().openInputStream(uri));
+                        FileOutputStream out=new FileOutputStream(output,false)) {
+                        if(in==null) continue;
+                        byte[] buffer=new byte[65536];int count;long copied=0;
+                        while((count=in.read(buffer))!=-1) {
+                            copied+=count;
+                            if(copied>expectedSize) throw new Exception("O arquivo salvo excede o tamanho esperado.");
+                            out.write(buffer,0,count);
+                        }
+                        out.getFD().sync();
+                        if(copied==expectedSize) {
+                            postProgress(copied,expectedSize,"PACOTE EXISTENTE ENCONTRADO NO CELULAR...");
+                            return true;
+                        }
+                    } catch(Exception ignored) {
+                        output.delete();
+                    }
+                }
+            }
+        } else {
+            File publicCopy=new File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),SAVED_ARCHIVE_NAME);
+            if(publicCopy.isFile()&&publicCopy.length()==expectedSize) {
+                try(InputStream in=new FileInputStream(publicCopy);FileOutputStream out=new FileOutputStream(output,false)) {
+                    byte[] buffer=new byte[65536];int count;
+                    while((count=in.read(buffer))!=-1) out.write(buffer,0,count);
+                    out.getFD().sync();
+                }
+                return output.length()==expectedSize;
+            }
+        }
+        output.delete();
+        return false;
+    }
+
+    /** Keep a verified archive in the user's Downloads folder; it is intentionally not deleted after extraction. */
+    private void saveArchiveToDownloads(File source) throws Exception {
+        if(Build.VERSION.SDK_INT>=29) {
+            ContentValues values=new ContentValues();
+            values.put(MediaStore.Downloads.DISPLAY_NAME,SAVED_ARCHIVE_NAME);
+            values.put(MediaStore.Downloads.MIME_TYPE,"application/zip");
+            values.put(MediaStore.Downloads.RELATIVE_PATH,SAVED_ARCHIVE_FOLDER);
+            values.put(MediaStore.Downloads.IS_PENDING,1);
+            Uri collection=MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+            Uri target=appContext.getContentResolver().insert(collection,values);
+            if(target==null) throw new Exception("Não foi possível salvar o pacote na pasta Downloads.");
+            boolean complete=false;
+            try {
+                try(InputStream in=new FileInputStream(source);
+                    java.io.OutputStream out=appContext.getContentResolver().openOutputStream(target,"w")) {
+                    if(out==null) throw new Exception("Não foi possível gravar o pacote no celular.");
+                    byte[] buffer=new byte[65536];int count;long copied=0;
+                    while((count=in.read(buffer))!=-1) {copied+=count;out.write(buffer,0,count);}
+                    out.flush();
+                    if(copied!=source.length()) throw new Exception("Falha ao copiar o pacote para Downloads.");
+                }
+                ContentValues ready=new ContentValues();
+                ready.put(MediaStore.Downloads.IS_PENDING,0);
+                appContext.getContentResolver().update(target,ready,null,null);
+                complete=true;
+            } finally {
+                if(!complete) appContext.getContentResolver().delete(target,null,null);
+            }
+        } else {
+            File folder=appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if(folder==null) throw new Exception("Armazenamento externo indisponível.");
+            if(!folder.exists()&&!folder.mkdirs()) throw new Exception("Não foi possível criar a pasta de downloads.");
+            File target=new File(folder,SAVED_ARCHIVE_NAME);
+            try(InputStream in=new FileInputStream(source);FileOutputStream out=new FileOutputStream(target,false)) {
+                byte[] buffer=new byte[65536];int count;
+                while((count=in.read(buffer))!=-1) out.write(buffer,0,count);
+                out.getFD().sync();
+            }
+        }
+        postProgress(source.length(),source.length(),"PACOTE SALVO NO CELULAR...");
     }
 
     private boolean isWifiConnected() {
