@@ -70,6 +70,7 @@ jobs:
           set -euo pipefail
           STORE_PASS="$(openssl rand -hex 24)"
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/bu-temp-release.jks" -storepass "$STORE_PASS" -keypass "$STORE_PASS" -alias bu-temp-release -keyalg RSA -keysize 2048 -validity 30 -dname "CN=BATTLE UNIVERSE TEMPORARY, OU=TEST, O=BATTLE UNIVERSE, L=Miguel Calmon, ST=Bahia, C=BR"
+          echo "::add-mask::$STORE_PASS"
           {
             echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/bu-temp-release.jks"
             echo "BU_KEYSTORE_PASSWORD=$STORE_PASS"
@@ -86,9 +87,13 @@ jobs:
           set -euo pipefail
           APK="app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
-          apksigner verify --verbose "$APK"
-          test "$(apkanalyzer manifest debuggable "$APK")" = "false"
-          test "$(apkanalyzer manifest application-id "$APK")" = "com.battleuniverse.game"
+          APK_SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          APK_ANALYZER="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          test -x "$APK_SIGNER"
+          test -x "$APK_ANALYZER"
+          "$APK_SIGNER" verify --verbose "$APK"
+          test "$("$APK_ANALYZER" manifest debuggable "$APK")" = "false"
+          test "$("$APK_ANALYZER" manifest application-id "$APK")" = "com.battleuniverse.game"
           python - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
