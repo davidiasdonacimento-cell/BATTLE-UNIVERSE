@@ -341,7 +341,7 @@ float terrainHeightForMap(int map,float x,float z) {
 }
 MeshBuffer buildMapTerrain(int map) {
     std::vector<float> vertices;
-    constexpr int segments=96;
+    constexpr int segments=128;
     constexpr float extent=WORLD_LIMIT;
     vertices.reserve(segments*segments*36);
     auto point=[&](int ix,int iz) {
@@ -543,7 +543,7 @@ bool terrainPositionBlocked(float x,float z,float radius) {
 bool worldPositionBlocked(float x,float z,float radius) {
     if(x<-WORLD_LIMIT+radius||x>WORLD_LIMIT-radius||z<-WORLD_LIMIT+radius||z>WORLD_LIMIT-radius)return true;
     if(terrainPositionBlocked(x,z,radius))return true;
-    const size_t treeLimit=gQuality==0?8:(gQuality==1?14:24);
+    const size_t treeLimit=gQuality==0?8:(gQuality==1?14:32);
     for(size_t i=0;i<treeLimit;++i) {
         const Vec3 tree=gTreePositions[i];
         const float dx=x-tree.x,dz=z-tree.z;
@@ -575,7 +575,7 @@ void moveWithCollision(Vec3& actor,float nextX,float nextZ,float radius) {
     const float startX=actor.x,startZ=actor.z;
     const float dx=nextX-startX,dz=nextZ-startZ;
     const int steps=std::clamp(static_cast<int>(std::ceil(
-        std::max(std::fabs(dx),std::fabs(dz))/0.20f)),1,32);
+        std::max(std::fabs(dx),std::fabs(dz))/0.15f)),1,128);
     for(int step=1;step<=steps;++step) {
         const float t=static_cast<float>(step)/static_cast<float>(steps);
         const float candidateX=startX+dx*t;
@@ -745,7 +745,7 @@ void drawWorld(float time) {
 
     // A forest ring and smaller groves break up sightlines and make the island feel broad.
     const auto& trees=gTreePositions;
-    size_t treeLimit=gQuality==0?8:(gQuality==1?14:24);
+    size_t treeLimit=gQuality==0?8:(gQuality==1?14:32);
     for(size_t i=0;i<treeLimit;++i) {
         float sway=std::sin(time*0.8f+static_cast<float>(i))*0.035f;
         float scale=0.80f+0.08f*static_cast<float>(i%4)+sway;
@@ -2445,7 +2445,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         const float playerDx=bot.pos.x-gPlayer.x;
         const float playerDz=bot.pos.z-gPlayer.z;
         const float botDistance2=playerDx*playerDx+playerDz*playerDz;
-        const float renderDistance=gQuality==0?64.0f:(gQuality==1?88.0f:112.0f);
+        const float renderDistance=gQuality==0?64.0f:(gQuality==1?96.0f:136.0f);
         if(botDistance2>renderDistance*renderDistance)continue;
         const bool botAiming=bot.aiming||(!isAllyBot(i)&&botDistance2<34.0f*34.0f);
         Vec3 botDrawPos=bot.pos;
