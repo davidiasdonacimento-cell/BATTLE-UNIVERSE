@@ -38,7 +38,7 @@ public final class MainActivity extends Activity {
                 if(hud!=null)hud.setDeviceIdentity(code);
             }
             @Override public void onRecoveryCode(String code) {
-                if(entryGate!=null)entryGate.showRecoveryCode(code);
+                if(hud!=null)hud.showRecoveryCode(code); else if(entryGate!=null)entryGate.showRecoveryCode(code);
             }
         });
         entryGate.setActions(new EntryGateView.Actions() {
@@ -142,6 +142,7 @@ public final class MainActivity extends Activity {
         hud.setGoogleAccountStatus(accountSync.isConfigured(),accountSync.isSignedIn(),
                 accountSync.getUsername(),"Conta BATTLE UNIVERSE autenticada.");
         hud.setDeviceIdentity(accountSync.getDeviceCode());
+        hud.setRecoveryCodeAction(()->accountSync.rotateRecoveryCode());
         root.addView(gameSurface,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
         root.addView(hud,new FrameLayout.LayoutParams(
