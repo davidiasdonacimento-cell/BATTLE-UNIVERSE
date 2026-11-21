@@ -195,7 +195,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                         :"O presente de hoje já foi resgatado.";
                 if(callback!=null)main.post(()->{if(!closed)callback.onResult(claimed,diamonds,message);});
             } catch(Exception e) {
-                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,0,"Não foi possível resgatar o presente diário.");});
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,"Não foi possível resgatar o presente diário.");});
             }
         });
     }
