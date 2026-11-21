@@ -121,6 +121,7 @@ public final class ContentPackInstaller {
                 String actualHash=sha256(archive);
                 if(!actualHash.equals(expectedHash) && restored) {
                     archive.delete();
+                    restored=false;
                     postProgress(0,expectedSize,"O ARQUIVO SALVO NÃO PASSOU NA VERIFICAÇÃO. BAIXANDO UMA CÓPIA NOVA...");
                     downloadArchive(archive,expectedSize);
                     actualHash=sha256(archive);
@@ -219,12 +220,15 @@ public final class ContentPackInstaller {
     /** Keep a verified archive in the user's Downloads folder; it is intentionally not deleted after extraction. */
     private void saveArchiveToDownloads(File source) throws Exception {
         if(Build.VERSION.SDK_INT>=29) {
+            Uri collection=MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+            String selection=MediaStore.Downloads.DISPLAY_NAME+"=? AND "+MediaStore.Downloads.RELATIVE_PATH+"=?";
+            appContext.getContentResolver().delete(collection,selection,
+                    new String[]{SAVED_ARCHIVE_NAME,SAVED_ARCHIVE_FOLDER});
             ContentValues values=new ContentValues();
             values.put(MediaStore.Downloads.DISPLAY_NAME,SAVED_ARCHIVE_NAME);
             values.put(MediaStore.Downloads.MIME_TYPE,"application/zip");
             values.put(MediaStore.Downloads.RELATIVE_PATH,SAVED_ARCHIVE_FOLDER);
             values.put(MediaStore.Downloads.IS_PENDING,1);
-            Uri collection=MediaStore.Downloads.EXTERNAL_CONTENT_URI;
             Uri target=appContext.getContentResolver().insert(collection,values);
             if(target==null) throw new Exception("Não foi possível salvar o pacote na pasta Downloads.");
             boolean complete=false;
