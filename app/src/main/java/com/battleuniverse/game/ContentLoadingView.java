@@ -145,6 +145,49 @@ public final class ContentLoadingView extends View {
         canvas.restore();
     }
 
+    private void drawVisionMascot(Canvas canvas,float time) {
+        float bob=(float)Math.sin(time*2.1f)*5f;
+        float pulse=1f+(float)Math.sin(time*3.2f)*0.035f;
+        canvas.save();
+        canvas.translate(640,228+bob);
+        canvas.scale(pulse,pulse);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0x5535DDEB);
+        canvas.drawCircle(0,0,72+(float)Math.sin(time*2.5f)*5f,paint);
+        paint.setShader(new LinearGradient(-42,-48,45,58,
+            new int[]{0xFFB9F8FF,0xFF36BFD6,0xFF155078},null,Shader.TileMode.CLAMP));
+        rect.set(-52,-60,52,64);
+        canvas.drawRoundRect(rect,34,34,paint);
+        paint.setShader(null);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(3f);
+        paint.setColor(0xFFB9F8FF);
+        rect.set(-52,-60,52,64);
+        canvas.drawRoundRect(rect,34,34,paint);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFF071A2B);
+        rect.set(-38,-17,38,24);
+        canvas.drawRoundRect(rect,18,18,paint);
+        paint.setColor(0xFF71F6F0);
+        canvas.drawOval(-27,-5,-9,7,paint);
+        canvas.drawOval(9,-5,27,7,paint);
+        paint.setColor(Color.WHITE);
+        canvas.drawCircle(-18,-1,3,paint);
+        canvas.drawCircle(18,-1,3,paint);
+        paint.setColor(0xFF16456A);
+        rect.set(-24,43,24,57);
+        canvas.drawRoundRect(rect,7,7,paint);
+        paint.setColor(0xFF8BF7EF);
+        canvas.drawCircle(0,49,4+(float)Math.sin(time*5f)*1.2f,paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(2f);
+        paint.setColor(0x9976F5F0);
+        canvas.drawArc(-66,-70,66,70,205,130,false,paint);
+        canvas.drawArc(-66,-70,66,70,25,130,false,paint);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.restore();
+    }
+
     private String shortText(String value,int max) {
         if(value==null)return "";
         if(value.length()<=max)return value;
