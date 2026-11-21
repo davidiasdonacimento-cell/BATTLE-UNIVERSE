@@ -178,3 +178,15 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - O cliente do jogo ainda precisa consultar as configurações globais do servidor para aplicar nome do jogo/personagens no lobby e precisa ser integrado/testado com a API própria. A alteração administrativa do nome exibido não altera applicationId, nome do pacote nem assinatura do APK.
 - Estado: código publicado; build em execução; sem confirmação de APK compilado, implantação de servidor ou teste no Redmi 12.
 - Próxima construção de conteúdo: modelos 3D originais de barbas, skins clássicas exclusivas BATTLE UNIVERSE e equipamentos modulares com geometria, materiais, encaixes, colisões quando aplicável e integração no inventário/engine. Não copiar modelos, marcas ou skins proprietárias de outros jogos.
+
+
+## Construção de barbas, skins e equipamentos — 2026-11-21
+
+- A engine OpenGL ES 3.0 agora possui quatro slots de acessórios cosméticos do operador: barba (3 variantes), capacete (3), mochila (3) e colete (3), cada categoria com opção de remover. Os componentes são geometria 3D procedural encaixada em coordenadas locais do corpo e acompanham a rotação/pose do personagem.
+- A página "ACESSÓRIOS 3D" foi adicionada à oficina de roupas; seleção é persistida em SharedPreferences e sincronizada pelo AccountSyncManager com o perfil PostgreSQL usando equipped_beard, equipped_helmet, equipped_backpack e equipped_vest.
+- Foram adicionadas três skins originais BATTLE UNIVERSE: VULCÃO, NEBULAR e CERRADO, com paletas, placas, ombreiras e faixas geométricas próprias na engine. A loja usa preço fixo em diamantes virtuais e a seleção fica persistida/sincronizada.
+- A API permite agora que cliente autenticado consulte /v1/game/settings. O login/restauração busca nome global do jogo, nomes de personagens e nome de exibição individual; HudOverlay aplica esses valores ao lobby.
+- Limite importante: estes acessórios e skins são malhas/primitivas procedurais de OpenGL ES, não arquivos de personagem GLB/FBX com rig profissional. A etapa futura ainda precisa produzir/importar modelos de alta fidelidade, UVs, texturas, pesos/rig e animações de equipamento; esta entrega não deve ser descrita como modelos escaneados ou assets de estúdio.
+- Integração administrativa e de conta está no código, mas não pode ser declarada operacional até o servidor e PostgreSQL serem implantados e testados.
+- Bloqueio de hospedagem identificado: a conta Render já tem um único PostgreSQL gratuito ativo, pertencente ao projeto Quantum Hub, com expiração indicada em 2026-12-14. Não reutilizar banco de outro projeto. O Render recusou criar um segundo banco free. Para manter API no Render sem misturar dados, escolher um banco gratuito externo (ex.: Neon) ou autorizar plano pago com responsável pela conta.
+- Estado desta construção: commits publicados; workflow Android em execução; APKs e teste no aparelho ainda não confirmados.
