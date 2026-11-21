@@ -467,8 +467,9 @@ public final class HudOverlay extends View {
         if (roster == null) roster = multiplayerState.optJSONArray("roster");
         if (roster == null) roster = new org.json.JSONArray();
         if (found) {
-            humans = root.optInt("human_count", humans);
-            bots = root.optInt("bot_count", bots);
+            JSONObject matchState = root.optJSONObject("state");
+            humans = root.optInt("human_count", matchState==null?humans:matchState.optInt("human_count",humans));
+            bots = root.optInt("bot_count", matchState==null?bots:matchState.optInt("bot_count",bots));
         } else {
             humans = root.optInt("human_players_searching", humans);
         }
