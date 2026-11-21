@@ -175,7 +175,9 @@ std::array<TrainingTarget,TARGET_COUNT> gTargets{{
 std::array<int,4> gWeaponAmmo{{0,0,0,0}};
 std::array<bool,4> gWeaponOwned{{false,false,false,false}};
 int gTrainingScore=0, gWeaponType=-1;
-int gDuelWeapon=1,gBotDuelWeapon=2;
+int gDuelWeapon=1,gBotDuelWeapon=2,gDuelBotScore=0;
+float gDuelPlayerRespawn=0.0f;
+bool gDuelPlayerPendingRespawn=false;
 struct GroundLoot { Vec3 pos; int weaponType=0; int ammo=0; bool active=false; bool ammoOnly=false; int kind=0; };
 std::array<GroundLoot,64> gGroundLoot{};
 int gPlayerHealth=100,gPlayerShield=0,gMedkits=0,gEliminations=0;
@@ -1278,6 +1280,11 @@ void updateStatus() {
         out<<"MODO ESPECTADOR  •  ACOMPANHANDO SOBREVIVENTES";
         setStatus(out.str());return;
     }
+    if(gPlayerDowned&&gSelectedMode==4&&gDuelPlayerPendingRespawn) {
+        out<<"GLADIADORES • PLACAR "<<gEliminations<<" - "<<gDuelBotScore
+           <<"  •  REENTRADA "<<static_cast<int>(std::ceil(gDuelPlayerRespawn))<<"s";
+        setStatus(out.str());return;
+    }
     if(gPlayerDowned) {
         out<<"DERRUBADO • AGUARDANDO REVIVER • "<<static_cast<int>(gDownedTimer)<<"s";
         setStatus(out.str());return;
@@ -1304,9 +1311,9 @@ void updateStatus() {
            <<"  •  MADEIRA "<<gWood<<"  •  PONTOS "<<gTrainingScore;
     } else if(gSelectedMode==4) {
         static const char* duelWeapons[]={"DESERT EAGLE","MINI UZI","XM8","UMP"};
-        out<<"GLADIADORES  •  PLACAR "<<gEliminations<<"/5  •  "<<weaponName()
-           <<"  •  IA: "<<duelWeapons[std::clamp(gBotDuelWeapon,0,3)];
-        if(gMatchFinished) out<<(gEliminations>=5?"  •  VITÓRIA":"  •  DERROTA");
+        out<<"GLADIADORES  •  PLACAR "<<gEliminations<<" - "<<gDuelBotScore
+           <<"  •  META 5  •  "<<weaponName()<<"  •  IA: "<<duelWeapons[std::clamp(gBotDuelWeapon,0,3)];
+        if(gMatchFinished) out<<(gEliminations>=5?"  •  VITÓRIA":"  •  ELIMINADO");
         else out<<"  •  VIDA "<<gPlayerHealth<<"%";
     } else {
         int remaining=0;
@@ -1595,9 +1602,24 @@ void applyPlayerDamage(int amount,const char* reason) {
     if(gPlayerDowned||gMatchFinished)return;
     const int absorbed=std::min(gPlayerShield,amount);gPlayerShield-=absorbed;amount-=absorbed;
     gPlayerHealth=std::max(0,gPlayerHealth-amount);gDamageTaken+=absorbed+amount;
-    if(gPlayerHealth<=0){bool ally=false;if(gSelectedMode==1||gSelectedMode==2)for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])ally=true;
-        if(ally){gPlayerDowned=true;gDownedTimer=90;gReviveProgress=0;setStatus("DERRUBADO • RASTEJE ATÉ SEU ESQUADRÃO • AGUARDANDO REVIVER");}else{gMatchFinished=true;setStatus(reason);}}
-    else setStatus("DANO RECEBIDO • VIDA "+std::to_string(gPlayerHealth)+"%");
+    if(gPlayerHealth<=0){
+        if(gSelectedMode==4) {
+            ++gDuelBotScore;
+            if(gDuelBotScore>=5) {
+                gMatchFinished=true;gPlayerDowned=false;gDuelPlayerPendingRespawn=false;
+                setStatus("GLADIADORES • DERROTA • IA 5/5");
+            } else {
+                gPlayerDowned=true;gDuelPlayerPendingRespawn=true;gDuelPlayerRespawn=2.5f;
+                gBotHealth[0]=BOT_MAX_HEALTH;gBotActive[0]=true;gBotDowned[0]=false;
+                gBotRespawn[0]=0.0f;gBots[0].pos=gBotHomes[0];
+                setStatus("GLADIADORES • PONTO IA "+std::to_string(gDuelBotScore)+"/5 • REENTRADA EM 3s");
+            }
+        } else {
+            bool ally=false;if(gSelectedMode==1||gSelectedMode==2)for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])ally=true;
+            if(ally){gPlayerDowned=true;gDownedTimer=90;gReviveProgress=0;setStatus("DERRUBADO • RASTEJE ATÉ SEU ESQUADRÃO • AGUARDANDO REVIVER");}
+            else {gMatchFinished=true;setStatus(reason);}
+        }
+    } else setStatus("DANO RECEBIDO • VIDA "+std::to_string(gPlayerHealth)+"%");
 }
 void placeBuildPiece() {
     if(gBuildCount>=gBuildLimit||gBuildCount>=BUILD_CAPACITY) {
@@ -1892,7 +1914,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gMatchTime=0;gZoneRadius=112;gCollected=0;gCrystalTaken.fill(false);
         gBuildCount=0;gWood=180;gBuildType=0;gBuildCooldown=0;
         gWeaponAmmo.fill(0);gWeaponOwned.fill(false);gTrainingScore=0;gWeaponType=-1;gPulseCooldown=0;gPulseFlash=0;
-        gPlayerHealth=100;gPlayerShield=0;gMedkits=0;gEliminations=0;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
+        gPlayerHealth=100;gPlayerShield=0;gMedkits=0;gEliminations=0;gDuelBotScore=0;gDuelPlayerRespawn=0.0f;gDuelPlayerPendingRespawn=false;gDamageDealt=0;gDamageTaken=0;gAiEliminations=0;gMatchFinished=false;gSpectatorMode=false;gSpectatorTarget=-1;gZoneDamageTimer=0;
         gPlayerDowned=false;gCrouched=false;gBuildPreview=false;gDownedTimer=0;gReviveProgress=0;
     gPlayerReviveTarget=-1;gPlayerReviveProgress=0;
         resetGroundLoot();
@@ -1996,6 +2018,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
     gScreenMode=0;gSelectedCharacter=0;gSelectedMap=0;gSelectedMode=0;gQuality=1;
+    gDuelBotScore=0;gDuelPlayerRespawn=0.0f;gDuelPlayerPendingRespawn=false;
     gJumpHeight=0;gJumpVelocity=0;gMatchTime=0;gZoneRadius=112;
     gCollected=0;gPreviousButtons=0;gInteractCooldown=0;gCrystalTaken.fill(false);
     gBuildCount=0;gBuildType=0;gWood=180;gBuildCooldown=0;gBuildLimit=12;gResourceCount=5;gContentPackReady=false;
@@ -2277,6 +2300,20 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
 
     if(gDropState==3) {
         updateBots(dt);
+        if(gSelectedMode==4&&gDuelPlayerPendingRespawn&&!gMatchFinished) {
+            gDuelPlayerRespawn=std::max(0.0f,gDuelPlayerRespawn-dt);
+            if(gDuelPlayerRespawn<=0.0f) {
+                gPlayer={0.0f,0.55f,0.0f};
+                gPlayerXSnapshot.store(gPlayer.x,std::memory_order_relaxed);
+                gPlayerZSnapshot.store(gPlayer.z,std::memory_order_relaxed);
+                gPlayerHealth=100;gPlayerShield=0;gPlayerDowned=false;
+                gDuelPlayerPendingRespawn=false;
+                gBots[0].pos=gBotHomes[0];gBotHealth[0]=BOT_MAX_HEALTH;
+                gBotActive[0]=true;gBotDowned[0]=false;gBotRespawn[0]=0.0f;
+                gBotAttackCooldown[0]=1.0f;
+                setStatus("GLADIADORES • PLACAR "+std::to_string(gEliminations)+" - "+std::to_string(gDuelBotScore)+" • DUELO REINICIADO");
+            }
+        }
         updateDownedState(dt);
         // Reviver controlado pelo jogador: mantenha USAR pressionado perto do aliado caído.
         if(!interactHeld){gPlayerReviveTarget=-1;gPlayerReviveProgress=0.0f;}
@@ -2502,6 +2539,11 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeGetMatchStats(JNIEnv* env,jcl
     jint values[5]={gDamageDealt,gDamageTaken,gAiEliminations,0,gPlayerHealth};
     for(int i=0;i<BOT_COUNT;++i)if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i))++values[3];
     jintArray result=env->NewIntArray(5);if(result)env->SetIntArrayRegion(result,0,5,values);return result;
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetDuelStats(JNIEnv* env,jclass) {
+    jint values[2]={gEliminations,gDuelBotScore};
+    jintArray result=env->NewIntArray(2);if(result)env->SetIntArrayRegion(result,0,2,values);return result;
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetSpectator(JNIEnv*,jclass,jboolean enabled) {
