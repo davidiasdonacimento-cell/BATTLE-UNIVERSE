@@ -325,7 +325,7 @@ def player_game_settings(db: Session = Depends(db_session), player: Player = Dep
             "account_character_name": (player.profile or {}).get("character_display_name", "")}
 
 ROYALE_PRIZES = [
-    {"id": "shirt_neon", "name": "CAMISA NEON", "weight": 40, "profile_key": "wear_shirt_neon"},
+    {"id": "shirt_tactical", "name": "CAMISA TÁTICA", "weight": 40, "profile_key": "wear_shirt_tactical"},
     {"id": "boots_combat", "name": "BOTAS COMBATE", "weight": 30, "profile_key": "wear_boots_combat"},
     {"id": "set_aurora", "name": "CONJUNTO AURORA", "weight": 20, "profile_key": "wear_set_aurora"},
     {"id": "beard_old", "name": "BARBINHA DO VELHO", "weight": 9, "profile_key": "wear_beard_old"},
