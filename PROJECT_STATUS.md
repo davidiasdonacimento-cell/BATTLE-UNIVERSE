@@ -236,4 +236,4 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Em nova instalação/atualização, procura esse ZIP no armazenamento compartilhado, copia para a área privada de trabalho e valida o SHA-256 antes de extrair. Não baixa novamente quando o arquivo existente está íntegro.
 - O ZIP é mantido após a instalação. Se estiver ausente, incompleto ou com hash incorreto, o instalador baixa uma nova cópia e substitui a salva.
 - Android 7–9 usa armazenamento externo específico do app como fallback.
-- Código publicado nos commits `1903fef` e `7c7ce21`. Build Android e teste físico ainda não confirmados; o comportamento no aparelho permanece pendente de validação.
+- Código publicado nos commits `1903fef`, `7c7ce21`, `af92026` e `6e51c0c`. A cópia privada temporária é removida após instalação bem-sucedida, mantendo o ZIP em Downloads; a checagem de espaço considera ZIP duplicado temporário e até 3 GiB de extração. Build Android e teste físico ainda não confirmados; o comportamento no aparelho permanece pendente de validação.
