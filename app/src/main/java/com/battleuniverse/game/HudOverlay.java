@@ -456,6 +456,11 @@ public final class HudOverlay extends View {
         pill(c,270,665,120,25,collectionPage==0?"PÁGINA 1 / 2":"VOLTAR À PÁG. 1",0x553B6172,Color.WHITE);
         pill(c,710,665,130,25,collectionPage==0?"PRÓXIMA PÁGINA":"PÁGINA 2 / 2",0xFF176A75,Color.WHITE);
         text(c,"Prévia de cada peça • sem miniaturas de personagens",430,682,7.5f,0xFF8FAAB8,Typeface.DEFAULT);
+        String[] history=profile.getRecentLedgerEntries(1);
+        if(history.length>0){
+            String recent=history[0].length()>92?history[0].substring(0,89)+"...":history[0];
+            text(c,"ÚLTIMA MOVIMENTAÇÃO • "+recent,270,705,7.0f,0xFF9CB4C1,Typeface.DEFAULT);
+        }
     }
 
     private void drawCollectionPreview(Canvas c,float cx,float cy,int type,int variant,int color){
