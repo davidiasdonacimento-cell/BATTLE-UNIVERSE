@@ -27,6 +27,11 @@ class AccountIdentityTests(unittest.TestCase):
         self.assertRegex(code, r"^BU-[A-F0-9]{5}-[A-F0-9]{5}$")
         self.assertNotEqual(code, main.new_recovery_code())
 
+    def test_online_promo_code_is_fixed_and_server_owned(self):
+        self.assertEqual(main.PROMO_CODES["100K"], {"id": "WELCOME_100K", "diamonds": 100000})
+        self.assertNotIn("coins", main.PROFILE_FIELDS)
+        self.assertNotIn("diamonds", main.PROFILE_FIELDS)
+
     def test_royale_probabilities_are_exactly_one_hundred_percent(self):
         self.assertEqual(sum(item["weight"] for item in main.ROYALE_PRIZES), 100)
         self.assertEqual(len({item["id"] for item in main.ROYALE_PRIZES}), 5)
