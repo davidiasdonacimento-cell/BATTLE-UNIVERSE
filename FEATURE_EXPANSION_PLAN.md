@@ -18,7 +18,7 @@
 - Diamantes recebidos em fluxos offline e online devem convergir para a mesma carteira da conta, sem duplicação e sem perda de saldo.
 - Quando offline, transações locais devem ser registradas em fila idempotente e reconciliadas com o servidor quando houver conexão; conflitos, limites e prevenção de fraude precisam ser definidos antes de liberar o fluxo.
 - O servidor é a fonte de verdade para saldo online, compras e recompensas competitivas. O cliente não pode inventar resultados ou alterar saldo.
-- Moedas comuns podem continuar como moeda distinta; não criar diamante premium/normal nem categorias paralelas de diamantes.
+- Moedas comuns/ouro foram removidos completamente; a única moeda é diamante.
 - Preservar saldos legados por migração única auditável, sem conceder duas vezes valores já migrados.
 
 ### Patentes, pontos e temporadas
@@ -33,7 +33,7 @@
 
 ### Recompensas por desempenho
 - Recompensas separadas e detalhadas para dano válido, eliminações, assistências, colocação, vitória, objetivos e participação.
-- Mostrar a origem de cada XP, moeda e diamante no resumo da partida e no histórico de recompensas.
+- Mostrar a origem de cada XP e diamante no resumo da partida e no histórico de recompensas.
 - Definir limites por partida, validação de dano, proteção contra auto-dano/farming, alvos repetidos, partidas inválidas e duplicação de resultados.
 - Partidas offline contra bots podem ter recompensas locais sujeitas a limites e reconciliação; não podem gerar pontos de ranking online sem validação autoritativa.
 - Recompensas de partidas online só são concedidas após validação do servidor de partidas.
@@ -49,7 +49,7 @@ Ao encerrar a partida, abrir uma tela de resultados completa, legível em celula
 - Estatísticas da equipe e comparação entre equipes.
 - Lista de eventos relevantes da partida, quando houver dados confiáveis.
 - Destaque visual do MVP e explicação dos critérios que determinaram o prêmio.
-- Recompensas detalhadas: XP, moedas, diamantes (saldo único), itens, missões concluídas e progresso do passe.
+- Recompensas detalhadas: XP, diamantes (saldo único), itens, missões concluídas e progresso do passe.
 - Painel de patente: pontos ganhos/perdidos e cálculo discriminado, patente/divisão anterior e atual, barra de progresso e pontos restantes para subir.
 - Ações: continuar, jogar novamente, convidar equipe, ver perfil e abrir histórico, conforme o modo e os serviços disponíveis.
 - Se algum dado não existir, mostrar indisponível ou omitir; nunca inventar estatísticas.
@@ -106,11 +106,11 @@ Ao encerrar a partida, abrir uma tela de resultados completa, legível em celula
 
 - Passe de temporada com trilha gratuita e premium, níveis, XP, calendário, recompensas, resgates e histórico.
 - Missões diárias e semanais com objetivos mensuráveis, renovação e resgate idempotente.
-- Loja rotativa com catálogo, preços, moeda, disponibilidade, prévia, confirmação e histórico.
+- Loja rotativa com catálogo, preços exclusivamente em diamantes, disponibilidade, prévia, confirmação e histórico.
 - Conquistas e medalhas com critérios verificáveis, progresso e data de obtenção.
 - Eventos especiais com calendário, regras, objetivos e recompensas.
 - Códigos promocionais com validade, limite por conta, auditoria e validação no servidor quando online.
-- Histórico de recompensas com origem, data, partida/evento, moeda/item e estado de sincronização.
+- Histórico de recompensas com origem, data, partida/evento, diamantes/item e estado de sincronização.
 - Evitar duplicação de recompensas entre passe, missão, evento, correio, partida e carteira.
 
 ## 9. Qualidade, apresentação e acessibilidade
@@ -175,6 +175,6 @@ O relatório de teste deve separar defeitos confirmados, sugestões, itens não 
 - Recursos online precisam de servidor ativo, autenticação, autorização, moderação/anti-abuso e teste com clientes reais.
 - Recompensas e ranking devem ser reproduzíveis a partir de eventos/resultados validados; não confiar em números enviados pelo cliente.
 - O resumo de partida deve ser consistente com os dados armazenados e não duplicar resultados/recompensas.
-- Uma única carteira de diamantes deve apresentar o mesmo saldo em telas offline/online e após sincronização, sem duplicação ou perda.
+- A carteira única de diamantes é autoritativa na API; o cache do APK não concede nem altera saldo. Não existe carteira de ouro/moedas.
 - O jogo deve manter compatibilidade com os requisitos permanentes e não regredir funcionalidades já existentes.
 - Bugs conhecidos, limitações e testes pendentes devem ser registrados; nunca prometer ausência total de bugs.
