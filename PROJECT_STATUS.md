@@ -58,6 +58,14 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Limitação desta alteração: a base territorial, parte das estradas e a distribuição principal de edifícios ainda são compartilhadas entre os oito mapas. Os novos marcos são principalmente visuais e ainda não têm colisão/interação própria, loot exclusivo, interiores exclusivos ou navegação específica. Portanto, os oito mapas ainda não devem ser descritos como oito mundos totalmente independentes.
 - A compilação do commit desta expansão e o teste visual no Redmi 12 ainda precisam ser confirmados.
 
+## Arsenal definitivo — correção publicada em 2026-11-21 (build pendente)
+- O arsenal permitido passa a conter somente **Desert Eagle (Desert), Mini Uzi, XM8 e UMP**. Pulso Plasma, Raio Arc, Nova e Carapina foram retiradas da engine.
+- A engine C++ usa quatro índices coerentes (0–3) para modelo desenhado, nome, munição, dano, alcance, cadência, coleta e troca de arma.
+- O loot do BR foi redistribuído para oferecer apenas essas quatro armas e suas munições.
+- O Treinamento disponibiliza as quatro armas, com munição infinita, e inicia com a Mini Uzi equipada; as quatro também aparecem como coletas próximas ao ponto inicial.
+- Os modelos atuais continuam sendo formas 3D procedurais desenhadas pela engine, não modelos externos de alta resolução.
+- Esta alteração está publicada no código; ainda depende de build CI e teste no aparelho para confirmar a exibição real das quatro armas.
+
 ## Pendências explícitas
 - Criar/importar modelos humanos de alta qualidade (GLB), rig profissional e biblioteca de animações; validar skins modulares reais.
 - Fazer teste visual e funcional no Redmi 12; confirmar orientação, escala, FPS, deformações e controles.
