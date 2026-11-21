@@ -21,7 +21,7 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - GameSurfaceView encaminha controles e JNI.
 - game_engine.cpp renderiza mundo/personagens em OpenGL ES 3.0.
 - HudOverlay desenha telas Android sobre a engine.
-- Firebase está ligado a autenticação/perfil; não é servidor multiplayer em tempo real.
+- Identidade e perfis online migrando para API própria FastAPI + PostgreSQL; Firebase foi descontinuado nesta arquitetura.
 
 ## Estado anterior comprovado
 - 29 bots locais, 30 participantes no modo offline.
@@ -164,3 +164,17 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Perfil e painel do lobby exibem partidas, vitórias e eliminações a partir da mesma fonte compartilhada.
 - O registro de estatísticas é idempotente e pode ser repetido após uma falha sem somar novamente a mesma partida.
 - Limite: estatísticas atuais vêm do modo local existente; ainda não representam partidas online, temporadas ranqueadas ou placares de servidor. Build Android completa e teste físico permanecem pendentes.
+
+
+## Servidor próprio e aplicativo administrativo — implementação publicada em 2026-11-21
+
+- A API `server/main.py` usa FastAPI + PostgreSQL, JWT com papéis separados (`player` e `admin`) e hash Argon2 para credenciais.
+- Administrador inicial é provisionado por variáveis privadas `ADMIN_USERNAME` e `ADMIN_PASSWORD`; o APK não contém senha mestra.
+- Endpoints administrativos: visão geral, pesquisa/listagem de contas, alteração de nickname, nome de exibição do personagem por conta, suspensão/reativação, exclusão lógica, nome global do jogo, nomes de personagens por ID e auditoria.
+- Exclusão de conta é lógica: bloqueia login, troca o hash por credencial aleatória e limpa o perfil, mantendo registro mínimo e histórico de auditoria. Backups do PostgreSQL devem ser configurados antes de uso real.
+- Novo módulo Android nativo `:admin`, pacote `com.battleuniverse.admin`, fornece login HTTPS, painel, pesquisa, edição, suspensão, encerramento, configurações globais e auditoria. É um APK separado do jogo; não usa WebView.
+- Workflow GitHub Actions agora compila e verifica os dois APKs e publica artefatos separados.
+- A URL HTTPS do servidor é informada na tela de login do ADMIN. O servidor ainda precisa ser implantado e receber PostgreSQL e variáveis privadas no Render antes de qualquer operação funcionar.
+- O cliente do jogo ainda precisa consultar as configurações globais do servidor para aplicar nome do jogo/personagens no lobby e precisa ser integrado/testado com a API própria. A alteração administrativa do nome exibido não altera applicationId, nome do pacote nem assinatura do APK.
+- Estado: código publicado; build em execução; sem confirmação de APK compilado, implantação de servidor ou teste no Redmi 12.
+- Próxima construção de conteúdo: modelos 3D originais de barbas, skins clássicas exclusivas BATTLE UNIVERSE e equipamentos modulares com geometria, materiais, encaixes, colisões quando aplicável e integração no inventário/engine. Não copiar modelos, marcas ou skins proprietárias de outros jogos.
