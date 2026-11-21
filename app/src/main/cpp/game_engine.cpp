@@ -95,6 +95,7 @@ GLsizei gSphereCount=0, gCylinderCount=0, gConeCount=0;
 GLint gMvpLocation=-1, gModelLocation=-1, gColorLocation=-1;
 int gScreenMode=0, gSelectedCharacter=0, gSelectedMap=0, gSelectedMode=0, gQuality=1;
 int gSelectedShirtStyle=0,gSelectedBootStyle=0,gSelectedSetStyle=0;
+int gEquippedBeard=0,gEquippedHelmet=0,gEquippedBackpack=0,gEquippedVest=0;
 Mat4 gProjection=identity();
 float gCharacterPoseScale=1.0f;
 int gWidth=1, gHeight=1;
@@ -1065,6 +1066,54 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSphere(localPoint(p,0.082f,1.94f+bob,-0.207f,yaw),{0.017f,0.020f,0.014f},dark,yaw);
     drawSphere(localPoint(p,0,1.88f+bob,-0.205f,yaw),{0.035f,0.045f,0.035f},skin,yaw);
     drawCube(localPoint(p,0,1.835f+bob,-0.19f,yaw),{0.045f,0.009f,0.012f},{0.30f,0.10f,0.10f},yaw);
+    // Acessórios 3D modulares BATTLE UNIVERSE: encaixes relativos ao corpo,
+    // para acompanhar rotação, movimento, câmera e escala de agachamento.
+    if(!bot) {
+        const Vec3 beardColor{0.075f,0.052f,0.040f};
+        if(gEquippedBeard==1) {
+            drawSphere(localPoint(p,0,1.785f+bob,-0.178f,yaw),{0.155f,0.075f,0.070f},beardColor,yaw);
+            drawSphere(localPoint(p,-0.105f,1.825f+bob,-0.154f,yaw),{0.065f,0.085f,0.065f},beardColor,yaw);
+            drawSphere(localPoint(p,0.105f,1.825f+bob,-0.154f,yaw),{0.065f,0.085f,0.065f},beardColor,yaw);
+        } else if(gEquippedBeard==2) {
+            drawSphere(localPoint(p,0,1.765f+bob,-0.155f,yaw),{0.175f,0.135f,0.085f},beardColor,yaw);
+            drawSphere(localPoint(p,-0.145f,1.825f+bob,-0.105f,yaw),{0.075f,0.125f,0.075f},beardColor,yaw);
+            drawSphere(localPoint(p,0.145f,1.825f+bob,-0.105f,yaw),{0.075f,0.125f,0.075f},beardColor,yaw);
+            drawSphere(localPoint(p,0,1.875f+bob,-0.188f,yaw),{0.145f,0.045f,0.040f},beardColor,yaw);
+        } else if(gEquippedBeard==3) {
+            drawSphere(localPoint(p,0,1.775f+bob,-0.185f,yaw),{0.085f,0.105f,0.065f},beardColor,yaw);
+            drawSphere(localPoint(p,0,1.865f+bob,-0.205f,yaw),{0.075f,0.035f,0.035f},beardColor,yaw);
+        }
+        if(gEquippedHelmet>0) {
+            const Vec3 helmet=gEquippedHelmet==1?Vec3{0.13f,0.18f,0.22f}:
+                (gEquippedHelmet==2?Vec3{0.68f,0.82f,0.91f}:Vec3{0.10f,0.38f,0.43f});
+            drawSphere(localPoint(p,0,2.105f+bob,0.005f,yaw),{0.255f,0.155f,0.225f},helmet,yaw);
+            drawCube(localPoint(p,0,2.045f+bob,-0.165f,yaw),{0.43f,0.035f,0.075f},helmet,yaw);
+            if(gEquippedHelmet==3)
+                drawSphere(localPoint(p,0,1.985f+bob,-0.205f,yaw),{0.205f,0.075f,0.035f},{0.18f,0.82f,0.91f},yaw);
+            drawCube(localPoint(p,0,2.025f+bob,0.19f,yaw),{0.12f,0.045f,0.045f},{0.035f,0.075f,0.09f},yaw);
+        }
+        if(gEquippedBackpack>0) {
+            const Vec3 pack=gEquippedBackpack==1?Vec3{0.20f,0.25f,0.27f}:
+                (gEquippedBackpack==2?Vec3{0.20f,0.43f,0.58f}:Vec3{0.20f,0.48f,0.34f});
+            drawCube(localPoint(p,0,1.28f+bob,0.285f,yaw),{0.36f,0.48f,0.22f},pack,yaw);
+            drawCube(localPoint(p,0,1.50f+bob,0.285f,yaw),{0.27f,0.16f,0.20f},pack,yaw);
+            drawCube(localPoint(p,-0.205f,1.31f+bob,0.15f,yaw),{0.055f,0.36f,0.055f},{0.10f,0.13f,0.15f},yaw);
+            drawCube(localPoint(p,0.205f,1.31f+bob,0.15f,yaw),{0.055f,0.36f,0.055f},{0.10f,0.13f,0.15f},yaw);
+            if(gEquippedBackpack==3)
+                drawCube(localPoint(p,0,1.28f+bob,0.405f,yaw),{0.19f,0.19f,0.035f},{0.82f,0.88f,0.76f},yaw);
+        }
+        if(gEquippedVest>0) {
+            const Vec3 armor=gEquippedVest==1?Vec3{0.16f,0.21f,0.24f}:
+                (gEquippedVest==2?Vec3{0.28f,0.31f,0.34f}:Vec3{0.08f,0.31f,0.36f});
+            drawCube(localPoint(p,0,1.38f+bob,-0.245f,yaw),{0.43f,0.43f,0.075f},armor,yaw);
+            drawCube(localPoint(p,-0.245f,1.39f+bob,-0.12f,yaw),{0.105f,0.31f,0.17f},armor,yaw);
+            drawCube(localPoint(p,0.245f,1.39f+bob,-0.12f,yaw),{0.105f,0.31f,0.17f},armor,yaw);
+            drawCube(localPoint(p,-0.13f,1.19f+bob,-0.295f,yaw),{0.12f,0.13f,0.06f},{0.08f,0.12f,0.14f},yaw);
+            drawCube(localPoint(p,0.13f,1.19f+bob,-0.295f,yaw),{0.12f,0.13f,0.06f},{0.08f,0.12f,0.14f},yaw);
+            if(gEquippedVest==3)
+                drawCube(localPoint(p,0,1.42f+bob,-0.292f,yaw),{0.13f,0.20f,0.025f},{0.12f,0.78f,0.83f},yaw);
+        }
+    }
 
     // Braços articulados e mãos.
     Vec3 shoulderL{-shoulder,1.48f+bob,0.0f}, shoulderR{shoulder,1.48f+bob,0.0f};
@@ -1793,6 +1842,13 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetWardrobe(JNIEnv*,jclass,ji
     gSelectedShirtStyle=std::clamp(static_cast<int>(shirt),0,4);
     gSelectedBootStyle=std::clamp(static_cast<int>(boots),0,4);
     gSelectedSetStyle=std::clamp(static_cast<int>(set),0,4);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeSetEquipment(JNIEnv*,jclass,jint beard,jint helmet,jint backpack,jint vest) {
+    gEquippedBeard=std::clamp(static_cast<int>(beard),0,3);
+    gEquippedHelmet=std::clamp(static_cast<int>(helmet),0,3);
+    gEquippedBackpack=std::clamp(static_cast<int>(backpack),0,3);
+    gEquippedVest=std::clamp(static_cast<int>(vest),0,3);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetLookSensitivity(JNIEnv*,jclass,jfloat general,jfloat aiming) {
