@@ -12,6 +12,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private volatile float lookSensitivity=1.0f,aimSensitivity=1.0f;
     private volatile int contentBuildLimit=12,contentResourceCount=5;
     private volatile int shirtStyle,bootStyle,setStyle;
+    private volatile int beardStyle,helmetStyle,backpackStyle,vestStyle;
     private volatile boolean contentPackReady=false;
     private volatile boolean invertCameraY=false;
     private boolean aimToggled=false;
@@ -67,6 +68,13 @@ public final class GameSurfaceView extends GLSurfaceView {
         bootStyle=Math.max(0,Math.min(4,boots));
         setStyle=Math.max(0,Math.min(4,set));
         queueEvent(()->nativeSetWardrobe(shirtStyle,bootStyle,setStyle));
+    }
+    public void setEquipment(int beard,int helmet,int backpack,int vest) {
+        beardStyle=Math.max(0,Math.min(3,beard));
+        helmetStyle=Math.max(0,Math.min(3,helmet));
+        backpackStyle=Math.max(0,Math.min(3,backpack));
+        vestStyle=Math.max(0,Math.min(3,vest));
+        queueEvent(()->nativeSetEquipment(beardStyle,helmetStyle,backpackStyle,vestStyle));
     }
     public int getEliminations() {
         try { return nativeGetEliminations(); } catch(UnsatisfiedLinkError error) { return 0; }
@@ -239,6 +247,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetQuality(int value);
     private static native void nativeSetLookSensitivity(float general,float aiming);
     private static native void nativeSetWardrobe(int shirt,int boots,int set);
+    private static native void nativeSetEquipment(int beard,int helmet,int backpack,int vest);
     private static native void nativeSetContentData(int buildLimit,int resourceCount);
     private static native String nativeGetStatus();
     private static native float[] nativeGetPlayerPosition();
@@ -258,6 +267,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
             nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
             nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
+            nativeSetEquipment(beardStyle,helmetStyle,backpackStyle,vestStyle);
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
             nativeSetScreen(screenMode);
             previous=System.nanoTime();
