@@ -300,8 +300,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 editor.putString(key, (String) value);
             } else if ("xp".equals(key) || "diamonds".equals(key) || "coins".equals(key)
                     || "daily_reward_day".equals(key) || "missions_day".equals(key)
-                    || "match_wins".equals(key) || "match_kills".equals(key)
-                    || "matches_played".equals(key) || "last_match_reward_coins".equals(key)
+                    || "last_match_reward_coins".equals(key)
                     || "last_match_reward_diamonds".equals(key) || "last_match_reward_xp".equals(key)) {
                 if (value instanceof Number) editor.putLong(key, ((Number) value).longValue());
             } else if ("mode".equals(key) || "map".equals(key) || "character".equals(key)
