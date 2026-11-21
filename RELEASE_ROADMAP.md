@@ -12,7 +12,7 @@
 4. Este documento: ordem de dependências, marcos internos e porta única de lançamento.
 
 Se uma descrição antiga divergir da decisão mais recente, aplicar estas decisões sem apagar o histórico:
-- Diamantes: um único tipo e um único saldo compartilhado entre experiências offline/online. Não criar diamantes offline/online, premium/comum ou carteiras paralelas. Moedas comuns podem continuar sendo uma moeda distinta. A migração deve preservar saldos e impedir duplicação.
+- Diamantes: única moeda do jogo e único saldo autoritativo no PostgreSQL. Ouro/moedas foram removidos completamente. O APK mantém somente cache de leitura; nenhuma operação local pode alterar a carteira online.
 - Lançamento: todas as funcionalidades obrigatórias planejadas para a primeira versão pública devem estar implementadas, integradas e aprovadas antes da publicação. Builds internas de desenvolvimento e teste são permitidas e não contam como lançamentos públicos.
 - Bots/IA: devem ser identificados como IA no lobby, placares e resultados; nunca apresentados como pessoas reais.
 - Online: só é considerado funcional após servidor autoritativo implantado e validado com clientes reais.
@@ -52,7 +52,7 @@ Tarefas:
 
 Tarefas:
 - Consolidar perfil, identidade, inventário, estatísticas, configurações, progresso e histórico.
-- Implementar carteira de moedas e **uma única carteira de diamantes**, sem divisão offline/online.
+- Implementar exclusivamente uma carteira de diamantes, sem ouro/moedas e sem divisão offline/online.
 - Migrar saldos legados uma única vez, preservar recibos/ledger e impedir concessões duplicadas.
 - Criar ledger imutável/idempotente e fila de transações offline com reconciliação segura.
 - Definir limites e validação de recompensas offline; recompensas competitivas online dependem de resultado validado pelo servidor.
@@ -243,7 +243,7 @@ A auditoria da Fase 0 deve confirmar explicitamente todos estes grupos antes de 
 - THE VISION, Season 02, pacote externo/persistência e integridade de conteúdo.
 - Assinatura de release estável para atualização in-place; não trocar chave.
 - MODMENU2 com God Mode apenas no Treinamento offline.
-- Uma única carteira de diamantes compartilhada, moedas comuns distintas permitidas.
+- Uma única carteira de diamantes; ouro/moedas comuns não são permitidos.
 - Todos os recursos selecionados em FEATURE_EXPANSION_PLAN.md.
 - Tela de fim de partida com IAs e equipes lado a lado, estatísticas e MVP.
 - Plano de teste e avaliação do Kensho.
