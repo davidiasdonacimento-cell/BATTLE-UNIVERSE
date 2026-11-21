@@ -30,7 +30,7 @@ android {
     packaging { jniLibs { useLegacyPackaging = false } }
 }
 dependencies {}
-// The same signing certificate is required for in-place APK updates.
+// Release builds must use the stable private key supplied through GitHub Actions secrets.
 def stableKeystorePath = System.getenv("BU_KEYSTORE_PATH")
 if (stableKeystorePath != null && !stableKeystorePath.trim().isEmpty()) {
     android.signingConfigs.create("ciStable") {
@@ -39,5 +39,5 @@ if (stableKeystorePath != null && !stableKeystorePath.trim().isEmpty()) {
         keyAlias = System.getenv("BU_KEY_ALIAS")
         keyPassword = System.getenv("BU_KEY_PASSWORD")
     }
-    android.buildTypes.debug.signingConfig = android.signingConfigs.getByName("ciStable")
+    android.buildTypes.release.signingConfig = android.signingConfigs.getByName("ciStable")
 }
