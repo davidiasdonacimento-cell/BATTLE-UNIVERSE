@@ -125,6 +125,22 @@ def make_texture_set(name,base,seed,kind):
         pattern=np.sin(x*360+y*120)*.035
     elif kind=="rock":
         pattern=np.sin(x*140+np.cos(y*40))*0.05
+    elif kind=="ice":
+        pattern=np.sin(x*420+y*85)*.045+np.cos(y*310)*.025
+    elif kind=="metal":
+        pattern=np.sin(x*900)*.025+np.cos(y*64)*.035
+    elif kind=="moss":
+        pattern=np.sin(x*72+np.cos(y*33))*0.06
+    elif kind=="composite":
+        pattern=np.sin(x*260)*.025+np.cos(y*260)*.025
+    elif kind=="stone":
+        pattern=np.sin((x*2+y)*170)*.055
+    elif kind=="water":
+        pattern=np.sin(x*38+y*13+np.sin(y*17))*0.065
+    elif kind=="neon":
+        pattern=np.sin(x*680+y*90)*.03+np.cos(y*410)*.02
+    elif kind=="volcanic":
+        pattern=np.sin(x*160+y*60)*.055+np.cos(x*40)*.025
     else:
         pattern=(np.sin(x*105+np.sin(y*27))*0.04+np.cos(y*88)*0.025)
     lum=np.clip((coarse-.5)*.27+(microf-.5)*.12+pattern,-.23,.23)
