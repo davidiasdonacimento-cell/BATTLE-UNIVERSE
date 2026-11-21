@@ -732,7 +732,6 @@ public final class HudOverlay extends View {
         float cx=465,cy=470,radius=133;
         float[] sweeps={144f,108f,72f,32.4f,3.6f};
         int[] colors={0xFF267D9A,0xFF287B75,0xFF7553A5,0xFFB07835,0xFFB43B66};
-        float startAngle=-90f+royaleWheelRotation;
         c.save();c.rotate(royaleWheelRotation,cx,cy);
         float angle=-90f;
         for(int i=0;i<sweeps.length;i++){
@@ -775,8 +774,8 @@ public final class HudOverlay extends View {
             text(c,ROYALE_CHANCES[i]+"%",1172,y+24,12,0xFFFFD27A,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
             if(selected)text(c,"SELECIONADO",1090,y+15,7,0xFF8BE7DE,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
         }
-        text(c,"As chances totalizam 100%. Repetidos devolvem 100 diamantes.",704,598,8,0xFFB7CED8,Typeface.DEFAULT);
-        text(c,"PRÉVIA: "+SHOP_NAMES[ROYALE_PRIZE_ITEMS[royaleSelectedPreview]],704,618,9,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"Chances: 40% • 30% • 20% • 9% • 1%  |  Repetidos: +100 ◆",704,598,8,0xFFB7CED8,Typeface.DEFAULT);
+        text(c,"GIROS: "+prefs.getInt("royale_spin_count",0)+"  •  ÚLTIMO: "+shortText(prefs.getString("royale_last_reward","SEM GIROS"),44),704,618,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         pill(c,698,652,220,30,"TESTAR ITEM",0xFF176A75,Color.WHITE);
         pill(c,938,652,256,30,royaleSpinning?"AGUARDE...":"GIRAR • 100 ◆",0xFF80551E,Color.WHITE);
         if(!royaleResultMessage.isEmpty()){
@@ -1491,11 +1490,11 @@ public final class HudOverlay extends View {
     private void tap(float x,float y){
         if(System.currentTimeMillis()-lastTap<110)return;lastTap=System.currentTimeMillis();
         if(hapticsEnabled)performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-        if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
+        if(hit(x,y,1000,17,246,60)){if(page==ROYALE_SPIN)restoreRoyalePreview();page=PROFILE;return;}
         if(page!=HOME){
             for(int i=0;i<NAV.length;i++){
                 float ny=143+i*33.2f;
-                if(hit(x,y,27,ny,196,29)){page=NAV_PAGES[i];return;}
+                if(hit(x,y,27,ny,196,29)){if(page==ROYALE_SPIN)restoreRoyalePreview();page=NAV_PAGES[i];return;}
             }
         }
         if(page==HOME){
