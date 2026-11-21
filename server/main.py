@@ -41,7 +41,7 @@ PROFILE_FIELDS = {
     "selected_mode", "selected_map", "selected_character", "quality",
     "music", "effects", "look_sensitivity", "sensitivity_general",
     "sensitivity_aim", "invert_camera_y", "show_minimap", "haptics",
-    "mode", "map", "character", "selected_mode", "selected_map", "selected_character",\n    "selected_shirt", "selected_boots", "selected_set",
+    "mode", "map", "character",\n    "selected_shirt", "selected_boots", "selected_set",
     "wear_shirt_tactical", "wear_shirt_neon", "wear_shirt_frost",
     "wear_shirt_desert", "wear_boots_combat", "wear_boots_neon",
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora",
