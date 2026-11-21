@@ -23,6 +23,7 @@ import android.view.View;
 import android.view.HapticFeedbackConstants;
 import org.json.JSONObject;
 import java.security.SecureRandom;
+import java.util.UUID;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
@@ -78,10 +79,29 @@ public final class HudOverlay extends View {
     public interface UsernameAccountAction {
         void authenticate(String username, String password, boolean createAccount);
     }
+    public interface RoyaleSpinAction {
+        void spin(String requestId,RoyaleResult callback);
+    }
+    public interface RoyaleResult {
+        void onResult(boolean success,String prizeId,String prizeName,boolean duplicate,long balance,String message);
+    }
+    public interface DailyRewardAction {
+        void claim(DailyRewardResult callback);
+    }
+    public interface DailyRewardResult {
+        void onResult(boolean claimed,long coins,long diamonds,String message);
+    }
     private boolean googleConfigured, googleSignedIn;
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
-    private Runnable accountSyncAction, accountSignOutAction;
+    private Runnable accountSyncAction, accountSignOutAction, recoveryCodeAction;
+    private String deviceIdentity="";
+    private long onlineCoins=-1L,onlineDiamonds=-1L;
+    private RoyaleSpinAction royaleSpinAction;
+    private DailyRewardAction dailyRewardAction;
+    private boolean royaleRequesting,royaleServerDuplicate;
+    private String royaleServerPrizeName="";
+    private String pendingRoyaleRequestId="";
     private long toastUntil, lastTap;
     private int collectionPage=0;
     private int cofreTab=0;
@@ -575,13 +595,16 @@ public final class HudOverlay extends View {
         text(c,prefs.getString("nickname","JOGADOR"),382,346,23,Color.WHITE,
             Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"NÍVEL "+level+"  •  "+xp+" XP",382,374,13,0xFF9FC0CF,Typeface.DEFAULT_BOLD);
-        text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,407,15,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS",382,432,11,0xFF82E5DC,Typeface.DEFAULT_BOLD);
+        text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,399,15,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS",382,420,11,0xFF82E5DC,Typeface.DEFAULT_BOLD);
         text(c,"PARTIDAS "+profile.getMatchesPlayed()+"  •  VITÓRIAS "+profile.getWins()
-            +"  •  ELIMS "+profile.getEliminations(),292,452,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
+            +"  •  ELIMS "+profile.getEliminations(),292,440,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
         text(c,prefs.getBoolean("code_100k_redeemed",false)
             ?"CÓDIGO 100K JÁ RESGATADO NESTE PERFIL"
-            :"CÓDIGO SECRETO 100K DISPONÍVEL",292,472,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+            :"CÓDIGO SECRETO 100K DISPONÍVEL",292,458,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+        String deviceLine=deviceIdentity.isEmpty()?"ID DO DISPOSITIVO • REGISTRANDO...":"ID DO DISPOSITIVO • "+deviceIdentity;
+        if(deviceLine.length()>68)deviceLine=deviceLine.substring(0,65)+"...";
+        text(c,deviceLine,292,476,8,0xFF9BC4D0,Typeface.DEFAULT_BOLD);
         panel(c,270,486,570,58,googleSignedIn?0xCC176A75:0xA91A3040,
             googleSignedIn?0xFF58DDE6:0x335D8495,15);
         text(c,googleSignedIn?"CONTA VINCULADA • TOQUE PARA SINCRONIZAR":
@@ -591,8 +614,8 @@ public final class HudOverlay extends View {
         if(accountLine.length()>68)accountLine=accountLine.substring(0,65)+"...";
         text(c,accountLine,292,530,9,0xFFBBD0D9,Typeface.DEFAULT);
         panel(c,270,558,270,70,0xCC176A75,0xFF58DDE6,16);
-        text(c,"RESGATAR CÓDIGO",294,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"Digite seu código secreto",294,607,10,0xFFD2F6F8,Typeface.DEFAULT);
+        text(c,googleSignedIn?"CÓDIGO DE RECUPERAÇÃO":"RESGATAR CÓDIGO",294,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,googleSignedIn?"Gerar um novo código secreto":"Digite seu código secreto",294,607,10,0xFFD2F6F8,Typeface.DEFAULT);
         panel(c,558,558,282,70,0xA91A3040,0x335D8495,16);
         text(c,"EDITAR NICKNAME",582,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Nome do seu perfil",582,607,10,0xFF9EB6C4,Typeface.DEFAULT);
@@ -695,7 +718,8 @@ public final class HudOverlay extends View {
         title(c,"MENU ROYALE",270,224);
         subtitle(c,"Gire a roleta com diamantes, confira as chances e teste os cosméticos antes.",270,252);
         panel(c,270,266,570,48,0xAE193040,0x557AA9BC,14);
-        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds())+" DIAMANTES",290,296,12,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"SALDO ONLINE  ◆ "+formatDiamonds(onlineDiamonds>=0?onlineDiamonds:0L),290,296,11,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        pill(c,642,276,186,29,"PRESENTE DIÁRIO",0xFF176A75,Color.WHITE);
         String[] names={"ROULETA ROYALE","BARBINHA DO VELHO","CALÇA ANGELICAL","COFRE","MODA","EVENTOS"};
         String[] hints={"100 diamantes • sorteio animado","900 diamantes • barba 3D","1.500 diamantes • calça azul","Ver itens e equipamentos","Camisas, botas e conjuntos","Conteúdo da temporada"};
         int[] featured={-1,18,19,-1,-1,-1};
@@ -725,7 +749,7 @@ public final class HudOverlay extends View {
         title(c,"ROLETA ROYALE",270,224);
         pill(c,674,184,166,32,"VOLTAR AO ROYALE",0x553B6172,0xFFD7E6ED);
         panel(c,270,264,570,48,0xA91A3040,0x557AA9BC,14);
-        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds()),290,294,12,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"SALDO ONLINE  ◆ "+formatDiamonds(onlineDiamonds>=0?onlineDiamonds:0L),290,294,11,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         text(c,"CUSTO POR GIRO: 100 ◆",610,294,10,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
 
         panel(c,270,326,390,316,0xA9152938,0x557AA9BC,18);
@@ -758,7 +782,7 @@ public final class HudOverlay extends View {
             if(phase>=1f)finishRoyaleSpin();
             else postInvalidateDelayed(16);
         }
-        text(c,royaleSpinning?"SORTEANDO PRÊMIO...":"GIRE A ROLETA",465,625,10,
+        text(c,royaleRequesting?"VALIDANDO NO SERVIDOR...":(royaleSpinning?"SORTEANDO PRÊMIO...":"GIRE A ROLETA"),465,625,10,
             royaleSpinning?0xFFFFD27A:0xFF8BDCE7,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
 
         panel(c,680,326,532,316,0xA9152938,0x557AA9BC,18);
@@ -777,7 +801,7 @@ public final class HudOverlay extends View {
         text(c,"Chances: 40% • 30% • 20% • 9% • 1%  |  Repetidos: +100 ◆",704,598,8,0xFFB7CED8,Typeface.DEFAULT);
         text(c,"GIROS: "+prefs.getInt("royale_spin_count",0)+"  •  ÚLTIMO: "+compactLabel(prefs.getString("royale_last_reward","SEM GIROS"),44),704,618,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         pill(c,698,652,220,30,"TESTAR ITEM",0xFF176A75,Color.WHITE);
-        pill(c,938,652,256,30,royaleSpinning?"AGUARDE...":"GIRAR • 100 ◆",0xFF80551E,Color.WHITE);
+        pill(c,938,652,256,30,(royaleSpinning||royaleRequesting)?"AGUARDE...":"GIRAR • 100 ◆",0xFF80551E,Color.WHITE);
         if(!royaleResultMessage.isEmpty()){
             panel(c,270,646,390,42,0xDD173E43,0xFF5ADACB,10);
             text(c,royaleResultMessage,465,672,9,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
@@ -785,38 +809,73 @@ public final class HudOverlay extends View {
     }
 
     private void startRoyaleSpin() {
-        if(royaleSpinning)return;
-        if(profile.getDiamonds()<100L){toast("Diamantes insuficientes. O giro custa 100.");return;}
+        if(royaleSpinning||royaleRequesting)return;
+        if(royaleSpinAction==null){toast("Royale online ainda não conectado ao servidor.");return;}
+        if(onlineDiamonds<100L){toast("Carteira online sem diamantes suficientes. Resgate o presente diário.");return;}
         restoreRoyalePreview();
-        int roll=royaleRandom.nextInt(100),sum=0,prize=ROYALE_CHANCES.length-1;
-        for(int i=0;i<ROYALE_CHANCES.length;i++){sum+=ROYALE_CHANCES[i];if(roll<sum){prize=i;break;}}
-        float[] sweeps={144f,108f,72f,32.4f,3.6f};
-        float center=-90f;
-        for(int i=0;i<prize;i++)center+=sweeps[i];
-        center+=sweeps[prize]*.5f;
-        float delta=(-90f-center-royaleWheelRotation)%360f;
-        if(delta<0)delta+=360f;
-        royaleSpinStartRotation=royaleWheelRotation;
-        royaleSpinEndRotation=royaleWheelRotation+2160f+delta;
-        royalePendingPrize=prize;
-        royaleSpinStartedAt=System.currentTimeMillis();
-        royaleSpinning=true;
+        royaleRequesting=true;
         royaleResultMessage="";
+        toast("Confirmando seu giro no servidor...");
         postInvalidate();
+        if(pendingRoyaleRequestId.isEmpty())pendingRoyaleRequestId=UUID.randomUUID().toString();
+        royaleSpinAction.spin(pendingRoyaleRequestId,(success,prizeId,prizeName,duplicate,balance,message)->{
+            royaleRequesting=false;
+            if(!success){
+                royaleResultMessage=message==null?"GIRO NÃO CONFIRMADO":message;
+                toast(royaleResultMessage);
+                postInvalidate();
+                return;
+            }
+            pendingRoyaleRequestId="";
+            onlineDiamonds=Math.max(0L,balance);
+            String[] ids={"shirt_tactical","boots_combat","set_aurora","beard_old","pants_angelical"};
+            int prize=-1;
+            for(int i=0;i<ids.length;i++)if(ids[i].equals(prizeId)){prize=i;break;}
+            if(prize<0){
+                royaleResultMessage="PRÊMIO RECEBIDO • ITEM NÃO RECONHECIDO";
+                toast("O servidor retornou um item não reconhecido. Saldo atualizado.");
+                postInvalidate();return;
+            }
+            float[] sweeps={144f,108f,72f,32.4f,3.6f};
+            float center=-90f;
+            for(int i=0;i<prize;i++)center+=sweeps[i];
+            center+=sweeps[prize]*.5f;
+            float delta=(-90f-center-royaleWheelRotation)%360f;
+            if(delta<0)delta+=360f;
+            royaleSpinStartRotation=royaleWheelRotation;
+            royaleSpinEndRotation=royaleWheelRotation+2160f+delta;
+            royalePendingPrize=prize;
+            royaleServerDuplicate=duplicate;
+            royaleServerPrizeName=prizeName==null?"RECOMPENSA":prizeName;
+            royaleSpinStartedAt=System.currentTimeMillis();
+            royaleSpinning=true;
+            royaleResultMessage="";
+            postInvalidate();
+        });
     }
 
     private void finishRoyaleSpin() {
         if(!royaleSpinning||royalePendingPrize<0)return;
         int item=ROYALE_PRIZE_ITEMS[royalePendingPrize];
-        String result=profile.performRoyaleSpin(100L,SHOP_KEYS[item],0L,100L,SHOP_NAMES[item]);
+        String result=royaleServerPrizeName+(royaleServerDuplicate?" REPETIDO • +100 DIAMANTES":"");
+        if(!royaleServerDuplicate){
+            prefs.edit().putBoolean(SHOP_KEYS[item],true)
+                .putInt("royale_spin_count",prefs.getInt("royale_spin_count",0)+1)
+                .putString("royale_last_reward",result).apply();
+            if(item==3){selectedShirt=1;selectedSet=0;game.setWardrobe(selectedShirt,selectedBoots,selectedSet);}
+            else if(item==7){selectedBoots=1;selectedSet=0;game.setWardrobe(selectedShirt,selectedBoots,selectedSet);}
+            else if(item==11){selectedSet=1;game.setWardrobe(selectedShirt,selectedBoots,selectedSet);}
+            else if(item==18){equippedBeard=4;game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);}
+            else if(item==19){selectedPants=1;game.setPantsStyle(1);}
+        }else{
+            prefs.edit().putInt("royale_spin_count",prefs.getInt("royale_spin_count",0)+1)
+                .putString("royale_last_reward",result).apply();
+        }
         royaleSpinning=false;
         royalePendingPrize=-1;
-        if(result==null){royaleResultMessage="GIRO NÃO CONFIRMADO • SALDO PRESERVADO";toast("Não foi possível confirmar o giro. Saldo preservado.");}
-        else{
-            royaleRevealItem=item;royaleRevealUntil=System.currentTimeMillis()+1800L;
-            royaleResultMessage="PRÊMIO: "+result;
-            toast("Royale: "+result);
-        }
+        royaleRevealItem=item;royaleRevealUntil=System.currentTimeMillis()+1800L;
+        royaleResultMessage="PRÊMIO: "+result;
+        toast("Royale: "+result);
         postInvalidate();
     }
 
@@ -1563,7 +1622,7 @@ public final class HudOverlay extends View {
                 if(accountSignOutAction!=null)accountSignOutAction.run();
                 return;
             }
-            if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
+            if(hit(x,y,270,558,270,70)){if(googleSignedIn){if(recoveryCodeAction!=null)recoveryCodeAction.run();}else showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
         }else if(page==INVENTORY){
             if(hit(x,y,270,312,150,29)){cofreTab=0;return;}
@@ -1673,6 +1732,13 @@ public final class HudOverlay extends View {
                 return;
             }
         }else if(page==ROYALE){
+            if(hit(x,y,642,276,186,29)){
+                if(dailyRewardAction!=null)dailyRewardAction.claim((claimed,coins,diamonds,message)->{
+                    onlineCoins=coins;onlineDiamonds=diamonds;toast(message);invalidate();
+                });
+                else toast("Presente diário indisponível.");
+                return;
+            }
             for(int i=0;i<6;i++){
                 float rx=270+(i%3)*192f,ry=326+(i/3)*151f;
                 if(!hit(x,y,rx,ry,174,132))continue;
@@ -1695,7 +1761,7 @@ public final class HudOverlay extends View {
             }
         }else if(page==ROYALE_SPIN){
             if(hit(x,y,674,184,166,32)){restoreRoyalePreview();page=ROYALE;return;}
-            if(royaleSpinning)return;
+            if(royaleSpinning||royaleRequesting)return;
             for(int i=0;i<ROYALE_PRIZE_ITEMS.length;i++){
                 float ry=370+i*43f;
                 if(hit(x,y,698,ry,496,38)){royaleSelectedPreview=i;postInvalidate();return;}
@@ -1748,6 +1814,21 @@ public final class HudOverlay extends View {
                 toast(hapticsEnabled?"Vibração ativada":"Vibração desativada");return;
             }
         }
+    }
+
+    public void setOnlineWallet(long coins,long diamonds) {
+        onlineCoins=Math.max(0L,coins);onlineDiamonds=Math.max(0L,diamonds);invalidate();
+    }
+    public void setRoyaleSpinAction(RoyaleSpinAction action) { royaleSpinAction=action; }
+    public void setDailyRewardAction(DailyRewardAction action) { dailyRewardAction=action; }
+    public void setDeviceIdentity(String code) { deviceIdentity=code==null?"":code; invalidate(); }
+    public void setRecoveryCodeAction(Runnable action) { recoveryCodeAction=action; }
+    public void showRecoveryCode(String code) {
+        if(code==null||code.isEmpty())return;
+        EditText field=new EditText(getContext());field.setText(code);field.setTextIsSelectable(true);
+        new AlertDialog.Builder(getContext()).setTitle("NOVO CÓDIGO DE RECUPERAÇÃO")
+            .setMessage("Guarde este código fora do aparelho. Ele aparece somente agora; o código anterior foi invalidado.")
+            .setView(field).setPositiveButton("ENTENDI",null).setCancelable(false).show();
     }
 
     public void setUsernameAccountActions(UsernameAccountAction authAction,

@@ -8,7 +8,7 @@ from PIL import Image
 ROOT=Path("build/content-pack-src")
 OUT=Path("build")
 if ROOT.exists(): shutil.rmtree(ROOT)
-for folder in ("models","textures","audio","worlds","characters","missions","shaders","effects"):
+for folder in ("models","textures","audio","worlds","characters","missions","shaders","effects","materials"):
     (ROOT/folder).mkdir(parents=True,exist_ok=True)
 
 def write_obj(name,vertices,faces):
@@ -125,6 +125,22 @@ def make_texture_set(name,base,seed,kind):
         pattern=np.sin(x*360+y*120)*.035
     elif kind=="rock":
         pattern=np.sin(x*140+np.cos(y*40))*0.05
+    elif kind=="ice":
+        pattern=np.sin(x*420+y*85)*.045+np.cos(y*310)*.025
+    elif kind=="metal":
+        pattern=np.sin(x*900)*.025+np.cos(y*64)*.035
+    elif kind=="moss":
+        pattern=np.sin(x*72+np.cos(y*33))*0.06
+    elif kind=="composite":
+        pattern=np.sin(x*260)*.025+np.cos(y*260)*.025
+    elif kind=="stone":
+        pattern=np.sin((x*2+y)*170)*.055
+    elif kind=="water":
+        pattern=np.sin(x*38+y*13+np.sin(y*17))*0.065
+    elif kind=="neon":
+        pattern=np.sin(x*680+y*90)*.03+np.cos(y*410)*.02
+    elif kind=="volcanic":
+        pattern=np.sin(x*160+y*60)*.055+np.cos(x*40)*.025
     else:
         pattern=(np.sin(x*105+np.sin(y*27))*0.04+np.cos(y*88)*0.025)
     lum=np.clip((coarse-.5)*.27+(microf-.5)*.12+pattern,-.23,.23)
@@ -165,6 +181,16 @@ make_texture_set("tropical_rock",(.34,.33,.29),2002,"rock")
 make_texture_set("operator_fabric",(.11,.19,.23),3003,"fabric")
 make_texture_set("neon_concrete",(.18,.21,.27),4004,"concrete")
 make_texture_set("desert_sand",(.68,.49,.29),5005,"sand")
+# Distinct material families for the remaining biomes and major world surfaces.
+# Each set has its own deterministic surface detail; no duplicated or padding files.
+make_texture_set("frozen_ice",(.62,.78,.86),6006,"ice")
+make_texture_set("industrial_metal",(.29,.34,.38),7007,"metal")
+make_texture_set("green_moss",(.20,.34,.19),8008,"moss")
+make_texture_set("orbital_composite",(.24,.29,.39),9009,"composite")
+make_texture_set("abandoned_stone",(.39,.38,.34),10101,"stone")
+make_texture_set("tropical_water",(.08,.31,.42),11111,"water")
+make_texture_set("neon_alloy",(.19,.23,.36),12121,"neon")
+make_texture_set("volcanic_rock",(.25,.16,.14),13131,"volcanic")
 
 world_templates={
 "island":{"id":"tropical_island","name":"Ilha Tropical","biome":"tropical","spawn":[0,0,0],
@@ -182,7 +208,29 @@ world_templates={
 "orbital_base":{"id":"orbital_base","name":"Orbital Base","biome":"futuristic","spawn":[0,0,0],"map_bounds":[-120,120,-120,120],"build_limit":20},
 "abandoned_sector":{"id":"abandoned_sector","name":"Abandoned Sector","biome":"ruins","spawn":[0,0,0],"map_bounds":[-120,120,-120,120],"build_limit":20}
 }
+world_materials={
+ "island":["island_ground","tropical_rock","tropical_water","operator_fabric"],
+ "neon_city":["neon_concrete","neon_alloy","operator_fabric"],
+ "desert_storm":["desert_sand","volcanic_rock","abandoned_stone"],
+ "frozen_front":["frozen_ice","abandoned_stone"],
+ "industrial_zone":["industrial_metal","neon_concrete"],
+ "green_valley":["green_moss","tropical_rock"],
+ "orbital_base":["orbital_composite","neon_alloy"],
+ "abandoned_sector":["abandoned_stone","volcanic_rock","industrial_metal"]
+}
+material_catalog={"materials":{},"world_bindings":world_materials}
+for material in sorted({name for group in world_materials.values() for name in group}):
+    material_catalog["materials"][material]={
+      "albedo":f"textures/{material}_albedo_4k.png",
+      "normal":f"textures/{material}_normal_4k.png",
+      "roughness":f"textures/{material}_roughness_4k.png",
+      "ambient_occlusion":f"textures/{material}_ao_2k.png",
+      "resolution":"4096x4096"
+    }
+(ROOT/"materials/biome_materials.json").write_text(
+    json.dumps(material_catalog,ensure_ascii=False,indent=2),encoding="utf-8")
 for key,data in world_templates.items():
+    data["materials"]=world_materials[key]
     (ROOT/f"worlds/{key}.json").write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding="utf-8")
 
 (ROOT/"characters/roster.json").write_text(json.dumps({"operators":[
@@ -252,8 +300,8 @@ required=[
  "models/energy_emitter.obj","models/build_wall.obj",
  "textures/island_ground_albedo_4k.png","textures/island_ground_normal_4k.png",
  "textures/desert_sand_albedo_4k.png","audio/transport_engine.wav",
- "effects/weapons.json"]
-pack_manifest={"pack_id":"battle_universe_season_02","version":2,
+ "effects/weapons.json","materials/biome_materials.json"]
+pack_manifest={"pack_id":"battle_universe_season_02","version":3,
  "title":"Battle Universe — Conteúdo Expandido 4K",
  "engine":"Android OpenGL ES 3.0","texture_resolution":"4096x4096",
  "world_count":8,"files":files,"required":required}
@@ -271,13 +319,15 @@ with zipfile.ZipFile(archive,"w",zipfile.ZIP_DEFLATED,compresslevel=1) as z:
     for item in sorted(ROOT.rglob("*")):
         if item.is_file():z.write(item,item.relative_to(ROOT).as_posix())
 size=archive.stat().st_size
-if size<250*1024*1024:
-    raise SystemExit(f"Content pack too small ({size} bytes); refusing to publish padded or incomplete assets.")
+if size<1024*1024*1024:
+    raise SystemExit(f"Content pack below the 1 GiB real-content target ({size} bytes); refusing to publish incomplete assets.")
+if size>5*1024*1024*1024:
+    raise SystemExit(f"Content pack exceeds the 5 GiB distribution limit ({size} bytes).")
 h=hashlib.sha256()
 with archive.open("rb") as inp:
     for chunk in iter(lambda:inp.read(4*1024*1024),b""):h.update(chunk)
-manifest={"version":2,"title":"Battle Universe Season 02 — Pacote 4K",
- "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v2/battle-universe-season-02-pack.zip",
+manifest={"version":3,"title":"Battle Universe Season 02 — Pacote 4K",
+ "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v3/battle-universe-season-02-pack.zip",
  "size_bytes":size,"sha256":h.hexdigest()}
 (OUT/"content-pack-manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
 print(f"Season 02 pack: {size/1024/1024:.1f} MiB; {len(files)} real hashed resources; SHA-256 {manifest['sha256']}",flush=True)

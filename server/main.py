@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import secrets
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
 
@@ -12,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 from pwdlib import PasswordHash
-from sqlalchemy import DateTime, Integer, String, Text, create_engine, select, func
+from sqlalchemy import DateTime, Integer, String, Text, BigInteger, ForeignKey, UniqueConstraint, create_engine, select, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -46,6 +47,15 @@ PROFILE_FIELDS = {
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
     "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
     "wear_set_cerrado", "wear_beard_old", "wear_pants_angelical", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
+    "nickname", "xp", "coins", "diamonds", "profile_schema_version", "coins_wallet_initialized",
+    "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
+    "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result", "match_history",
+    "economy_ledger", "royale_history", "royale_spin_count",
+    "mission_matches", "mission_eliminations", "mission_crystals", "missions_day",
+    "mission_claimed_0", "mission_claimed_1", "mission_claimed_2", "wardrobe_starter_v2_granted",
+    "shop_frame_neon", "shop_emblem_bloob", "shop_title_champion",
+    "match_reward_session_id", "match_reward_recorded",
+    "last_match_reward_diamonds", "last_match_reward_xp", "last_match_reward_coins",
 }
 
 class Base(DeclarativeBase):
@@ -59,6 +69,54 @@ class Player(Base):
     profile: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+class PlayerDevice(Base):
+    __tablename__ = "player_devices"
+    __table_args__ = (UniqueConstraint("player_id", "install_id", name="uq_player_device_install"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    install_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    device_code: Mapped[str] = mapped_column(String(24), unique=True, index=True, nullable=False)
+    device_label: Mapped[str] = mapped_column(String(40), nullable=False, default="Android")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class RecoveryCredential(Base):
+    __tablename__ = "account_recovery_credentials"
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rotated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class PlayerWallet(Base):
+    __tablename__ = "player_wallets"
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), primary_key=True)
+    coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+class RoyaleSpin(Base):
+    __tablename__ = "royale_spins"
+    __table_args__ = (UniqueConstraint("player_id", "request_id", name="uq_royale_player_request"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    prize_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    prize_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    duplicate: Mapped[bool] = mapped_column(nullable=False, default=False)
+    diamonds_spent: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class DailyRewardClaim(Base):
+    __tablename__ = "daily_reward_claims"
+    __table_args__ = (UniqueConstraint("player_id", "reward_day", name="uq_daily_reward_player_day"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    reward_day: Mapped[str] = mapped_column(String(10), nullable=False)
+    coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=250)
+    diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=100)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
 class AdminUser(Base):
     __tablename__ = "admin_users"
@@ -102,6 +160,23 @@ class LoginBody(BaseModel):
 
 class ProfileBody(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
+
+class DeviceRegisterBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    device_label: str = Field(default="Android", min_length=1, max_length=40)
+
+class RecoveryRotateBody(BaseModel):
+    confirm: bool = True
+
+class RecoverAccountBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    username: str = Field(min_length=3, max_length=18)
+    recovery_code: str = Field(min_length=20, max_length=80)
+
+class RoyaleSpinBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
 
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
@@ -200,7 +275,12 @@ def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str,
         raise HTTPException(422, "Use 3 a 18 letras, números ou _ no nickname.")
     if db.scalar(select(Player.id).where(Player.username == username)) is not None:
         raise HTTPException(409, "Esse nickname já está em uso.")
+    recovery_code = new_recovery_code()
     player = Player(username=username, password_hash=password_hash.hash(body.password), profile={})
+    db.add(player)
+    db.flush()
+    db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+    db.add(RecoveryCredential(player_id=player.id, code_hash=recovery_digest(recovery_code)))
     db.add(player)
     try:
         db.commit()
@@ -212,7 +292,7 @@ def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str,
         raise HTTPException(503, "Não foi possível criar a conta agora.")
     return {"access_token": issue_token(str(player.id), username, "player", ACCESS_TOKEN_MINUTES),
             "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60,
-            "player": {"id": player.id, "username": player.username, "profile": {}}}
+            "player": {"id": player.id, "username": player.username, "profile": {}}, "recovery_code": recovery_code}
 
 @app.post("/v1/accounts/login")
 def login(body: LoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
@@ -223,6 +303,9 @@ def login(body: LoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
     control = db.get(AccountControl, player.id)
     if control and control.state != "active":
         raise HTTPException(403, "Esta conta está suspensa ou encerrada.")
+    if db.get(PlayerWallet, player.id) is None:
+        db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+        db.commit()
     return {"access_token": issue_token(str(player.id), username, "player", ACCESS_TOKEN_MINUTES),
             "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60, "player": player_payload(player)}
 
@@ -239,7 +322,8 @@ def update_profile(body: ProfileBody, db: Session = Depends(db_session),
     clean: dict[str, Any] = {}
     for key, value in body.profile.items():
         if key in PROFILE_FIELDS and (isinstance(value, (str, bool, int, float)) or value is None):
-            if isinstance(value, str) and len(value) > 256:
+            max_length = 8192 if key == "economy_ledger" else (4096 if key in {"match_history", "royale_history"} else 256)
+            if isinstance(value, str) and len(value) > max_length:
                 raise HTTPException(422, f"Valor muito longo: {key}")
             clean[key] = value
     player.profile = {**(player.profile or {}), **clean}
@@ -254,6 +338,223 @@ def player_game_settings(db: Session = Depends(db_session), player: Player = Dep
     return {"game_name": values.get("game_name", "BATTLE UNIVERSE"),
             "character_names": values.get("character_names", {}),
             "account_character_name": (player.profile or {}).get("character_display_name", "")}
+
+ROYALE_PRIZES = [
+    {"id": "shirt_tactical", "name": "CAMISA TÁTICA", "weight": 40, "profile_key": "wear_shirt_tactical"},
+    {"id": "boots_combat", "name": "BOTAS COMBATE", "weight": 30, "profile_key": "wear_boots_combat"},
+    {"id": "set_aurora", "name": "CONJUNTO AURORA", "weight": 20, "profile_key": "wear_set_aurora"},
+    {"id": "beard_old", "name": "BARBINHA DO VELHO", "weight": 9, "profile_key": "wear_beard_old"},
+    {"id": "pants_angelical", "name": "CALÇA ANGELICAL", "weight": 1, "profile_key": "wear_pants_angelical"},
+]
+ROYALE_COST = 100
+ROYALE_DUPLICATE_COMPENSATION = 100
+
+def new_recovery_code() -> str:
+    raw = secrets.token_hex(16).upper()
+    return "-".join(raw[i:i + 8] for i in range(0, len(raw), 8))
+
+def recovery_digest(code: str) -> str:
+    normalized = re.sub(r"[^A-Fa-f0-9]", "", code).upper()
+    return hashlib.sha256(normalized.encode("ascii")).hexdigest()
+
+def make_device_code() -> str:
+    raw = secrets.token_hex(5).upper()
+    return "BU-" + raw[:5] + "-" + raw[5:]
+
+@app.post("/v1/accounts/me/devices/register")
+def register_device(body: DeviceRegisterBody, db: Session = Depends(db_session),
+                    player: Player = Depends(current_player)):
+    now = datetime.now(timezone.utc)
+    device = db.scalar(select(PlayerDevice).where(
+        PlayerDevice.player_id == player.id, PlayerDevice.install_id == body.install_id))
+    if device is None:
+        device = PlayerDevice(player_id=player.id, install_id=body.install_id,
+                              device_code=make_device_code(), device_label=body.device_label.strip(),
+                              created_at=now, last_seen_at=now)
+        db.add(device)
+    else:
+        device.device_label = body.device_label.strip()
+        device.last_seen_at = now
+    db.commit()
+    db.refresh(device)
+    return {"device_id": device.device_code, "device_label": device.device_label,
+            "created_at": device.created_at.isoformat(), "last_seen_at": device.last_seen_at.isoformat()}
+
+@app.get("/v1/accounts/me/devices")
+def list_devices(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    rows = db.scalars(select(PlayerDevice).where(PlayerDevice.player_id == player.id)
+                      .order_by(PlayerDevice.last_seen_at.desc())).all()
+    return {"devices": [{"device_id": row.device_code, "device_label": row.device_label,
+                         "created_at": row.created_at.isoformat(), "last_seen_at": row.last_seen_at.isoformat()}
+                        for row in rows]}
+
+@app.post("/v1/accounts/me/recovery-code/rotate")
+def rotate_recovery_code(body: RecoveryRotateBody, db: Session = Depends(db_session),
+                         player: Player = Depends(current_player)):
+    code = new_recovery_code()
+    row = db.get(RecoveryCredential, player.id) or RecoveryCredential(player_id=player.id)
+    row.code_hash = recovery_digest(code)
+    row.failed_attempts = 0
+    row.locked_until = None
+    row.rotated_at = datetime.now(timezone.utc)
+    db.add(row)
+    db.commit()
+    return {"recovery_code": code, "shown_once": True,
+            "message": "Guarde este código fora do aparelho. Ele não será exibido novamente."}
+
+@app.post("/v1/accounts/recover")
+def recover_account(body: RecoverAccountBody, db: Session = Depends(db_session)):
+    username = body.username.strip().lower()
+    player = db.scalar(select(Player).where(Player.username == username))
+    if player is None:
+        secrets.compare_digest(recovery_digest(body.recovery_code), hashlib.sha256(secrets.token_bytes(32)).hexdigest())
+        raise HTTPException(401, "Dados de recuperação inválidos.")
+    credential = db.get(RecoveryCredential, player.id)
+    now = datetime.now(timezone.utc)
+    if credential is None:
+        raise HTTPException(401, "Dados de recuperação inválidos.")
+    if credential.locked_until and credential.locked_until > now:
+        raise HTTPException(429, "Muitas tentativas. Aguarde antes de tentar novamente.")
+    supplied = recovery_digest(body.recovery_code)
+    if not secrets.compare_digest(supplied, credential.code_hash):
+        credential.failed_attempts += 1
+        if credential.failed_attempts >= 5:
+            credential.failed_attempts = 0
+            credential.locked_until = now + timedelta(minutes=15)
+        db.add(credential)
+        db.commit()
+        raise HTTPException(401, "Dados de recuperação inválidos.")
+    control = db.get(AccountControl, player.id)
+    if control and control.state != "active":
+        raise HTTPException(403, "Esta conta está suspensa ou encerrada.")
+    replacement = new_recovery_code()
+    credential.code_hash = recovery_digest(replacement)
+    credential.failed_attempts = 0
+    credential.locked_until = None
+    credential.rotated_at = now
+    db.add(credential)
+    db.commit()
+    return {"access_token": issue_token(str(player.id), username, "player", ACCESS_TOKEN_MINUTES),
+            "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60,
+            "player": player_payload(player), "new_recovery_code": replacement,
+            "message": "Acesso recuperado. Guarde o novo código; o anterior foi invalidado."}
+
+@app.get("/v1/accounts/me/wallet")
+def get_wallet(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    wallet = db.get(PlayerWallet, player.id)
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        db.add(wallet)
+        db.commit()
+        db.refresh(wallet)
+    return {"coins": wallet.coins, "diamonds": wallet.diamonds,
+            "currency": "virtual", "authority": "server"}
+
+@app.post("/v1/game/rewards/daily")
+def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    day = datetime.now(timezone.utc).date().isoformat()
+    existing = db.scalar(select(DailyRewardClaim).where(
+        DailyRewardClaim.player_id == player.id, DailyRewardClaim.reward_day == day))
+    if existing is not None:
+        wallet = db.get(PlayerWallet, player.id)
+        return {"claimed": False, "reward_day": day, "coins": existing.coins,
+                "diamonds": existing.diamonds,
+                "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
+    wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        db.add(wallet)
+        db.flush()
+    wallet.coins += 250
+    wallet.diamonds += 100
+    claim = DailyRewardClaim(player_id=player.id, reward_day=day, coins=250, diamonds=100)
+    db.add(claim)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        existing = db.scalar(select(DailyRewardClaim).where(
+            DailyRewardClaim.player_id == player.id, DailyRewardClaim.reward_day == day))
+        wallet = db.get(PlayerWallet, player.id)
+        if existing is None:
+            raise HTTPException(503, "Não foi possível confirmar a recompensa diária.")
+        return {"claimed": False, "reward_day": day, "coins": existing.coins,
+                "diamonds": existing.diamonds,
+                "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
+    return {"claimed": True, "reward_day": day, "coins": 250, "diamonds": 100,
+            "wallet": {"coins": wallet.coins, "diamonds": wallet.diamonds}}
+
+@app.get("/v1/royale/config")
+def royale_config(player: Player = Depends(current_player)):
+    return {"cost": ROYALE_COST, "duplicate_compensation": ROYALE_DUPLICATE_COMPENSATION,
+            "probabilities": [{"id": item["id"], "name": item["name"], "percent": item["weight"]}
+                              for item in ROYALE_PRIZES],
+            "total_percent": sum(item["weight"] for item in ROYALE_PRIZES)}
+
+@app.post("/v1/royale/spin")
+def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
+                player: Player = Depends(current_player)):
+    existing = db.scalar(select(RoyaleSpin).where(
+        RoyaleSpin.player_id == player.id, RoyaleSpin.request_id == body.request_id))
+    if existing is not None:
+        return {"spin_id": existing.id, "prize_id": existing.prize_id,
+                "prize_name": existing.prize_name, "duplicate": existing.duplicate,
+                "diamonds_spent": existing.diamonds_spent, "diamonds_balance": existing.balance_after,
+                "replayed": True}
+    wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        db.add(wallet)
+        db.flush()
+    if wallet.diamonds < ROYALE_COST:
+        raise HTTPException(409, "Diamantes insuficientes na carteira online.")
+    roll = secrets.randbelow(100)
+    cursor = 0
+    selected = ROYALE_PRIZES[-1]
+    for item in ROYALE_PRIZES:
+        cursor += item["weight"]
+        if roll < cursor:
+            selected = item
+            break
+    profile = dict(player.profile or {})
+    duplicate = bool(profile.get(selected["profile_key"], False))
+    credit = ROYALE_DUPLICATE_COMPENSATION if duplicate else 0
+    wallet.diamonds = wallet.diamonds - ROYALE_COST + credit
+    if not duplicate:
+        profile[selected["profile_key"]] = True
+        player.profile = profile
+    row = RoyaleSpin(player_id=player.id, request_id=body.request_id,
+                     prize_id=selected["id"], prize_name=selected["name"],
+                     duplicate=duplicate, diamonds_spent=ROYALE_COST,
+                     balance_after=wallet.diamonds, created_at=datetime.now(timezone.utc))
+    db.add(row)
+    try:
+        db.commit()
+        db.refresh(row)
+    except Exception:
+        db.rollback()
+        replay = db.scalar(select(RoyaleSpin).where(
+            RoyaleSpin.player_id == player.id, RoyaleSpin.request_id == body.request_id))
+        if replay is None:
+            raise HTTPException(503, "Não foi possível confirmar o giro. Tente sincronizar antes de repetir.")
+        return {"spin_id": replay.id, "prize_id": replay.prize_id,
+                "prize_name": replay.prize_name, "duplicate": replay.duplicate,
+                "diamonds_spent": replay.diamonds_spent, "diamonds_balance": replay.balance_after,
+                "replayed": True}
+    return {"spin_id": row.id, "prize_id": row.prize_id, "prize_name": row.prize_name,
+            "duplicate": row.duplicate, "diamonds_spent": row.diamonds_spent,
+            "duplicate_compensation": credit, "diamonds_balance": wallet.diamonds,
+            "replayed": False}
+
+@app.get("/v1/royale/history")
+def royale_history(limit: int = Query(default=20, ge=1, le=100),
+                   db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    rows = db.scalars(select(RoyaleSpin).where(RoyaleSpin.player_id == player.id)
+                      .order_by(RoyaleSpin.id.desc()).limit(limit)).all()
+    return {"history": [{"spin_id": row.id, "prize_id": row.prize_id, "prize_name": row.prize_name,
+                         "duplicate": row.duplicate, "diamonds_spent": row.diamonds_spent,
+                         "diamonds_balance": row.balance_after, "created_at": row.created_at.isoformat()}
+                        for row in rows]}
 
 @app.post("/v1/owner/pair")
 def owner_pair(body: OwnerPairBody) -> dict[str, Any]:

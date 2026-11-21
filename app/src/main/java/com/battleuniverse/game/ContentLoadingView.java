@@ -10,25 +10,17 @@ import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
-import java.util.ArrayList;
-import java.util.Locale;
 
+/** Cinematic THE VISION setup scene. Real progress stays internal; no fake download meter is shown. */
 public final class ContentLoadingView extends View {
-    private static final class FileRow {
-        final String name;
-        float progress;
-        boolean complete;
-        FileRow(String value) { name=value; }
-    }
-
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect=new RectF();
-    private final ArrayList<FileRow> recentFiles=new ArrayList<>();
-    private float progress=0f,scale=1f,offsetX,offsetY;
-    private long downloaded=0,total=0,started=System.currentTimeMillis();
-    private String status="CONFIGURANDO A PRIMEIRA ENTRADA...";
+    private long started=System.currentTimeMillis();
+    private float realProgress;
+    private String status="PREPARANDO SUA PRIMEIRA ENTRADA...";
     private String error="";
-    private Runnable retryAction,continueAction;
+    private Runnable retryAction,backAction;
+    private float scale=1f,offsetX,offsetY;
 
     public ContentLoadingView(Context context) {
         super(context);
@@ -37,44 +29,39 @@ public final class ContentLoadingView extends View {
     }
 
     public void setProgress(long done,long all,String message) {
-        downloaded=Math.max(0,done);total=Math.max(0,all);
-        progress=all>0?Math.max(0f,Math.min(1f,(float)done/(float)all)):0f;
-        status=message==null?"CONFIGURANDO O UNIVERSO...":message;
+        realProgress=all>0?Math.max(0f,Math.min(1f,(float)done/(float)all)):realProgress;
+        status=brandStatus(message);
         error="";
         postInvalidate();
     }
 
     public void setStatus(String message) {
-        status=message==null?status:message;
+        status=brandStatus(message);
         postInvalidate();
     }
 
+    /** File-level telemetry is intentionally not exposed as a technical list. */
     public void setFileProgress(String name,int index,int count,long done,long size) {
-        String safe=name==null?"Arquivo do jogo":name.replace('\\','/');
-        int found=-1;
-        for(int i=0;i<recentFiles.size();i++) {
-            if(recentFiles.get(i).name.equals(safe)){found=i;break;}
-        }
-        if(found<0) {
-            for(FileRow row:recentFiles) row.complete=true;
-            recentFiles.add(new FileRow(safe));
-            while(recentFiles.size()>4) recentFiles.remove(0);
-            found=recentFiles.size()-1;
-        }
-        FileRow row=recentFiles.get(found);
-        row.progress=size>0?Math.max(0f,Math.min(1f,(float)done/(float)size)):0f;
-        row.complete=size>0&&done>=size;
+        if(size>0)realProgress=Math.max(realProgress,Math.min(1f,(float)done/(float)size));
         postInvalidate();
     }
 
-    public void setFailure(String message,Runnable retry,Runnable continueBase) {
-        error=message==null?"Não foi possível concluir a instalação.":message;
-        status="NÃO FOI POSSÍVEL CONFIGURAR O CONTEÚDO";
-        retryAction=retry;continueAction=continueBase;
+    public void setFailure(String message,Runnable retry,Runnable back) {
+        error=message==null?"Não foi possível preparar os recursos.":message;
+        status="A CONFIGURAÇÃO PRECISA DE ATENÇÃO";
+        retryAction=retry;backAction=back;
         postInvalidate();
     }
 
-    public boolean hasError(){return !error.isEmpty();}
+    private String brandStatus(String raw) {
+        if(raw==null||raw.trim().isEmpty())return status;
+        String value=raw.toUpperCase();
+        if(value.contains("CONFERINDO")||value.contains("SHA-256"))return "VALIDANDO A INTEGRIDADE DO UNIVERSO...";
+        if(value.contains("INSTALANDO")||value.contains("EXTRAINDO"))return "MONTANDO OS RECURSOS DO MUNDO...";
+        if(value.contains("CONFIGURANDO")||value.contains("PREPARANDO")||value.contains("PACOTE"))return "SINCRONIZANDO A TEMPORADA 02...";
+        if(value.contains("UNIVERSO CONFIGURADO")||value.contains("ABRINDO"))return "ABRINDO OS PORTÕES DO UNIVERSO...";
+        return "ALINHANDO OS RECURSOS DO UNIVERSO...";
+    }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -83,64 +70,59 @@ public final class ContentLoadingView extends View {
         scale=Math.min(w/1280f,h/720f);
         offsetX=(w-1280f*scale)*.5f;offsetY=(h-720f*scale)*.5f;
         canvas.save();canvas.translate(offsetX,offsetY);canvas.scale(scale,scale);
+        float t=(System.currentTimeMillis()-started)/1000f;
         paint.setShader(new LinearGradient(0,0,1280,720,
-            new int[]{0xFF050D19,0xFF0A1C30,0xFF10142B},null,Shader.TileMode.CLAMP));
+            new int[]{0xFF030914,0xFF0A1C30,0xFF11152B},null,Shader.TileMode.CLAMP));
         canvas.drawRect(0,0,1280,720,paint);paint.setShader(null);
 
-        float t=(System.currentTimeMillis()-started)/1000f;
-        paint.setColor(0x1636C8DA);
-        for(int i=0;i<26;i++) {
-            float x=(i*173f+t*(7+i%4)*3f)%1280f;
-            float y=(i*97f+(float)Math.sin(t*.7f+i)*38f)%720f;
-            canvas.drawCircle(x,y,1.3f+(i%4)*.65f,paint);
+        // Deep-space field with slow drifting particles and a luminous horizon.
+        for(int i=0;i<56;i++) {
+            float x=(i*173f+t*(5+i%6)*2.5f)%1280f;
+            float y=(i*97f+(float)Math.sin(t*.6f+i)*32f)%720f;
+            paint.setColor(i%5==0?0xAA74EAF0:0x447CAFC3);
+            canvas.drawCircle(x,y,i%7==0?2.1f:1.1f,paint);
         }
+        paint.setColor(0x3323C9DC);
+        canvas.drawOval(120,520,1160,900,paint);
         paint.setStyle(Paint.Style.STROKE);
-        for(int i=0;i<3;i++) {
-            paint.setStrokeWidth(i==0?2.2f:1.2f);
-            paint.setColor(i==0?0xFF38D5E4:0x4438D5E4);
-            float radius=84+i*18+(float)Math.sin(t*1.5f+i)*4f;
-            canvas.drawCircle(640,228,radius,paint);
+        for(int i=0;i<5;i++) {
+            paint.setStrokeWidth(i==0?2.4f:1.2f);
+            paint.setColor(i==0?0xFF54E4E8:0x4435C8DA);
+            float radius=105+i*24+(float)Math.sin(t*1.25f+i)*5f;
+            canvas.drawCircle(640,260,radius,paint);
         }
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF66F0F0);canvas.drawCircle(640,228,7,paint);
+        paint.setColor(0xFF67F0E9);
+        float orbit=1f+(float)Math.sin(t*2.4f)*.08f;
+        for(int i=0;i<4;i++) {
+            double a=t*(.65+i*.12)+i*Math.PI*.5;
+            canvas.drawCircle(640+(float)Math.cos(a)*(150+i*19),
+                    260+(float)Math.sin(a)*(150+i*19),3.2f*orbit,paint);
+        }
         drawVisionMascot(canvas,t);
-        text(canvas,"THE VISION",640,105,39,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
-        text(canvas,"BATTLE UNIVERSE",640,133,12,0xFF54DCE9,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-        text(canvas,"CONFIGURANDO A TEMPORADA 02",640,365,17,0xFFD4EAF2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-        text(canvas,"Mapas  •  Operadores  •  Materiais  •  Áudio  •  Efeitos",640,391,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
 
-        rect.set(260,414,1020,428);
-        paint.setColor(0xFF1B3448);canvas.drawRoundRect(rect,8,8,paint);
-        rect.set(260,414,260+760*progress,428);
-        paint.setShader(new LinearGradient(260,414,1020,428,0xFF36B9D0,0xFF69F0D2,Shader.TileMode.CLAMP));
-        canvas.drawRoundRect(rect,8,8,paint);paint.setShader(null);
-        text(canvas,String.format(Locale.US,"%d%%",(int)(progress*100)),640,468,28,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
-        text(canvas,status,640,493,12,0xFF9FCCD9,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-        String size=total>0?"CONTEÚDO INTEGRADO  •  VERIFICAÇÃO DE INTEGRIDADE":"PREPARANDO RECURSOS DO JOGO";
-        text(canvas,size,640,516,10,0xFF7898AA,Typeface.DEFAULT,Paint.Align.CENTER);
+        text(canvas,"THE VISION",640,91,42,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
+        text(canvas,"BATTLE UNIVERSE",640,121,13,0xFF5BE5EA,Typeface.create("sans-serif",Typeface.BOLD),Paint.Align.CENTER);
+        text(canvas,"TEMPORADA 02  •  UM UNIVERSO ORIGINAL",640,472,15,0xFFD5EAF0,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        text(canvas,status,640,516,13,0xFF82E4E5,Typeface.create("sans-serif",Typeface.BOLD),Paint.Align.CENTER);
+        text(canvas,"OPERADORES  •  MAPAS  •  EQUIPAMENTOS  •  EXPERIÊNCIA",640,548,9,0xFF789EAF,Typeface.DEFAULT,Paint.Align.CENTER);
+
+        // Animated light sequence, not a percentage or simulated progress indicator.
+        for(int i=0;i<7;i++) {
+            float pulse=(float)Math.sin(t*3.1f-i*.62f);
+            paint.setColor(pulse>0?0xFF67EDE5:0x553C8C9C);
+            canvas.drawCircle(610+i*10,594,2.2f+Math.max(0,pulse)*2.2f,paint);
+        }
+        text(canvas,"A EXPERIÊNCIA SERÁ INICIADA APÓS A VERIFICAÇÃO DOS RECURSOS",640,652,8,0xFF66899A,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
 
         if(!error.isEmpty()) {
-            panel(canvas,275,570,350,58,0xFF16475B,0xFF53DDE7);
-            panel(canvas,655,570,350,58,0xFF263545,0xFF6F8798);
-            text(canvas,"TENTAR NOVAMENTE",450,606,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-            text(canvas,"ABRIR JOGO BASE",830,606,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-            text(canvas,shortText(error,105),640,665,10,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
+            panel(canvas,275,565,350,58,0xFF16475B,0xFF53DDE7);
+            panel(canvas,655,565,350,58,0xFF263545,0xFF6F8798);
+            text(canvas,"TENTAR NOVAMENTE",450,601,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,"VOLTAR AO MENU",830,601,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,shortText(error,108),640,680,9,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
         } else {
-            text(canvas,"ETAPAS DE CONFIGURAÇÃO  •  PROGRESSO REAL",260,548,11,0xFF64DDE8,Typeface.DEFAULT_BOLD);
-            for(int i=0;i<recentFiles.size();i++) {
-                FileRow row=recentFiles.get(i);
-                float y=568+i*29;
-                text(canvas,shortText(row.name,72),270,y,10,0xFFB8D6E2,Typeface.DEFAULT);
-                String percent=row.complete?"OK":String.format(Locale.US,"%d%%",(int)(row.progress*100));
-                text(canvas,percent,1008,y,9,row.complete?0xFF69F0D2:0xFF8DB7C7,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
-                rect.set(270,y+5,1010,y+10);
-                paint.setColor(0xFF1B3448);canvas.drawRoundRect(rect,3,3,paint);
-                rect.set(270,y+5,270+740*row.progress,y+10);
-                paint.setColor(row.complete?0xFF56D9B8:0xFF36B9D0);
-                canvas.drawRoundRect(rect,3,3,paint);
-            }
-            text(canvas,"THE VISION  •  CONTEÚDO VALIDADO ANTES DE SER ATIVADO",640,692,9,0xFF648DA1,Typeface.DEFAULT,Paint.Align.CENTER);
-            postInvalidateDelayed(70);
+            postInvalidateDelayed(45);
         }
         canvas.restore();
     }
@@ -148,54 +130,30 @@ public final class ContentLoadingView extends View {
     private void drawVisionMascot(Canvas canvas,float time) {
         float bob=(float)Math.sin(time*2.1f)*5f;
         float pulse=1f+(float)Math.sin(time*3.2f)*0.035f;
-        canvas.save();
-        canvas.translate(640,228+bob);
-        canvas.scale(pulse,pulse);
+        canvas.save();canvas.translate(640,260+bob);canvas.scale(pulse,pulse);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(0x5535DDEB);
-        canvas.drawCircle(0,0,72+(float)Math.sin(time*2.5f)*5f,paint);
+        canvas.drawCircle(0,0,78+(float)Math.sin(time*2.5f)*5f,paint);
         paint.setShader(new LinearGradient(-42,-48,45,58,
             new int[]{0xFFB9F8FF,0xFF36BFD6,0xFF155078},null,Shader.TileMode.CLAMP));
-        rect.set(-52,-60,52,64);
-        canvas.drawRoundRect(rect,34,34,paint);
-        paint.setShader(null);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(3f);
-        paint.setColor(0xFFB9F8FF);
-        rect.set(-52,-60,52,64);
-        canvas.drawRoundRect(rect,34,34,paint);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF071A2B);
-        rect.set(-38,-17,38,24);
-        canvas.drawRoundRect(rect,18,18,paint);
-        paint.setColor(0xFF71F6F0);
-        canvas.drawOval(-27,-5,-9,7,paint);
-        canvas.drawOval(9,-5,27,7,paint);
-        paint.setColor(Color.WHITE);
-        canvas.drawCircle(-18,-1,3,paint);
-        canvas.drawCircle(18,-1,3,paint);
-        paint.setColor(0xFF16456A);
-        rect.set(-24,43,24,57);
-        canvas.drawRoundRect(rect,7,7,paint);
-        paint.setColor(0xFF8BF7EF);
-        canvas.drawCircle(0,49,4+(float)Math.sin(time*5f)*1.2f,paint);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(2f);
-        paint.setColor(0x9976F5F0);
-        canvas.drawArc(-66,-70,66,70,205,130,false,paint);
-        canvas.drawArc(-66,-70,66,70,25,130,false,paint);
-        paint.setStyle(Paint.Style.FILL);
-        canvas.restore();
+        rect.set(-52,-60,52,64);canvas.drawRoundRect(rect,34,34,paint);paint.setShader(null);
+        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(3f);paint.setColor(0xFFB9F8FF);
+        rect.set(-52,-60,52,64);canvas.drawRoundRect(rect,34,34,paint);
+        paint.setStyle(Paint.Style.FILL);paint.setColor(0xFF071A2B);
+        rect.set(-38,-17,38,24);canvas.drawRoundRect(rect,18,18,paint);
+        paint.setColor(0xFF71F6F0);canvas.drawOval(-27,-5,-9,7,paint);canvas.drawOval(9,-5,27,7,paint);
+        paint.setColor(Color.WHITE);canvas.drawCircle(-18,-1,3,paint);canvas.drawCircle(18,-1,3,paint);
+        paint.setColor(0xFF16456A);rect.set(-24,43,24,57);canvas.drawRoundRect(rect,7,7,paint);
+        paint.setColor(0xFF8BF7EF);canvas.drawCircle(0,49,4+(float)Math.sin(time*5f)*1.2f,paint);
+        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(2f);paint.setColor(0x9976F5F0);
+        canvas.drawArc(-66,-70,66,70,205,130,false,paint);canvas.drawArc(-66,-70,66,70,25,130,false,paint);
+        paint.setStyle(Paint.Style.FILL);canvas.restore();
     }
 
     private String shortText(String value,int max) {
         if(value==null)return "";
         if(value.length()<=max)return value;
-        return "…"+value.substring(value.length()-max+1);
-    }
-
-    private void text(Canvas c,String value,float x,float y,float size,int color,Typeface face) {
-        text(c,value,x,y,size,color,face,Paint.Align.LEFT);
+        return value.substring(0,max-1)+"…";
     }
     private void text(Canvas c,String value,float x,float y,float size,int color,Typeface face,Paint.Align align) {
         paint.setShader(null);paint.setStyle(Paint.Style.FILL);paint.setTypeface(face);
@@ -213,7 +171,7 @@ public final class ContentLoadingView extends View {
             float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
             if(y>=550&&y<=635) {
                 if(x>=275&&x<=625&&retryAction!=null)retryAction.run();
-                else if(x>=655&&x<=1005&&continueAction!=null)continueAction.run();
+                else if(x>=655&&x<=1005&&backAction!=null)backAction.run();
                 performClick();
             }
             return true;

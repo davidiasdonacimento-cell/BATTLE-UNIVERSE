@@ -3,6 +3,9 @@ import android.app.Activity;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
+import android.provider.Settings;
+import android.content.Context;
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -10,14 +13,35 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Locale;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
+import java.util.Set;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Native Android client for the BATTLE UNIVERSE FastAPI/PostgreSQL account service. */
 public final class AccountSyncManager implements SharedPreferences.OnSharedPreferenceChangeListener {
-    public interface Listener{void onAccountState(boolean serverConfigured,boolean signedIn,String username,String message);}
+    public interface Listener {
+        void onAccountState(boolean serverConfigured,boolean signedIn,String username,String message);
+        default void onDeviceIdentity(String deviceCode) {}
+        default void onRecoveryCode(String recoveryCode) {}
+    }
+    public interface WalletListener { void onWallet(long coins,long diamonds,String message); }
+    public interface RoyaleListener {
+        void onResult(boolean success,String prizeId,String prizeName,boolean duplicate,long balance,String message);
+    }
+    public interface DailyRewardListener {
+        void onResult(boolean claimed,long coins,long diamonds,String message);
+    }
+    private static final Set<String> LONG_PROFILE_KEYS=new HashSet<>(Arrays.asList(
+        "xp","coins","diamonds","missions_day","match_reward_session_id",
+        "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
+    ));
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
         "invert_camera_y","show_minimap","haptics","selected_mode","selected_map","selected_character",
@@ -25,9 +49,19 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "wear_shirt_desert","wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
         "wear_set_volcano","wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical",
-        "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name"
+        "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name",
+        "nickname","xp","coins","diamonds","profile_schema_version","coins_wallet_initialized",
+        "matches_played","match_wins","match_kills","match_damage","match_resources",
+        "last_match_kills","last_match_damage","last_match_resources","last_match_result","match_history",
+        "economy_ledger","royale_history","royale_spin_count",
+        "mission_matches","mission_eliminations","mission_crystals","missions_day",
+        "mission_claimed_0","mission_claimed_1","mission_claimed_2","wardrobe_starter_v2_granted",
+        "shop_frame_neon","shop_emblem_bloob","shop_title_champion",
+        "match_reward_session_id","match_reward_recorded",
+        "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
     };
     private final SharedPreferences prefs;
+    private final Context appContext;
     private final Listener listener;
     private final AccountSessionStore session;
     private final Handler main=new Handler(Looper.getMainLooper());
@@ -35,10 +69,11 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private final Runnable saveRunnable=this::saveProfile;
     private final String baseUrl;
     private volatile boolean closed;
+    private final AtomicBoolean recoveryBusy=new AtomicBoolean(false);
     private boolean listening,applying;
     private String status="";
     public AccountSyncManager(Activity activity,SharedPreferences prefs,Listener listener){
-        this.prefs=prefs;this.listener=listener;session=new AccountSessionStore(activity);
+        this.prefs=prefs;this.listener=listener;this.appContext=activity.getApplicationContext();session=new AccountSessionStore(activity);
         String url=BuildConfig.ACCOUNT_API_BASE_URL==null?"":BuildConfig.ACCOUNT_API_BASE_URL.trim();
         while(url.endsWith("/"))url=url.substring(0,url.length()-1);baseUrl=url;
         publish(isConfigured(),isSignedIn(),getUsername(),isConfigured()?"Servidor de contas configurado.":"Servidor ainda não configurado neste APK.");
@@ -53,7 +88,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             JSONObject r=request("GET","/v1/accounts/me",null,session.getToken()),p=r.optJSONObject("player");
             if(p==null)throw new ApiException(502,"Resposta inválida do servidor.");
             String name=p.optString("username",getUsername());session.save(session.getToken(),name,session.getExpiresAt());
-            applyProfile(p.optJSONObject("profile"));syncGameSettings(session.getToken());registerListener();publish(true,true,name,"Login restaurado automaticamente.");
+            applyProfile(p.optJSONObject("profile"));syncGameSettings(session.getToken());registerListener();registerDevice(session.getToken());saveProfile();publish(true,true,name,"Login restaurado automaticamente.");
         }catch(ApiException e){if(e.code==401)session.clear();publish(true,false,"",e.code==401?"Sessão expirada. Entre novamente.":e.getMessage());
         }catch(Exception e){publish(true,true,getUsername(),"Servidor indisponível. Sessão mantida neste aparelho; tente novamente com internet.");}});
     }
@@ -70,12 +105,151 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             String token=r.optString("access_token","");int seconds=r.optInt("expires_in",0);JSONObject player=r.optJSONObject("player");
             if(token.isEmpty()||seconds<=0||player==null)throw new ApiException(502,"Sessão inválida retornada pelo servidor.");
             session.save(token,player.optString("username",name),System.currentTimeMillis()/1000L+seconds);
-            applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();
-            publish(true,true,name,create?"Conta criada e sessão protegida neste aparelho.":"Login realizado; sessão salva para atualizações.");
-            if(create)saveProfile();
+            applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();registerDevice(token);saveProfile();
+            String firstRecoveryCode=create?r.optString("recovery_code",""):"";
+            if(!firstRecoveryCode.isEmpty()&&listener!=null)
+                main.post(()->{if(!closed)listener.onRecoveryCode(firstRecoveryCode);});
+            publish(true,true,name,create?"Conta criada. Guarde o código de recuperação exibido.":"Login realizado; sessão salva para atualizações.");
+            saveProfile();
         }catch(ApiException e){publish(true,isSignedIn(),getUsername(),e.getMessage());}
         catch(Exception e){publish(true,isSignedIn(),getUsername(),"Não foi possível conectar. Verifique a internet.");}});
     }
+    public void fetchWallet(WalletListener callback) {
+        if(!isSignedIn()){if(callback!=null)main.post(()->callback.onWallet(0,0,"Entre para consultar a carteira online."));return;}
+        network.execute(()->{
+            try {
+                JSONObject result=request("GET","/v1/accounts/me/wallet",null,session.getToken());
+                long coins=result.optLong("coins",0),diamonds=result.optLong("diamonds",0);
+                if(callback!=null)main.post(()->{if(!closed)callback.onWallet(coins,diamonds,"Carteira online atualizada.");});
+            } catch(Exception e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onWallet(0,0,"Não foi possível atualizar a carteira online.");});
+            }
+        });
+    }
+
+    public void spinRoyale(String requestId,RoyaleListener callback) {
+        if(!isSignedIn()){if(callback!=null)main.post(()->callback.onResult(false,"","",false,0,"Entre na conta para usar o Royale online."));return;}
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();body.put("request_id",requestId==null||requestId.isEmpty()?UUID.randomUUID().toString():requestId);
+                JSONObject result=request("POST","/v1/royale/spin",body,session.getToken());
+                boolean duplicate=result.optBoolean("duplicate",false);
+                String prizeId=result.optString("prize_id","");
+                String prizeName=result.optString("prize_name","");
+                long balance=result.optLong("diamonds_balance",0);
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(true,prizeId,prizeName,duplicate,balance,"Giro confirmado pelo servidor.");});
+            } catch(ApiException e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,"","",false,0,e.getMessage());});
+            } catch(Exception e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,"","",false,0,"Falha ao confirmar o giro no servidor.");});
+            }
+        });
+    }
+
+    public void claimDailyReward(DailyRewardListener callback) {
+        if(!isSignedIn()){if(callback!=null)main.post(()->callback.onResult(false,0,0,"Entre para resgatar a recompensa diária."));return;}
+        network.execute(()->{
+            try {
+                JSONObject result=request("POST","/v1/game/rewards/daily",new JSONObject(),session.getToken());
+                JSONObject wallet=result.optJSONObject("wallet");
+                long coins=wallet==null?0:wallet.optLong("coins",0);
+                long diamonds=wallet==null?0:wallet.optLong("diamonds",0);
+                boolean claimed=result.optBoolean("claimed",false);
+                String message=claimed?"Presente diário recebido: +250 moedas e +100 diamantes."
+                        :"O presente de hoje já foi resgatado.";
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(claimed,coins,diamonds,message);});
+            } catch(Exception e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,0,"Não foi possível resgatar o presente diário.");});
+            }
+        });
+    }
+
+    public String getDeviceCode() {
+        return prefs.getString("server_device_code", "");
+    }
+
+    private String stableInstallId() throws Exception {
+        String androidId=Settings.Secure.getString(appContext.getContentResolver(),Settings.Secure.ANDROID_ID);
+        if(androidId==null||androidId.trim().isEmpty())throw new Exception("Identificador Android indisponível.");
+        String material=appContext.getPackageName()+"|"+androidId+"|BATTLE_UNIVERSE_DEVICE_V1";
+        byte[] digest=MessageDigest.getInstance("SHA-256").digest(material.getBytes(StandardCharsets.UTF_8));
+        StringBuilder out=new StringBuilder();
+        for(byte value:digest)out.append(String.format(Locale.US,"%02x",value&0xff));
+        return out.toString();
+    }
+
+    private void registerDevice(String token) {
+        if(closed||token==null||token.isEmpty())return;
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();
+                body.put("install_id",stableInstallId());
+                String label=(Build.MANUFACTURER+" "+Build.MODEL).trim();
+                if(label.length()>40)label=label.substring(0,40);
+                body.put("device_label",label.isEmpty()?"Android":label);
+                JSONObject result=request("POST","/v1/accounts/me/devices/register",body,token);
+                String code=result.optString("device_id","");
+                if(!code.isEmpty()){
+                    prefs.edit().putString("server_device_code",code).apply();
+                    if(listener!=null)main.post(()->{if(!closed)listener.onDeviceIdentity(code);});
+                }
+            } catch(Exception ignored) {
+                // Device registration is retried on the next authenticated launch.
+            }
+        });
+    }
+
+    public void rotateRecoveryCode() {
+        if(!isSignedIn()){publish(isConfigured(),false,"","Entre na conta para gerar um código de recuperação.");return;}
+        if(!recoveryBusy.compareAndSet(false,true))return;
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();body.put("confirm",true);
+                JSONObject result=request("POST","/v1/accounts/me/recovery-code/rotate",body,session.getToken());
+                String code=result.optString("recovery_code","");
+                if(code.isEmpty())throw new ApiException(502,"O servidor não retornou o código de recuperação.");
+                if(listener!=null)main.post(()->{if(!closed)listener.onRecoveryCode(code);});
+                publish(true,true,getUsername(),"Código novo gerado. Guarde-o agora; o anterior foi invalidado.");
+            } catch(Exception e) {
+                publish(true,isSignedIn(),getUsername(),"Não foi possível gerar o código de recuperação. Tente novamente.");
+            } finally {
+                recoveryBusy.set(false);
+            }
+        });
+    }
+
+    public void recoverAccount(String rawUsername,String recoveryCode) {
+        String name=rawUsername==null?"":rawUsername.trim().toLowerCase(Locale.ROOT);
+        String code=recoveryCode==null?"":recoveryCode.trim();
+        if(!isConfigured()){publish(false,false,"","Servidor de contas não configurado.");return;}
+        if(!name.matches("[a-z0-9_]{3,18}")||code.length()<20||code.length()>80){
+            publish(true,false,"","Nickname ou código de recuperação inválido.");return;
+        }
+        if(!recoveryBusy.compareAndSet(false,true))return;
+        publish(true,false,name,"Validando código de recuperação...");
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();body.put("username",name);body.put("recovery_code",code);
+                JSONObject result=request("POST","/v1/accounts/recover",body,null);
+                String token=result.optString("access_token","");int seconds=result.optInt("expires_in",0);
+                JSONObject player=result.optJSONObject("player");
+                String replacement=result.optString("new_recovery_code","");
+                if(token.isEmpty()||seconds<=0||player==null||replacement.isEmpty())
+                    throw new ApiException(502,"Resposta de recuperação incompleta.");
+                session.save(token,player.optString("username",name),System.currentTimeMillis()/1000L+seconds);
+                applyProfile(player.optJSONObject("profile"));syncGameSettings(token);registerListener();registerDevice(token);
+                if(listener!=null)main.post(()->{if(!closed)listener.onRecoveryCode(replacement);});
+                publish(true,true,name,"Conta recuperada. Salve o novo código de recuperação.");
+            } catch(ApiException e) {
+                publish(true,false,"",e.getMessage());
+            } catch(Exception e) {
+                publish(true,false,"","Falha ao recuperar a conta. Verifique a conexão e tente novamente.");
+            } finally {
+                recoveryBusy.set(false);
+            }
+        });
+    }
+
     private void syncGameSettings(String token) {
         try {
             JSONObject data=request("GET","/v1/game/settings",null,token);
@@ -110,7 +284,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         if(profile==null||closed)return;applying=true;SharedPreferences.Editor ed=prefs.edit();Map<String,?> old=prefs.getAll();
         for(String key:PROFILE_KEYS){if(!profile.has(key)||profile.isNull(key))continue;Object v=profile.opt(key),prior=old.get(key);
             if(v instanceof Boolean)ed.putBoolean(key,(Boolean)v);
-            else if(v instanceof Number)ed.putInt(key,((Number)v).intValue());
+            else if(v instanceof Number) {
+                if(LONG_PROFILE_KEYS.contains(key)||prior instanceof Long)ed.putLong(key,((Number)v).longValue());
+                else ed.putInt(key,((Number)v).intValue());
+            }
             else if(v instanceof String&&(prior==null||prior instanceof String))ed.putString(key,(String)v);}
         ed.commit();applying=false;
     }
