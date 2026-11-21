@@ -20,8 +20,6 @@ import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.HapticFeedbackConstants;
-import java.security.SecureRandom;
-
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
@@ -62,7 +60,6 @@ public final class HudOverlay extends View {
     private final PlayerProfileStore profile;
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r=new RectF();
-    private final SecureRandom royaleRandom=new SecureRandom();
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private int generalSensitivity=100, aimSensitivity=100;
     private int selectedShirt,selectedBoots,selectedSet;
@@ -596,23 +593,6 @@ public final class HudOverlay extends View {
         text(c,"PRÉVIA DO COSMÉTICO",290,586,10,0xFF69DCE5,Typeface.DEFAULT_BOLD);
         text(c,"Escolha uma peça e veja exatamente o item antes de confirmar a compra.",290,610,9,0xFFBBD0D9,Typeface.DEFAULT);
         text(c,"Sem roleta paga, chances ocultas ou prêmio aleatório.",290,630,9,0xFF8FAAB8,Typeface.DEFAULT);
-    }
-
-    private void performRoyaleSpin() {
-        final long cost=100L;
-        if(profile.getDiamonds()<cost) { toast("Diamantes insuficientes para girar.");return; }
-        int roll=royaleRandom.nextInt(100);
-        int prize=roll<40?0:(roll<70?1:(roll<90?2:(roll<99?3:4)));
-        String result;
-        if(prize==0) result=profile.performRoyaleSpin(cost,null,50L,0L,"");
-        else if(prize==1) result=profile.performRoyaleSpin(cost,null,100L,0L,"");
-        else {
-            int itemIndex=prize==2?4:(prize==3?9:13);
-            long compensation=prize==2?75L:(prize==3?90L:150L);
-            result=profile.performRoyaleSpin(cost,SHOP_KEYS[itemIndex],0L,compensation,SHOP_NAMES[itemIndex]);
-        }
-        if(result==null){toast("Não foi possível registrar o giro. Nenhum prêmio foi aplicado.");return;}
-        toast("ROYALE: "+result);
     }
 
     private void ensureStarterWardrobe() {
