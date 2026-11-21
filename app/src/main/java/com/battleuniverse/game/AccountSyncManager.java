@@ -25,7 +25,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "wear_shirt_desert","wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
         "wear_set_volcano","wear_set_nebula","wear_set_cerrado",
-        "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","character_display_name"
+        "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name"
     };
     private final SharedPreferences prefs;
     private final Listener listener;
@@ -131,14 +131,25 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             int code=c.getResponseCode();InputStream stream=code>=200&&code<300?c.getInputStream():c.getErrorStream();
             ByteArrayOutputStream buffer=new ByteArrayOutputStream();if(stream!=null)try(InputStream in=stream){
                 byte[] chunk=new byte[4096];int n;while((n=in.read(chunk))!=-1)buffer.write(chunk,0,n);}
-            String text=buffer.toString(StandardCharsets.UTF_8.name());JSONObject json=text.isEmpty()?new JSONObject():new JSONObject(text);
-            if(code<200||code>=300)throw new ApiException(code,json.optString("detail","Erro de comunicação com o servidor."));
+            String text=buffer.toString(StandardCharsets.UTF_8.name());
+            JSONObject json;
+            try { json=text.isEmpty()?new JSONObject():new JSONObject(text); }
+            catch(org.json.JSONException malformed) {
+                if(code<200||code>=300) {
+                    String detail=text.trim();if(detail.length()>180)detail=detail.substring(0,180);
+                    throw new ApiException(code,detail.isEmpty()?"Servidor retornou erro HTTP "+code+".":detail);
+                }
+                throw new ApiException(502,"O servidor respondeu em formato inválido. Tente novamente.");
+            }
+            if(code<200||code>=300)throw new ApiException(code,json.optString("detail","Erro HTTP "+code+" ao comunicar com o servidor."));
             return json;
         }finally{c.disconnect();}
     }
     private void publish(boolean configured,boolean signed,String username,String message){
-        status=message==null?"":message;if(listener==null||closed)return;
-        main.post(()->{if(!closed)listener.onAccountState(configured,signed,username==null?"":username,status);});
+        final String safeMessage=message==null?"":message;
+        status=safeMessage;if(listener==null||closed)return;
+        final String safeUsername=username==null?"":username;
+        main.post(()->{if(!closed)listener.onAccountState(configured,signed,safeUsername,safeMessage);});
     }
     public void close(){closed=true;main.removeCallbacks(saveRunnable);if(listening){prefs.unregisterOnSharedPreferenceChangeListener(this);listening=false;}network.shutdownNow();}
     private static final class ApiException extends Exception{final int code;ApiException(int c,String m){super(m);code=c;}}
