@@ -58,27 +58,32 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Run available Android unit tests and compile APK
+      - name: Compile game and administration APKs
         env:
           ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL }}
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
-      - name: Verify APK, DEX and native ARM libraries
+          ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :admin:assembleDebug
+      - name: Verify game and administration APKs
         run: |
           python - <<'PY'
           from zipfile import ZipFile
           from pathlib import Path
-          apk = Path("app/build/outputs/apk/debug/app-debug.apk")
-          assert apk.is_file() and apk.stat().st_size > 300_000, "APK ausente ou pequeno demais"
-          with ZipFile(apk) as z:
+          game = Path("app/build/outputs/apk/debug/app-debug.apk")
+          admin = Path("admin/build/outputs/apk/debug/admin-debug.apk")
+          assert game.is_file() and game.stat().st_size > 300_000, "APK do jogo ausente ou pequeno"
+          assert admin.is_file() and admin.stat().st_size > 100_000, "APK administrativo ausente ou pequeno"
+          with ZipFile(game) as z:
               names = set(z.namelist())
-              assert "classes.dex" in names, "classes.dex não encontrado"
+              assert "classes.dex" in names, "DEX do jogo ausente"
               assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Biblioteca ARM64 ausente"
               assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Biblioteca ARMv7 ausente"
-              bad = z.testzip()
-              assert bad is None, f"APK corrompido: {bad}"
-          print(f"APK válido: {apk.stat().st_size} bytes; DEX e libs ARM presentes")
+              assert z.testzip() is None, "APK do jogo corrompido"
+          with ZipFile(admin) as z:
+              assert "classes.dex" in z.namelist(), "DEX do admin ausente"
+              assert z.testzip() is None, "APK administrativo corrompido"
+          print(f"Jogo: {game.stat().st_size} bytes; Admin: {admin.stat().st_size} bytes")
           PY
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk admin/build/outputs/apk/debug/admin-debug.apk
           ls -lh build/battle-universe-season-02-pack.zip
           test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 262144000
       - name: Publish verified Season 02 4K data pack
@@ -99,11 +104,18 @@ jobs:
             build/content-pack-manifest.json
           overwrite_files: true
           fail_on_unmatched_files: true
-      - name: Upload APK artifact
+      - name: Upload game APK
         uses: actions/upload-artifact@v4
         with:
-          name: BATTLE-UNIVERSE-debug-apk
+          name: BATTLE-UNIVERSE-game-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload administration APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BATTLE-UNIVERSE-ADMIN-debug-apk
+          path: admin/build/outputs/apk/debug/admin-debug.apk
           if-no-files-found: error
           retention-days: 14
       - name: Upload Season 02 4K package artifact
