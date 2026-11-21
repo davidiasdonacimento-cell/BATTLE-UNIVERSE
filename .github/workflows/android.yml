@@ -43,6 +43,8 @@ jobs:
           python-version: '3.12'
       - name: Install content pack tools
         run: python -m pip install --disable-pip-version-check numpy pillow
+      - name: Validate account server Python syntax
+        run: python -m compileall -q server
       - name: Build expanded Season 02 4K content package
         run: python scripts/build_content_pack.py
       - name: Set up JDK 17
