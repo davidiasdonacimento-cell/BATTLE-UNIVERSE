@@ -6,7 +6,7 @@ import android.view.MotionEvent;
 import java.util.Arrays;
 
 public final class GameSurfaceView extends GLSurfaceView {
-    private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64, CROUCH=128;
+    private static final int JUMP=1, INTERACT=2, BUILD=4, RUN=8, FIRE=16, SWAP=32, AIM=64, CROUCH=128, KIT=256;
     private volatile float moveX,moveY,lookDX,lookDY;
     private volatile int buttons,screenMode,characterId,mapId,matchMode,quality=1;
     private volatile float lookSensitivity=1.0f,aimSensitivity=1.0f;
@@ -16,8 +16,8 @@ public final class GameSurfaceView extends GLSurfaceView {
     private volatile boolean invertCameraY=false;
     private boolean aimToggled=false;
     private int movePointer=-1,lookPointer=-1;
-    private final int[] buttonPointers={-1,-1,-1,-1,-1,-1,-1,-1};
-    private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,FIRE,SWAP,AIM,CROUCH};
+    private final int[] buttonPointers={-1,-1,-1,-1,-1,-1,-1,-1,-1};
+    private final int[] buttonBits={JUMP,INTERACT,BUILD,RUN,FIRE,SWAP,AIM,CROUCH,KIT};
     private float moveOriginX,moveOriginY,lastLookX,lastLookY;
 
     public GameSurfaceView(Context context) {
@@ -73,6 +73,9 @@ public final class GameSurfaceView extends GLSurfaceView {
     }
     public int getCollectedResources() {
         try { return nativeGetCollected(); } catch(UnsatisfiedLinkError error) { return 0; }
+    }
+    public int getMedkits() {
+        try { return nativeGetMedkits(); } catch(UnsatisfiedLinkError error) { return 0; }
     }
     public int[] getMatchStats() {
         try { int[] stats=nativeGetMatchStats(); return stats==null?new int[]{0,0,0,0,100}:stats; }
@@ -136,7 +139,8 @@ public final class GameSurfaceView extends GLSurfaceView {
             {1065f,465f,SWAP,42f},
             {1152f,562f,JUMP,52f},
             {960f,605f,INTERACT,47f},
-            {850f,562f,CROUCH,43f}
+            {850f,562f,CROUCH,43f},
+            {1065f,605f,KIT,39f}
         };
         for(float[] c:controls) {
             float dx=x-c[0],dy=y-c[1],r=c[3];
@@ -242,6 +246,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native void nativeSetWaypoint(float worldX,float worldZ);
     private static native int nativeGetEliminations();
     private static native int nativeGetCollected();
+    private static native int nativeGetMedkits();
     private static native int[] nativeGetMatchStats();
     private static native void nativeSetSpectator(boolean enabled);
 
