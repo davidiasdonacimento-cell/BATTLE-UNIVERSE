@@ -261,9 +261,13 @@ float terrainHeightForMap(int map,float x,float z) {
         return std::exp(-0.5f*(dx*dx+dz*dz));
     };
     const float radial=std::sqrt(x*x+z*z);
-    const float edge=std::clamp((78.0f-radial)/15.0f,0.0f,1.0f);
+    // A malha cobre o mundo jogável inteiro; a costa começa perto do limite circular da ilha.
+    constexpr float ISLAND_RADIUS=210.0f;
+    constexpr float COAST_WIDTH=22.0f;
+    const float coastStart=ISLAND_RADIUS-COAST_WIDTH;
+    const float edge=std::clamp((ISLAND_RADIUS-radial)/COAST_WIDTH,0.0f,1.0f);
     const float coast=edge*edge*(3.0f-2.0f*edge);
-    const float coastFade=std::clamp((radial-68.0f)/10.0f,0.0f,1.0f);
+    const float coastFade=std::clamp((radial-coastStart)/COAST_WIDTH,0.0f,1.0f);
     const float coastBlend=coastFade*coastFade*(3.0f-2.0f*coastFade);
     float h=0.0f;
     switch(map) {
@@ -321,9 +325,9 @@ float terrainHeightForMap(int map,float x,float z) {
 }
 MeshBuffer buildMapTerrain(int map) {
     std::vector<float> vertices;
-    constexpr int segments=64;
-    constexpr float extent=78.0f;
-    vertices.reserve(segments*segments*6*18);
+    constexpr int segments=96;
+    constexpr float extent=WORLD_LIMIT;
+    vertices.reserve(segments*segments*36);
     auto point=[&](int ix,int iz) {
         const float x=-extent+2.0f*extent*static_cast<float>(ix)/segments;
         const float z=-extent+2.0f*extent*static_cast<float>(iz)/segments;
@@ -493,6 +497,17 @@ float buildingWidth(size_t i) { return 7.0f+static_cast<float>(i%3)*2.1f; }
 float buildingDepth(size_t i) { return 6.0f+static_cast<float>(i%2)*2.0f; }
 float buildingHeight(size_t i) { return 4.0f+static_cast<float>(i%4)*1.5f; }
 bool terrainPositionBlocked(float x,float z,float radius) {
+    // Encostas muito íngremes não são caminháveis; o teste usa a mesma função
+    // de altura da malha renderizada para todos os oito mapas.
+    constexpr float sample=1.0f;
+    const float hx0=terrainHeightForMap(gSelectedMap,x-sample,z);
+    const float hx1=terrainHeightForMap(gSelectedMap,x+sample,z);
+    const float hz0=terrainHeightForMap(gSelectedMap,x,z-sample);
+    const float hz1=terrainHeightForMap(gSelectedMap,x,z+sample);
+    const float slopeX=(hx1-hx0)/(2.0f*sample);
+    const float slopeZ=(hz1-hz0)/(2.0f*sample);
+    const float slope=std::sqrt(slopeX*slopeX+slopeZ*slopeZ);
+    if(slope>0.78f)return true;
     auto ellipse=[&](float cx,float cz,float rx,float rz) {
         const float dx=(x-cx)/std::max(0.1f,rx+radius);
         const float dz=(z-cz)/std::max(0.1f,rz+radius);
@@ -534,31 +549,41 @@ bool worldPositionBlocked(float x,float z,float radius) {
     return false;
 }
 void moveWithCollision(Vec3& actor,float nextX,float nextZ,float radius) {
-    if(!worldPositionBlocked(nextX,actor.z,radius))actor.x=nextX;
-    if(!worldPositionBlocked(actor.x,nextZ,radius))actor.z=nextZ;
+    // Subpassos evitam atravessar paredes, limites e áreas íngremes entre dois frames.
+    const float startX=actor.x,startZ=actor.z;
+    const float dx=nextX-startX,dz=nextZ-startZ;
+    const int steps=std::clamp(static_cast<int>(std::ceil(
+        std::max(std::fabs(dx),std::fabs(dz))/0.20f)),1,32);
+    for(int step=1;step<=steps;++step) {
+        const float t=static_cast<float>(step)/static_cast<float>(steps);
+        const float candidateX=startX+dx*t;
+        const float candidateZ=startZ+dz*t;
+        if(!worldPositionBlocked(candidateX,actor.z,radius))actor.x=candidateX;
+        if(!worldPositionBlocked(actor.x,candidateZ,radius))actor.z=candidateZ;
+    }
     actor.y=terrainHeightForMap(gSelectedMap,actor.x,actor.z)+0.08f;
 }
 void drawBuilding(float x,float z,float w,float d,float h,Vec3 wall,Vec3 roof) {
-    const float wallY=0.55f+h*0.5f,front=z-d*0.5f,back=z+d*0.5f;
-    // Open-front room with four real walls: the entrance remains clear.
-    drawCube({x,0.57f,z},{w-0.24f,0.16f,d-0.24f},{0.37f,0.31f,0.24f});
+    const float baseY=terrainHeightForMap(gSelectedMap,x,z)+0.08f;
+    const float wallY=baseY+h*0.5f,front=z-d*0.5f,back=z+d*0.5f;
+    // A estrutura acompanha a altura real do terreno em cada mapa.
+    drawCube({x,baseY,z},{w-0.24f,0.16f,d-0.24f},{0.37f,0.31f,0.24f});
     drawCube({x,wallY,back},{w,h,0.20f},wall);
     drawCube({x-w*0.5f,wallY,z},{0.20f,h,d},wall);
     drawCube({x+w*0.5f,wallY,z},{0.20f,h,d},wall);
     const float sideWidth=(w-2.25f)*0.5f;
     drawCube({x-(1.125f+sideWidth*0.5f),wallY,front},{sideWidth,h,0.20f},wall);
     drawCube({x+(1.125f+sideWidth*0.5f),wallY,front},{sideWidth,h,0.20f},wall);
-    drawCube({x,0.55f+2.35f,front},{2.25f,0.35f,0.22f},roof);
-    const float roofY=0.55f+h+0.16f;
-    // Roof beams frame the room without hiding its interior from the follow camera.
+    drawCube({x,baseY+2.35f,front},{2.25f,0.35f,0.22f},roof);
+    const float roofY=baseY+h+0.16f;
     drawCube({x,roofY,z-d*0.5f},{w+0.35f,0.22f,0.20f},roof);
     drawCube({x,roofY,z+d*0.5f},{w+0.35f,0.22f,0.20f},roof);
     drawCube({x-w*0.5f,roofY,z},{0.20f,0.22f,d+0.35f},roof);
     drawCube({x+w*0.5f,roofY,z},{0.20f,0.22f,d+0.35f},roof);
-    drawCube({x-w*0.28f,2.7f,front-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
-    drawCube({x+w*0.28f,2.7f,front-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
-    drawCube({x+1.35f,0.92f,z+0.75f},{1.45f,0.55f,0.85f},{0.24f,0.34f,0.40f});
-    drawCube({x-1.35f,0.72f,z+1.05f},{0.85f,0.25f,0.70f},{0.46f,0.35f,0.23f});
+    drawCube({x-w*0.28f,baseY+2.15f,front-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
+    drawCube({x+w*0.28f,baseY+2.15f,front-0.04f},{0.85f,0.72f,0.07f},{0.12f,0.66f,0.79f});
+    drawCube({x+1.35f,baseY+0.37f,z+0.75f},{1.45f,0.55f,0.85f},{0.24f,0.34f,0.40f});
+    drawCube({x-1.35f,baseY+0.17f,z+1.05f},{0.85f,0.25f,0.70f},{0.46f,0.35f,0.23f});
 }
 void drawMapTerrain() {
     // Cada mapa recebe relevo próprio em escala de mundo. As massas são posicionadas
