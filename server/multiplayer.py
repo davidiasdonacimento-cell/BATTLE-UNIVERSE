@@ -236,24 +236,38 @@ def build_router(Base, db_session, current_player) -> APIRouter:
         mode = safe_mode(body.mode)
         if body.map_id not in VALID_MAPS:
             raise HTTPException(422, "Mapa inválido.")
+        # One durable queue row per account: reuse it after a match/cancellation
+        # because uq_match_queue_player intentionally prevents duplicate tickets.
         existing = db.scalar(select(QueueEntry).where(
-            QueueEntry.player_id == player.id, QueueEntry.state.in_(( "queued", "matched" ))
+            QueueEntry.player_id == player.id
         ).with_for_update())
         if existing and existing.state == "matched" and existing.match_id:
-            match = db.get(MatchSession, existing.match_id)
-            if match and match.status not in {"completed", "cancelled"}:
-                return {"ticket_id": existing.id, "state": "matched", "match_id": match.id,
+            active_match = db.get(MatchSession, existing.match_id)
+            if active_match and active_match.status not in {"completed", "cancelled"}:
+                return {"ticket_id": existing.id, "state": "matched", "match_id": active_match.id,
                         "message": "Você já possui uma partida em andamento."}
         if existing and existing.state == "queued":
             if (existing.mode, existing.map_id, existing.region) == (mode, body.map_id, body.region):
                 return {"ticket_id": existing.id, "state": "queued", "wait_seconds": QUEUE_WAIT_SECONDS}
             existing.state = "cancelled"
-        entry = QueueEntry(
-            id=str(uuid.uuid4()), player_id=player.id, username=player.username,
-            mode=mode, map_id=body.map_id, region=body.region, state="queued",
-            created_at=utcnow(), updated_at=utcnow(),
-        )
-        db.add(entry)
+        now = utcnow()
+        if existing is None:
+            entry = QueueEntry(
+                id=str(uuid.uuid4()), player_id=player.id, username=player.username,
+                mode=mode, map_id=body.map_id, region=body.region, state="queued",
+                created_at=now, updated_at=now,
+            )
+            db.add(entry)
+        else:
+            entry = existing
+            entry.username = player.username
+            entry.mode = mode
+            entry.map_id = body.map_id
+            entry.region = body.region
+            entry.state = "queued"
+            entry.match_id = None
+            entry.created_at = now
+            entry.updated_at = now
         try:
             db.flush()
             match = attempt_matchmaking(db, entry)
