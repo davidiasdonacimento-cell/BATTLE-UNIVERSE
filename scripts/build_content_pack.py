@@ -8,7 +8,7 @@ from PIL import Image
 ROOT=Path("build/content-pack-src")
 OUT=Path("build")
 if ROOT.exists(): shutil.rmtree(ROOT)
-for folder in ("models","textures","audio","worlds","characters","missions","shaders","effects"):
+for folder in ("models","textures","audio","worlds","characters","missions","shaders","effects","materials"):
     (ROOT/folder).mkdir(parents=True,exist_ok=True)
 
 def write_obj(name,vertices,faces):
@@ -208,7 +208,29 @@ world_templates={
 "orbital_base":{"id":"orbital_base","name":"Orbital Base","biome":"futuristic","spawn":[0,0,0],"map_bounds":[-120,120,-120,120],"build_limit":20},
 "abandoned_sector":{"id":"abandoned_sector","name":"Abandoned Sector","biome":"ruins","spawn":[0,0,0],"map_bounds":[-120,120,-120,120],"build_limit":20}
 }
+world_materials={
+ "island":["island_ground","tropical_rock","tropical_water","operator_fabric"],
+ "neon_city":["neon_concrete","neon_alloy","operator_fabric"],
+ "desert_storm":["desert_sand","volcanic_rock","abandoned_stone"],
+ "frozen_front":["frozen_ice","abandoned_stone"],
+ "industrial_zone":["industrial_metal","neon_concrete"],
+ "green_valley":["green_moss","tropical_rock"],
+ "orbital_base":["orbital_composite","neon_alloy"],
+ "abandoned_sector":["abandoned_stone","volcanic_rock","industrial_metal"]
+}
+material_catalog={"materials":{},"world_bindings":world_materials}
+for material in sorted({name for group in world_materials.values() for name in group}):
+    material_catalog["materials"][material]={
+      "albedo":f"textures/{material}_albedo_4k.png",
+      "normal":f"textures/{material}_normal_4k.png",
+      "roughness":f"textures/{material}_roughness_4k.png",
+      "ambient_occlusion":f"textures/{material}_ao_2k.png",
+      "resolution":"4096x4096"
+    }
+(ROOT/"materials/biome_materials.json").write_text(
+    json.dumps(material_catalog,ensure_ascii=False,indent=2),encoding="utf-8")
 for key,data in world_templates.items():
+    data["materials"]=world_materials[key]
     (ROOT/f"worlds/{key}.json").write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding="utf-8")
 
 (ROOT/"characters/roster.json").write_text(json.dumps({"operators":[
@@ -278,7 +300,7 @@ required=[
  "models/energy_emitter.obj","models/build_wall.obj",
  "textures/island_ground_albedo_4k.png","textures/island_ground_normal_4k.png",
  "textures/desert_sand_albedo_4k.png","audio/transport_engine.wav",
- "effects/weapons.json"]
+ "effects/weapons.json","materials/biome_materials.json"]
 pack_manifest={"pack_id":"battle_universe_season_02","version":3,
  "title":"Battle Universe — Conteúdo Expandido 4K",
  "engine":"Android OpenGL ES 3.0","texture_resolution":"4096x4096",
