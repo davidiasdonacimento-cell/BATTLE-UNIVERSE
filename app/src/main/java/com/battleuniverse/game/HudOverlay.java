@@ -31,17 +31,20 @@ public final class HudOverlay extends View {
     private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
         "CAMISA TÁTICA","CAMISA NEON","CAMISA FROST","CAMISA DESERTO",
         "BOTAS COMBATE","BOTAS NEON","BOTAS FROST","BOTAS DOURADAS",
-        "CONJUNTO AURORA","CONJUNTO CAMPEÃO","CONJUNTO ORBITAL","CONJUNTO DESERTO"};
+        "CONJUNTO AURORA","CONJUNTO CAMPEÃO","CONJUNTO ORBITAL","CONJUNTO DESERTO",
+        "SKIN VULCÃO","SKIN NEBULAR","SKIN CERRADO"};
     private static final String[] SHOP_KEYS={"shop_frame_neon","shop_emblem_bloob","shop_title_champion",
         "wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost","wear_shirt_desert",
         "wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
-        "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert"};
+        "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
+        "wear_set_volcano","wear_set_nebula","wear_set_cerrado"};
     private static final long[] SHOP_PRICES={500L,1000L,1500L,650L,800L,750L,700L,
-        450L,600L,550L,700L,1800L,2200L,2500L,1900L};
+        450L,600L,550L,700L,1800L,2200L,2500L,1900L,2900L,3200L,3500L};
     private static final int[] SHOP_COLORS={0xFF8D42D7,0xFF08A9D8,0xFFE0A62B,
         0xFF344C5C,0xFF8D42D7,0xFFB8DDE8,0xFFB87843,
         0xFF4B5058,0xFF2FAFC4,0xFFCBDCE4,0xFFE0AE38,
-        0xFF55B7B8,0xFFE0AE38,0xFF6B83C4,0xFFB87843};
+        0xFF55B7B8,0xFFE0AE38,0xFF6B83C4,0xFFB87843,
+        0xFFE64B24,0xFF3C70D8,0xFF5D9B39};
     private static final int[] ROYALE_LEVELS={2,4,6,8,10,12};
     private static final long[] ROYALE_REWARDS={40,60,80,100,120,150};
     private static final String[] MISSION_NAMES={"JOGUE UMA PARTIDA","ELIMINE 3 OPONENTES","COLETE 3 CRISTAIS"};
@@ -536,18 +539,18 @@ public final class HudOverlay extends View {
                 active?0xFF176A75:owned?0xFF345D79:0x553B6172,Color.WHITE);
         }
         text(c,"CONJUNTOS COMPLETOS",270,540,10,0xFF69DCE5,Typeface.DEFAULT_BOLD);
-        String[] sets={"AURORA","CAMPEÃO","ORBITAL","DESERTO"};
-        for(int i=0;i<4;i++) {
-            float x=270+i*146f;boolean owned=prefs.getBoolean(SHOP_KEYS[11+i],false);
+        String[] sets={"AURORA","CAMPEÃO","ORBITAL","DESERTO","VULCÃO","NEBULAR","CERRADO"};
+        for(int i=0;i<7;i++) {
+            int col=i%4,row=i/4;float x=270+col*146f,y=552+row*72f;
+            boolean owned=prefs.getBoolean(SHOP_KEYS[11+i],false);
             boolean active=selectedSet==i+1;
-            panel(c,x,552,132,72,active?0xB51A5B69:0xA91A3040,
+            panel(c,x,y,132,64,active?0xB51A5B69:0xA91A3040,
                 active?0xFF48D7E1:0x335D8495,12);
-            circle(c,x+23,578,13,SHOP_COLORS[11+i],0xFFB5D6E1);
-            text(c,sets[i],x+43,578,8,Color.WHITE,Typeface.DEFAULT_BOLD);
-            pill(c,x+12,590,108,24,active?"EQUIPADO":owned?"VESTIR":"BLOQUEADO",
+            circle(c,x+20,y+20,11,SHOP_COLORS[11+i],0xFFB5D6E1);
+            text(c,sets[i],x+38,y+23,7.5f,Color.WHITE,Typeface.DEFAULT_BOLD);
+            pill(c,x+8,y+34,116,23,active?"EQUIPADO":owned?"VESTIR":"BLOQUEADO",
                 active?0xFF176A75:owned?0xFF345D79:0x553B6172,Color.WHITE);
         }
-        text(c,"KIT INICIAL LIBERADO: CAMISA TÁTICA + BOTAS DE COMBATE.",270,654,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
     }
 
     private void drawAccessoriesPage(Canvas c) {
@@ -1371,11 +1374,14 @@ public final class HudOverlay extends View {
                     prefs.edit().putInt("selected_boots",selectedBoots).putInt("selected_set",0).apply();
                     game.setWardrobe(selectedShirt,selectedBoots,0);toast("Botas equipadas.");return;
                 }
-                if(hit(x,y,sx,552,132,72)) {
-                    if(!prefs.getBoolean(SHOP_KEYS[11+i],false)){toast("Compre este conjunto na loja primeiro.");return;}
+            for(int i=0;i<7;i++) {
+                int col=i%4,row=i/4;float sx=270+col*146f,sy=552+row*72f;
+                if(hit(x,y,sx,sy,132,64)) {
+                    if(!prefs.getBoolean(SHOP_KEYS[11+i],false)){toast("Compre esta skin na loja primeiro.");return;}
                     selectedSet=i+1;
                     prefs.edit().putInt("selected_set",selectedSet).apply();
-                    game.setWardrobe(selectedShirt,selectedBoots,selectedSet);toast("Conjunto "+new String[]{"AURORA","CAMPEÃO","ORBITAL","DESERTO"}[i]+" equipado.");return;
+                    game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
+                    toast("Skin "+new String[]{"AURORA","CAMPEÃO","ORBITAL","DESERTO","VULCÃO","NEBULAR","CERRADO"}[i]+" equipada.");return;
                 }
             }
         }else if(page==ACCESSORIES){
