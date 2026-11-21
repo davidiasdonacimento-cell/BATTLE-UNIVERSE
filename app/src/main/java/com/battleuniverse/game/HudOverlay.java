@@ -23,6 +23,7 @@ import android.view.View;
 import android.view.HapticFeedbackConstants;
 import org.json.JSONObject;
 import java.security.SecureRandom;
+import java.util.UUID;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
@@ -79,7 +80,7 @@ public final class HudOverlay extends View {
         void authenticate(String username, String password, boolean createAccount);
     }
     public interface RoyaleSpinAction {
-        void spin(RoyaleResult callback);
+        void spin(String requestId,RoyaleResult callback);
     }
     public interface RoyaleResult {
         void onResult(boolean success,String prizeId,String prizeName,boolean duplicate,long balance,String message);
@@ -100,6 +101,7 @@ public final class HudOverlay extends View {
     private DailyRewardAction dailyRewardAction;
     private boolean royaleRequesting,royaleServerDuplicate;
     private String royaleServerPrizeName="";
+    private String pendingRoyaleRequestId="";
     private long toastUntil, lastTap;
     private int collectionPage=0;
     private int cofreTab=0;
@@ -815,7 +817,8 @@ public final class HudOverlay extends View {
         royaleResultMessage="";
         toast("Confirmando seu giro no servidor...");
         postInvalidate();
-        royaleSpinAction.spin((success,prizeId,prizeName,duplicate,balance,message)->{
+        if(pendingRoyaleRequestId.isEmpty())pendingRoyaleRequestId=UUID.randomUUID().toString();
+        royaleSpinAction.spin(pendingRoyaleRequestId,(success,prizeId,prizeName,duplicate,balance,message)->{
             royaleRequesting=false;
             if(!success){
                 royaleResultMessage=message==null?"GIRO NÃO CONFIRMADO":message;
@@ -823,6 +826,7 @@ public final class HudOverlay extends View {
                 postInvalidate();
                 return;
             }
+            pendingRoyaleRequestId="";
             onlineDiamonds=Math.max(0L,balance);
             String[] ids={"shirt_tactical","boots_combat","set_aurora","beard_old","pants_angelical"};
             int prize=-1;
