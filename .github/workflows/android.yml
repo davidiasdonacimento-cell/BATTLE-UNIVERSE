@@ -97,7 +97,6 @@ jobs:
           from zipfile import ZipFile
           from pathlib import Path
           from shutil import copy2
-          import hashlib, json
           game = Path("app/build/outputs/apk/debug/app-debug.apk")
           admin_candidates = sorted(Path("admin/build/outputs/apk").rglob("*.apk"))
           assert game.is_file() and game.stat().st_size > 300_000, "APK do jogo ausente ou pequeno"
@@ -118,50 +117,30 @@ jobs:
           with ZipFile(admin) as z:
               assert "classes.dex" in z.namelist(), "DEX do admin ausente"
               assert z.testzip() is None, "APK administrativo corrompido"
-          print(f"APK enxuto sem Season 02 embutida: {game.stat().st_size} bytes; Admin: {admin.stat().st_size} bytes")
+          print(f"APK do jogo validado: {game.stat().st_size} bytes; Admin compilado e validado: {admin.stat().st_size} bytes")
           PY
           ls -lh app/build/outputs/apk/debug/app-debug.apk build/admin-debug.apk
           ls -lh build/battle-universe-season-02-pack.zip
           test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 1073741824
           test $(stat -c%s build/battle-universe-season-02-pack.zip) -le 5368709120
-      - name: Publish verified Season 02 4K data pack
+      - name: Publish APK and verified Season 02 data pack as direct release assets
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: data-pack-v3
-          name: Battle Universe — Conteúdo Expandido 4K
+          name: Battle Universe — APK + Conteúdo Expandido 4K
           body: |
-            Pacote expandido do Battle Universe.
-            Inclui avião de transporte, modelos OBJ, materiais PBR 4K, oito mapas,
-            missões, shaders OpenGL ES 3.0 e quatro ambientes de áudio.
+            Arquivos oficiais de distribuição do Battle Universe.
+            - app-debug.apk: APK do jogo, disponível diretamente, sem ZIP externo do Actions.
+            - battle-universe-season-02-pack.zip: pacote de conteúdo Season 02 separado (1–5 GiB).
+            - content-pack-manifest.json: manifesto e verificação SHA-256.
+            O APK não inclui o pacote pesado da Season 02.
             O aplicativo valida o SHA-256 do pacote e de cada arquivo antes da instalação.
           prerelease: true
           files: |
+            app/build/outputs/apk/debug/app-debug.apk
             build/battle-universe-season-02-pack.zip
             build/content-pack-manifest.json
           overwrite_files: true
           fail_on_unmatched_files: true
-      - name: Upload game APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: BATTLE-UNIVERSE-game-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload administration APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: BATTLE-UNIVERSE-ADMIN-debug-apk
-          path: build/admin-debug.apk
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload Season 02 4K package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: BATTLE-UNIVERSE-season-02-4k-content-pack
-          path: |
-            build/battle-universe-season-02-pack.zip
-            build/content-pack-manifest.json
-          if-no-files-found: error
-          retention-days: 14
