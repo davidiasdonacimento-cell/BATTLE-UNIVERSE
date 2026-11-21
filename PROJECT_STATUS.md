@@ -102,3 +102,18 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Antes de ativar qualquer novo modo na interface, implementar e testar o respectivo fluxo na engine; não apresentar seleção visual como modo funcional.
 - Multiplayer humano exige servidor autoritativo e matchmaking; bots locais não contam como jogadores online.
 - Testar compilação e, separadamente, testar no Redmi 12. Não afirmar que mapas, interiores, IA, economia ou modos estão prontos sem evidência.
+
+
+## Geografia própria dos oito mapas — código publicado, build pendente
+- `drawMapTerrain()` agora cria formas de relevo específicas por mapa, em vez de depender apenas do disco de terreno circular e de marcos decorativos:
+  1. Ilha Tropical: espinhaço central, morros costeiros separados e enseadas.
+  2. Neon City: quadras elevadas em terraços e canal urbano rebaixado.
+  3. Desert Storm: dunas/mesas e corredor de vale seco.
+  4. Frozen Front: cordilheiras glaciais e corredor de fenda.
+  5. Industrial Zone: taludes de escavação, bacias e platôs fabris.
+  6. Green Valley: colinas onduladas e vale fluvial.
+  7. Orbital Base: crateras, anéis de impacto e plataforma central.
+  8. Abandoned Sector: crateras de impacto e cordões de entulho.
+- `terrainPositionBlocked()` impede a movimentação de entrar nas áreas íngremes/ocupadas correspondentes às formas principais, além das colisões de construções já existentes.
+- Limite técnico importante: o terreno ainda é composto por primitivas low-poly sobre uma superfície-base plana; não é um heightmap contínuo com inclinações caminháveis. As áreas de relevo alto são tratadas como obstáculos, não como encostas que o personagem escala. Rios/canais são representação visual e ainda precisam de regras próprias de travessia/água. Não declarar os mapas como totalmente finalizados.
+- Compilação Android e teste visual após este commit ainda pendentes; o sucesso do workflow anterior não valida esta alteração.
