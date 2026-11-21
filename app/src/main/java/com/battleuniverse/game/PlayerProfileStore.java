@@ -178,8 +178,20 @@ public final class PlayerProfileStore {
                     .putString("royale_last_reward", result)
                     .putInt("royale_spin_count", prefs.getInt("royale_spin_count", 0) + 1);
             if (itemPrize && !duplicate) edit.putBoolean(itemKey, true);
-            appendLedger(edit, "royale_spin_" + (prefs.getInt("royale_spin_count", 0) + 1),
-                    "ROYALE", 0L, credit - cost, 0L);
+            int nextSpin = prefs.getInt("royale_spin_count", 0) + 1;
+            String oldHistory = prefs.getString("royale_history", "");
+            String[] historyRows = oldHistory.isEmpty() ? new String[0] : oldHistory.split("\\n");
+            StringBuilder history = new StringBuilder();
+            int historyStart = Math.max(0, historyRows.length - 19);
+            for (int i = historyStart; i < historyRows.length; i++) {
+                if (historyRows[i].isEmpty()) continue;
+                if (history.length() > 0) history.append('\\n');
+                history.append(historyRows[i]);
+            }
+            if (history.length() > 0) history.append('\\n');
+            history.append(nextSpin).append('|').append(System.currentTimeMillis()).append('|').append(result);
+            edit.putString("royale_history", history.toString());
+            appendLedger(edit, "royale_spin_" + nextSpin, "ROYALE", 0L, credit - cost, 0L);
             return edit.commit() ? result : null;
         }
     }
