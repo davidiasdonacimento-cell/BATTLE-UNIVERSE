@@ -19,6 +19,8 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -36,10 +38,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     public interface DailyRewardListener {
         void onResult(boolean claimed,long coins,long diamonds,String message);
     }
-    private static final Set<String> LONG_PROFILE_KEYS=Set.of(
+    private static final Set<String> LONG_PROFILE_KEYS=new HashSet<>(Arrays.asList(
         "xp","coins","diamonds","missions_day","match_reward_session_id",
         "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
-    );
+    ));
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
         "invert_camera_y","show_minimap","haptics","selected_mode","selected_map","selected_character",
