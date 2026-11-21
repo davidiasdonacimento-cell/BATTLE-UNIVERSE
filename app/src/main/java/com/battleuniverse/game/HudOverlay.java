@@ -57,7 +57,7 @@ public final class HudOverlay extends View {
     private static final int[] MISSION_GOALS={1,3,3};
     private static final long[] MISSION_XP={120,180,0};
     private static final long[] MISSION_DIAMONDS={0,0,80};
-    private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO"};
+    private static final String[] MODE_NAMES={"BATTLE ROYALE","DUPLA","ESQUADRÃO","TREINAMENTO","GLADIADORES"};
     private static final String[] MAP_NAMES={"ILHA TROPICAL","NEON CITY","DESERT STORM","FROZEN FRONT","INDUSTRIAL ZONE","GREEN VALLEY","ORBITAL BASE","ABANDONED SECTOR"};
     private static final String[] MAP_DETAILS={"Praias • florestas • vilas","Arranha-céus • neon • avenidas","Dunas • cânions • ruínas","Geleiras • neve • bases polares","Fábricas • depósitos • chaminés","Campos • rios • florestas","Instalações • plataformas • tecnologia","Ruínas • depósitos • estruturas antigas"};
     private static final String[] CHARACTER_NAMES={"CAIO","MAYA","DANTE","LUNA"};
@@ -305,9 +305,9 @@ public final class HudOverlay extends View {
         panel(c,44,238,260,68,0xD51B3C4D,0x557AA9BC,13);
         text(c,MODE_NAMES[mode],62,267,16,Color.WHITE,
             Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,mode==0?"SOLO  •  30 PARTICIPANTES":mode==1?"DUPLA  •  EQUIPES DE 2":
-            mode==2?"ESQUADRÃO  •  EQUIPES DE 4":"TREINAMENTO LIVRE",
-            62,289,8,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+        String modeDetail=mode==0?"SOLO  •  30 PARTICIPANTES":mode==1?"DUPLA  •  EQUIPES DE 2":
+            mode==2?"ESQUADRÃO  •  EQUIPES DE 4":mode==3?"TREINAMENTO LIVRE":"DUELO  •  PRIMEIRO A 5 PONTOS";
+        text(c,modeDetail,62,289,8,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
         chevron(c,284,271);
 
         eyebrow(c,48,337,"MAPA");
@@ -323,8 +323,8 @@ public final class HudOverlay extends View {
         gradientButton(c,44,512,260,66,"JOGAR","ENTRAR NA PARTIDA",0xFFFFB45E,0xFFE97543);
         text(c,"▶",62,553,20,0xFFFFF4E7,Typeface.DEFAULT_BOLD);
         text(c,"Offline: você + 29 bots IA",48,601,9,0xFFB3C8D4,Typeface.DEFAULT_BOLD);
-        text(c,onlineMode?"Online bloqueado • servidor pendente":
-            "Servidor local • partida sem internet",48,622,8,
+        text(c,onlineMode?"ONLINE BLOQUEADO • SERVIDOR DE PARTIDAS PENDENTE":
+            "OFFLINE • PARTIDA LOCAL COM IA",48,622,8,
             onlineMode?0xFFFFC27A:0xFF8EDFD4,Typeface.DEFAULT);
 
         pill(c,448,139,354,29,"OPERADOR EM DESTAQUE  •  "+characterName(character),
@@ -395,32 +395,47 @@ public final class HudOverlay extends View {
     }
     private void drawModes(Canvas c){
         eyebrow(c,270,175,"SELECIONE A EXPERIÊNCIA");title(c,"MODOS DE JOGO",270,224);
-        subtitle(c,"Partida offline com até 30 participantes: você e 29 bots IA.",270,252);
-        String[] desc={"Você contra 29 bots IA","Você + 1 aliado • 28 bots IA","Você + 3 aliados • 26 bots IA","Sem pressão • alvos e exploração"};
-        String[] counts={"30 PARTICIPANTES","30 PARTICIPANTES","30 PARTICIPANTES","TREINAMENTO"};
-        for(int i=0;i<4;i++){
-            float x=270+(i%2)*292,y=290+(i/2)*150;boolean active=mode==i;
-            panel(c,x,y,270,126,active?0xD51B5B69:0xAA193040,active?0xFF48D7E1:0x335D8495,17);
-            pill(c,x+17,y+16,92,23,counts[i],0x553A6B7C,0xFFB9E8EF);
-            text(c,MODE_NAMES[i],x+18,y+70,20,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,desc[i],x+18,y+96,11,0xFFAAC1CE,Typeface.DEFAULT);
-            if(active)circle(c,x+242,y+25,7,0xFF5CE4DA,0xFFB6FFF5);
+        subtitle(c,"Modos locais disponíveis • bots identificados como IA.",270,252);
+        String[] desc={"Você contra 29 bots IA","Você + 1 aliado • equipes de 2","Você + 3 aliados • equipes de 4",
+            "Área livre • treino local","Duelo individual • primeiro a 5 pontos"};
+        String[] counts={"30 PARTICIPANTES","30 PARTICIPANTES","30 PARTICIPANTES","TREINAMENTO","1 VS 1 • IA"};
+        for(int i=0;i<MODE_NAMES.length;i++){
+            int row=i/3;
+            float x=270+(i%3)*304f+(row==1?152f:0f),y=290+row*150f;
+            boolean active=mode==i;
+            panel(c,x,y,280,126,active?0xD51B5B69:0xAA193040,
+                active?0xFF48D7E1:0x335D8495,17);
+            pill(c,x+17,y+16,112,23,counts[i],0x553A6B7C,0xFFB9E8EF);
+            text(c,MODE_NAMES[i],x+18,y+70,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,desc[i],x+18,y+96,10,0xFFAAC1CE,Typeface.DEFAULT);
+            if(active)circle(c,x+252,y+25,7,0xFF5CE4DA,0xFFB6FFF5);
         }
+        text(c,"ONLINE CONTINUA DESATIVADO ATÉ EXISTIR MATCHMAKING E SERVIDOR DE PARTIDAS REAIS.",
+            270,615,9,0xFFFFC27A,Typeface.DEFAULT_BOLD);
     }
     private void drawPreMatch(Canvas c){
-        eyebrow(c,270,175,"PREPARAÇÃO LOCAL • BATTLE ROYALE");
+        eyebrow(c,270,175,"PREPARAÇÃO LOCAL • "+MODE_NAMES[mode]);
         title(c,"SALA PRÉ-PARTIDA",270,224);
-        subtitle(c,"Confira o operador, o mapa e a composição antes de iniciar.",270,252);
+        subtitle(c,"Confira o operador, o mapa e as regras antes de iniciar.",270,252);
         panel(c,270,270,570,350,0xB8193040,0x557AA9BC,18);
-        eyebrow(c,292,300,"PARTICIPANTES DA PARTIDA OFFLINE");
+        eyebrow(c,292,300,mode==4?"DUELO LOCAL":"COMPOSIÇÃO DA PARTIDA OFFLINE");
         panel(c,292,316,526,48,0xAA123D4A,0x6654DCE5,12);
         text(c,"01  VOCÊ  •  "+CHARACTER_NAMES[character],308,346,13,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"29 VAGAS DE BOT IA  •  CARREGADAS AO INICIAR",292,390,11,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<29;i++){
-            int col=i%6,row=i/6;
-            float x=292+col*88f,y=405+row*35f;
-            panel(c,x,y,80,28,0x66304455,0x334F7B8D,7);
-            text(c,"BOT IA "+String.format(Locale.US,"%02d",i+1),x+7,y+18,8.2f,0xFFB9CBD5,Typeface.DEFAULT_BOLD);
+        if(mode==4){
+            panel(c,292,382,250,46,0x66304455,0x334F7B8D,9);
+            text(c,"02  OPONENTE IA",308,410,11,0xFFFFCF83,Typeface.DEFAULT_BOLD);
+            text(c,"PRIMEIRO A 5 PONTOS VENCE",292,462,11,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+        }else if(mode==3){
+            text(c,"TREINO LIVRE • SEM ADVERSÁRIOS",292,390,11,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+            text(c,"ALVOS E RECURSOS DE TREINAMENTO",292,430,10,0xFF9DB6C5,Typeface.DEFAULT);
+        }else{
+            text(c,"29 VAGAS DE BOT IA  •  CARREGADAS AO INICIAR",292,390,11,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+            for(int i=0;i<29;i++){
+                int col=i%6,row=i/6;
+                float x=292+col*88f,y=405+row*35f;
+                panel(c,x,y,80,28,0x66304455,0x334F7B8D,7);
+                text(c,"BOT IA "+String.format(Locale.US,"%02d",i+1),x+7,y+18,8.2f,0xFFB9CBD5,Typeface.DEFAULT_BOLD);
+            }
         }
         panel(c,292,596,526,1,0x557AA9BC,0x00000000,0);
         text(c,"MAPA: "+MAP_NAMES[map]+"   •   MODO: "+MODE_NAMES[mode],292,581,10,0xFF72DCE6,Typeface.DEFAULT_BOLD);
@@ -430,11 +445,16 @@ public final class HudOverlay extends View {
         text(c,new String[]{"C","M","D","L"}[character],1019,405,42,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,CHARACTER_NAMES[character],886,490,20,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"Camisa, botas e conjunto equipados",886,516,10,0xFF9DB6C5,Typeface.DEFAULT);
-        text(c,"Partida offline • bots identificados como IA",886,546,10,0xFFFFCF83,Typeface.DEFAULT_BOLD);
-        pill(c,886,572,144,25,"30 PARTICIPANTES",0x553A6B7C,0xFFB9E8EF);
+        text(c,mode==4?"Duelo offline • adversário identificado como IA":
+            mode==3?"Treinamento offline • sem adversários":"Partida offline • bots identificados como IA",
+            886,546,9,0xFFFFCF83,Typeface.DEFAULT_BOLD);
+        pill(c,886,572,144,25,mode==4?"2 PARTICIPANTES":mode==3?"TREINO LIVRE":"30 PARTICIPANTES",
+            0x553A6B7C,0xFFB9E8EF);
         pill(c,1038,572,150,25,"SERVIDOR: LOCAL",0x553A6B7C,0xFFB9E8EF);
         pill(c,270,636,170,34,"VOLTAR AO LOBBY",0x553B6172,0xFFBBD0D9);
-        gradientButton(c,862,636,350,34,"INICIAR PARTIDA","CARREGAR AVIÃO E MAPA",0xFFFFB45E,0xFFE97543);
+        gradientButton(c,862,636,350,34,"INICIAR PARTIDA",
+            mode==4?"INICIAR DUELO":mode==3?"INICIAR TREINAMENTO":"CARREGAR AVIÃO E MAPA",
+            0xFFFFB45E,0xFFE97543);
     }
     private void beginOfflineMatch(){
         ensureDailyMissionWindow();
@@ -1634,9 +1654,13 @@ public final class HudOverlay extends View {
             }
             if(hit(x,y,894,584,294,34)){page=WARDROBE;return;}
         }else if(page==MODES_PAGE){
-            for(int i=0;i<4;i++)if(hit(x,y,270+(i%2)*292,290+(i/2)*150,270,126)){
-                mode=i;game.setMatchMode(i);prefs.edit().putInt("mode",i).apply();
-                toast("Modo "+MODE_NAMES[i]+" selecionado");return;
+            for(int i=0;i<MODE_NAMES.length;i++){
+                int row=i/3;
+                float mx=270+(i%3)*304f+(row==1?152f:0f),my=290+row*150f;
+                if(hit(x,y,mx,my,280,126)){
+                    mode=i;game.setMatchMode(i);prefs.edit().putInt("mode",i).apply();
+                    toast("Modo "+MODE_NAMES[i]+" selecionado");return;
+                }
             }
         }else if(page==MAPS_PAGE){
             for(int i=0;i<MAP_NAMES.length;i++){
