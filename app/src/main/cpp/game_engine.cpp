@@ -93,7 +93,7 @@ Mat4 lookAt(Vec3 eye,Vec3 center,Vec3 up) {
 GLuint gProgram=0, gCubeVbo=0, gSphereVbo=0, gCylinderVbo=0, gConeVbo=0;
 GLsizei gSphereCount=0, gCylinderCount=0, gConeCount=0;
 GLint gMvpLocation=-1, gModelLocation=-1, gColorLocation=-1;
-int gScreenMode=0, gSelectedCharacter=0, gSelectedMap=0, gSelectedMode=0, gQuality=1;
+int gScreenMode=0, gSelectedCharacter=0, gSelectedMap=0, gSelectedMode=0, gQuality=2;
 int gSelectedShirtStyle=0,gSelectedBootStyle=0,gSelectedSetStyle=0,gSelectedPantsStyle=0;
 int gEquippedBeard=0,gEquippedHelmet=0,gEquippedBackpack=0,gEquippedVest=0;
 Mat4 gProjection=identity();
@@ -278,8 +278,8 @@ float terrainHeightForMap(int map,float x,float z) {
     };
     const float radial=std::sqrt(x*x+z*z);
     // A malha cobre o mundo jogável inteiro; a costa começa perto do limite circular da ilha.
-    constexpr float ISLAND_RADIUS=210.0f;
-    constexpr float COAST_WIDTH=22.0f;
+    constexpr float ISLAND_RADIUS=145.0f;
+    constexpr float COAST_WIDTH=20.0f;
     const float coastStart=ISLAND_RADIUS-COAST_WIDTH;
     const float edge=std::clamp((ISLAND_RADIUS-radial)/COAST_WIDTH,0.0f,1.0f);
     const float coast=edge*edge*(3.0f-2.0f*edge);
@@ -394,7 +394,7 @@ MeshBuffer buildCone() {
     return makeMesh(v);
 }
 MeshBuffer gSphereMesh, gCylinderMesh, gConeMesh;
-std::array<MeshBuffer,8> gMapTerrainMeshes{};
+std::array<MeshBuffer,1> gMapTerrainMeshes{};
 
 void createCube() {
     std::vector<float> v; v.reserve(36*6);
@@ -440,7 +440,7 @@ bool initializeGraphics() {
     gColorLocation=glGetUniformLocation(gProgram,"uColor");
     createCube();
     gSphereMesh=buildSphere(); gCylinderMesh=buildCylinder(); gConeMesh=buildCone();
-    for(int map=0;map<8;++map) gMapTerrainMeshes[static_cast<size_t>(map)]=buildMapTerrain(map);
+    gMapTerrainMeshes[0]=buildMapTerrain(0);
     gSphereVbo=gSphereMesh.vbo; gSphereCount=gSphereMesh.count;
     gCylinderVbo=gCylinderMesh.vbo; gCylinderCount=gCylinderMesh.count;
     gConeVbo=gConeMesh.vbo; gConeCount=gConeMesh.count;
@@ -702,7 +702,7 @@ void drawWorld(float time) {
         {0.34f,0.37f,0.39f},{0.12f,0.16f,0.22f},{0.40f,0.37f,0.32f},
         {0.48f,0.57f,0.64f},{0.22f,0.27f,0.29f},{0.30f,0.39f,0.29f},{0.18f,0.26f,0.42f},{0.31f,0.29f,0.25f}
     }};
-    const size_t mapStyle=static_cast<size_t>(std::clamp(gSelectedMap,0,7));
+    const size_t mapStyle=0;
     const Vec3 beach=beachColors[mapStyle],land=landColors[mapStyle],road=roadColors[mapStyle];
     drawSphere({0,-0.02f,0},{174,0.62f,174},beach);
     drawSphere({0,0.31f,0},{158,0.31f,158},land);
@@ -1957,7 +1957,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,j
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMap(JNIEnv*,jclass,jint id) {
-    gSelectedMap=std::clamp(static_cast<int>(id),0,7);
+    gSelectedMap=0; (void)id;
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint id) {
