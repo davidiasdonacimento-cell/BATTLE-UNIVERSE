@@ -1024,6 +1024,7 @@ public final class HudOverlay extends View {
     }
     private void drawMatchResult(Canvas c,boolean victory) {
         int[] stats=game.getMatchStats();
+        int[] duelStats=game.getDuelStats();
         p.setColor(0xD9000811);c.drawRect(0,0,1280,720,p);
         panel(c,225,76,830,570,0xF20B1C2A,0xFF4BCDD5,25);
         eyebrow(c,275,116,"BATTLE UNIVERSE  •  RELATÓRIO DA PARTIDA");
@@ -1035,15 +1036,15 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         text(c,mode==4?"SEM CRÉDITO DE MOEDAS OU DIAMANTES OFFLINE":"+"+prefs.getLong("last_match_reward_xp",0L)+" XP  •  +"+prefs.getLong("last_match_reward_coins",0L)+" MOEDAS",296,302,mode==4?8:10,0xFF8BE6D1,Typeface.DEFAULT_BOLD);
         panel(c,625,220,380,104,0xCC132B43,0xFF4B9BD0,16);
         text(c,mode==4?"PLACAR FINAL":"RESULTADO DA EQUIPE",648,247,10,0xFFAED8F0,Typeface.DEFAULT_BOLD);
-        text(c,mode==4?(victory?"VOCÊ VENCEU O 1V1":"IA VENCEU O 1V1"):""+stats[3]+" OPONENTES RESTANTES",648,278,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,mode==4?"VOCÊ "+duelStats[0]+"  —  IA "+duelStats[1]:""+stats[3]+" OPONENTES RESTANTES",648,278,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,mode==4?"META: PRIMEIRO A 5 PONTOS":""+game.getCollectedResources()+" RECURSOS COLETADOS",648,302,10,0xFFB6D7E8,Typeface.DEFAULT_BOLD);
         statCard(c,275,350,220,82,""+game.getEliminations(),mode==4?"PONTOS NO DUELO":"ELIMINAÇÕES");
         statCard(c,515,350,220,82,""+stats[0],"DANO CAUSADO");
         statCard(c,755,350,250,82,""+stats[1],"DANO RECEBIDO");
         statCard(c,275,448,340,70,""+stats[2],"ELIMINAÇÕES FEITAS PELA IA");
-        statCard(c,635,448,370,70,""+stats[3],"BOTS AINDA NA PARTIDA");
+        statCard(c,635,448,370,70,mode==4?""+duelStats[1]:""+stats[3],mode==4?"PONTOS DA IA":"BOTS AINDA NA PARTIDA");
         gradientButton(c,300,548,300,68,"PAINEL PRINCIPAL","Salvar resultado e voltar ao lobby",0xFF126C72,0xFF164C70);
-        gradientButton(c,680,548,300,68,"ASSISTIR PARTIDA","Acompanhar os bots restantes",0xFF694B20,0xFF9A6426);
+        gradientButton(c,680,548,300,68,mode==4?(victory?"VOLTAR AO LOBBY":"ASSISTIR IA"):"ASSISTIR PARTIDA",mode==4?(victory?"ENCERRAR DUELO":"VER A IA NA ARENA"):"Acompanhar os bots restantes",0xFF694B20,0xFF9A6426);
     }
     private void statCard(Canvas c,float x,float y,float w,float h,String value,String label) {
         panel(c,x,y,w,h,0xCC102B3A,0x4469C5D2,13);
@@ -1354,7 +1355,7 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         text(c,mode==4?"GLADIADORES  •  DUELO 1V1":"BATTLE ROYALE  •  IA LOCAL",38,141,11,0xFF79E8D0,Typeface.DEFAULT_BOLD);
 
         String gameStatus=game.getGameStatus();
-        if(showMinimap) {
+        if(showMinimap&&mode!=4) {
             panel(c,1064,18,190,166,0xD9071724,0x6679DDEB,17);
             eyebrow(c,1080,40,"MINIMAPA");
             p.setColor(0xFF173A43);c.drawCircle(1159,105,59,p);
@@ -1398,13 +1399,13 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
         drawControl(c,890,310,38,game.isAimToggled()?"MIRA ON":"MIRA",
             0xFF285D79,0xFF8ADCF4,game.isAimToggled());
         drawControl(c,1002,310,43,"DISPARAR",0xFF185D7A,0xFF65E9F4,game.isFiring());
-        drawControl(c,1165,403,43,gameStatus.contains("PRÉVIA DE")?"CONFIRMAR":"CONSTRUIR",0xFF176C83,0xFF8CEBFF,gameStatus.contains("PRÉVIA DE"));
+        if(mode!=4)drawControl(c,1165,403,43,gameStatus.contains("PRÉVIA DE")?"CONFIRMAR":"CONSTRUIR",0xFF176C83,0xFF8CEBFF,gameStatus.contains("PRÉVIA DE"));
         drawControl(c,960,461,39,"CORRER",0xFF285D49,0xFF83E9B2);
         drawControl(c,1065,465,34,"ARMA",0xFF354F79,0xFF9DC7FF);
         drawControl(c,1152,562,47,"SALTAR",0xFF7B3D35,0xFFFFA28F);
-        drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
+        if(mode!=4)drawControl(c,960,605,39,"USAR",0xFF354F79,0xFF9DC7FF);
         drawControl(c,850,562,39,"AGACHAR",0xFF315B50,0xFF8DE7C1);
-        drawControl(c,1065,605,35,"KIT "+game.getMedkits(),0xFF176447,0xFF9CF0B9,game.getMedkits()>0);
+        if(mode!=4)drawControl(c,1065,605,35,"KIT "+game.getMedkits(),0xFF176447,0xFF9CF0B9,game.getMedkits()>0);
 
         if(!gameStatus.startsWith("EMBARQUE")&&!gameStatus.startsWith("AVIÃO")) {
             float cx=640,cy=360;
@@ -1445,7 +1446,7 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
 
         pill(c,24,625,160,49,"SAIR DA PARTIDA",0xDD173C4A,Color.WHITE);
         panel(c,420,650,440,40,0xBB071522,0x226A8EA0,14);
-        text(c,"JOYSTICK: MOVER  •  AGACHAR: SEGURE  •  GELO: TOQUE PARA VER / CONFIRMAR",
+        text(c,mode==4?"JOYSTICK: MOVER  •  MIRA: AJUSTAR CÂMERA  •  DISPARAR: DUELO 1V1":"JOYSTICK: MOVER  •  AGACHAR: SEGURE  •  GELO: TOQUE PARA VER / CONFIRMAR",
             438,675,8,0xFFDAEAF0,Typeface.DEFAULT_BOLD);
         if(gameStatus.contains("DERRUBADO")) {
             panel(c,430,92,420,66,0xE90B2633,0xFF67DDEB,16);
@@ -1583,7 +1584,7 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
                     }
                     return true;
                 }
-                if(hit(q[0],q[1],1080,150,158,25)) { tacticalMapVisible=true;invalidate();return true; }
+                if(mode!=4&&hit(q[0],q[1],1080,150,158,25)) { tacticalMapVisible=true;invalidate();return true; }
                 if(!resultSpectating&&isMatchOver()) {
                     boolean victory=game.getGameStatus().contains("VITÓRIA");
                     if(hit(q[0],q[1],300,548,300,68)) {
@@ -1591,6 +1592,10 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
                         page=HOME;game.setGameScreen(false);invalidate();return true;
                     }
                     if(hit(q[0],q[1],680,548,300,68)) {
+                        if(mode==4&&victory) {
+                            recordMissionProgressFromMatch();resultSpectating=false;
+                            page=HOME;game.setGameScreen(false);invalidate();return true;
+                        }
                         resultSpectating=true;game.setSpectatorMode(true);invalidate();return true;
                     }
                     return true;
@@ -1628,7 +1633,8 @@ title(c,mode==4?(victory?"VITÓRIA NO DUELO":"DERROTA NO DUELO"):(victory?"VITÓ
                 toast("MODO OFFLINE SELECIONADO.");return;
             }
             if(hit(x,y,180,462,124,31)){
-                onlineMode=true;prefs.edit().putBoolean("online_mode",true).apply();
+                onlineMode=true;game.setTrainingGodMode(false);
+                prefs.edit().putBoolean("online_mode",true).putBoolean("modmenu2_god_mode",false).apply();
                 toast("ONLINE AINDA PRECISA DE UM SERVIDOR DE PARTIDAS.");return;
             }
             if(hit(x,y,44,238,260,68)){page=MODES_PAGE;return;}
