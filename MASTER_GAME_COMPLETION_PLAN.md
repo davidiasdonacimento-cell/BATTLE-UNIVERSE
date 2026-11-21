@@ -224,3 +224,12 @@ A fase permanece em desenvolvimento até build Android, testes automatizados, te
 - A falha “Falha ao sincronizar. Dados locais preservados” vinha de I/O HTTP síncrono no thread principal Android. O debounce e `syncNow()` agora enviam o salvamento ao executor de rede; falhas transitórias são repetidas sem apagar os dados locais.
 - A aplicação do perfil remoto mescla contadores, flags de desbloqueio e históricos com dados locais para reduzir risco de perda de progresso.
 - Validação pendente: CI Android DEBUG, APK, deploy e teste de sincronização com conta real.
+
+
+## Armazenamento persistente do pacote Season 02 — 2026-11-21
+- O instalador Android salva o ZIP verificado em `Downloads/Battle Universe/battle-universe-season-02-pack.zip` no Android 10+ usando MediaStore, sem pedir permissão ampla de armazenamento.
+- Antes de iniciar outro download, procura o arquivo salvo, confere tamanho e SHA-256 com o manifesto remoto e reutiliza o ZIP válido para extrair novamente.
+- O ZIP não é apagado depois da instalação; permanece disponível no armazenamento compartilhado para futuras reinstalações/atualizações. A cópia de trabalho privada continua sendo usada para extração segura e instalação atômica.
+- Se o arquivo público não existir ou falhar na integridade, o instalador baixa uma nova cópia e substitui o arquivo salvo.
+- Em Android 7–9, a cópia fica no diretório externo específico do aplicativo, sem permissão ampla.
+- Estado: código publicado nos commits `1903fef` e `7c7ce21`; compilação Android e teste físico ainda pendentes. Não declarar a função validada no aparelho até concluir esses testes.
