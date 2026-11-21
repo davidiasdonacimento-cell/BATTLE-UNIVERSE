@@ -22,6 +22,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.HapticFeedbackConstants;
 import org.json.JSONObject;
+import java.security.SecureRandom;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
@@ -89,6 +90,17 @@ public final class HudOverlay extends View {
     private TextView accountDialogStatus;
     private int royaleRevealItem=-1;
     private long royaleRevealUntil=0L;
+    private static final int[] ROYALE_PRIZE_ITEMS={3,7,11,18,19};
+    private static final int[] ROYALE_CHANCES={40,30,20,9,1};
+    private final SecureRandom royaleRandom=new SecureRandom();
+    private boolean royaleSpinning,royalePreviewActive;
+    private long royaleSpinStartedAt;
+    private float royaleWheelRotation,royaleSpinStartRotation,royaleSpinEndRotation;
+    private int royalePendingPrize=-1,royaleSelectedPreview=0;
+    private String royaleResultMessage="";
+    private int royalePreviewOriginalShirt,royalePreviewOriginalBoots,royalePreviewOriginalSet;
+    private int royalePreviewOriginalBeard,royalePreviewOriginalHelmet,royalePreviewOriginalBackpack;
+    private int royalePreviewOriginalVest,royalePreviewOriginalPants;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
         super(context);
@@ -679,62 +691,164 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyalePage(Canvas c) {
-        eyebrow(c,270,175,"ROYALE • LOJA DE RECOMPENSAS");
+        eyebrow(c,270,175,"ROYALE • RECOMPENSAS E RELÍQUIAS");
         title(c,"MENU ROYALE",270,224);
-        subtitle(c,"Escolha a peça, confira a prévia e compre diretamente com diamantes.",270,252);
+        subtitle(c,"Gire a roleta com diamantes, confira as chances e teste os cosméticos antes.",270,252);
         panel(c,270,266,570,48,0xAE193040,0x557AA9BC,14);
         text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds())+" DIAMANTES",290,296,12,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        String[] names={"BARBINHA DO VELHO","CALÇA ANGELICAL","COFRE","MODA","CATÁLOGO","EVENTOS"};
-        String[] hints={"900 diamantes • barba 3D","1.500 diamantes • calça azul","Ver itens e equipamentos","Camisas, botas e conjuntos","Todos os cosméticos","Conteúdo da temporada"};
-        int[] featured={18,19,-1,-1,-1,-1};
+        String[] names={"ROULETA ROYALE","BARBINHA DO VELHO","CALÇA ANGELICAL","COFRE","MODA","EVENTOS"};
+        String[] hints={"100 diamantes • sorteio animado","900 diamantes • barba 3D","1.500 diamantes • calça azul","Ver itens e equipamentos","Camisas, botas e conjuntos","Conteúdo da temporada"};
+        int[] featured={-1,18,19,-1,-1,-1};
         int owned=0;for(String key:SHOP_KEYS)if(prefs.getBoolean(key,false))owned++;
         for(int i=0;i<names.length;i++){
             int col=i%3,row=i/3;float x=270+col*192f,y=326+row*151f;
             boolean featuredItem=featured[i]>=0;
             boolean ownedItem=featuredItem&&prefs.getBoolean(SHOP_KEYS[featured[i]],false);
-            panel(c,x,y,174,132,ownedItem?0xB51A4650:0xB51A3040,ownedItem?0xFF4BD4C9:0x557AA9BC,14);
-            if(featuredItem)drawCollectionPreview(c,x+34,y+39,featured[i]==18?0:8,featured[i]==18?4:1,SHOP_COLORS[featured[i]]);
-            else circle(c,x+34,y+39,19,i==2?0xFF24677A:i==3?0xFF8D42D7:0xFF2FAFC4,0xFF9BC9D2);
+            panel(c,x,y,174,132,i==0?0xB55A4220:(ownedItem?0xB51A4650:0xB51A3040),
+                i==0?0xFFFFD27A:(ownedItem?0xFF4BD4C9:0x557AA9BC),14);
+            if(i==0){
+                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5f);p.setColor(0xFFFFD27A);
+                c.drawCircle(x+34,y+39,22,p);p.setStyle(Paint.Style.FILL);
+                text(c,"★",x+26,y+47,25,0xFFFFE5A6,Typeface.DEFAULT_BOLD);
+            }else if(featuredItem)drawCollectionPreview(c,x+34,y+39,featured[i]==18?0:8,featured[i]==18?4:1,SHOP_COLORS[featured[i]]);
+            else circle(c,x+34,y+39,19,i==3?0xFF24677A:i==4?0xFF8D42D7:0xFF2FAFC4,0xFF9BC9D2);
             text(c,names[i],x+13,y+77,8.2f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
             text(c,hints[i],x+13,y+94,7.0f,0xFF9DB6C5,Typeface.DEFAULT);
-            pill(c,x+12,y+101,150,23,featuredItem?(ownedItem?"ADQUIRIDO":"COMPRAR"):"ABRIR",
-                featuredItem?0xFF73501F:0xFF176A75,Color.WHITE);
+            pill(c,x+12,y+101,150,23,i==0?"ABRIR ROLETA":(featuredItem?(ownedItem?"ADQUIRIDO":"COMPRAR"):"ABRIR"),
+                i==0?0xFF80551E:(featuredItem?0xFF73501F:0xFF176A75),Color.WHITE);
         }
-        text(c,owned+" ITENS DESBLOQUEADOS • COMPRAS DIRETAS • ENTREGA NO COFRE",270,660,8,0xFF8FAAB8,Typeface.DEFAULT_BOLD);
+        text(c,owned+" ITENS DESBLOQUEADOS • PRÊMIOS ENTREGUES NO COFRE",270,660,8,0xFF8FAAB8,Typeface.DEFAULT_BOLD);
     }
 
     private void drawRoyaleSpinPage(Canvas c) {
-        eyebrow(c,270,175,"ARQUIVO DE RELÍQUIAS • ITENS CLÁSSICOS");
-        title(c,"COLEÇÃO RARA",270,224);
-        pill(c,674,184,166,32,"VOLTAR À COLEÇÃO",0x553B6172,0xFFD7E6ED);
+        eyebrow(c,270,175,"ROYALE • GIRO DE PRÊMIOS");
+        title(c,"ROLETA ROYALE",270,224);
+        pill(c,674,184,166,32,"VOLTAR AO ROYALE",0x553B6172,0xFFD7E6ED);
         panel(c,270,264,570,48,0xA91A3040,0x557AA9BC,14);
-        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds()),292,294,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,"ESCOLHA O ITEM • PREÇO FIXO • SEM SORTEIO",520,294,9,Color.WHITE,Typeface.DEFAULT_BOLD);
-        int[] items={4,9,13};
-        String[] rarity={"CLÁSSICA • RARA","LEGADO • ÉPICA","RELÍQUIA • LENDÁRIA"};
-        int[] colors={0xFF8D42D7,0xFFB8DDE8,0xFFFFC66F};
-        long now=System.currentTimeMillis();
-        for(int i=0;i<items.length;i++) {
-            int item=items[i];float x=270+i*192f,y=340;
-            boolean owned=prefs.getBoolean(SHOP_KEYS[item],false);
-            panel(c,x,y,174,196,owned?0xB51A4650:0xB51A3040,owned?0xFF4BD4C9:0x557AA9BC,14);
-            if(royaleRevealItem==item&&now<royaleRevealUntil) {
-                float phase=(now-(royaleRevealUntil-1100L))/1100.0f;
-                float radius=34.0f+12.0f*(float)Math.sin(phase*Math.PI*5.0f);
-                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3.0f);
-                p.setColor(0xFFFFD27A);c.drawCircle(x+87,y+45,radius,p);p.setStyle(Paint.Style.FILL);
-                postInvalidateDelayed(45);
-            }
-            circle(c,x+87,y+45,28,colors[i],0xFFB5D6E1);
-            text(c,rarity[i],x+15,y+91,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-            text(c,SHOP_NAMES[item],x+15,y+119,9,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,owned?"JÁ DESBLOQUEADO":"◆ "+SHOP_PRICES[item]+" DIAMANTES",x+15,y+146,8,owned?0xFF83DCD5:0xFFFFD27A,Typeface.DEFAULT_BOLD);
-            pill(c,x+12,y+158,150,27,owned?"ADQUIRIDO":"COMPRAR ITEM",owned?0xFF176A75:0xFF73501F,Color.WHITE);
+        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds()),290,294,12,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"CUSTO POR GIRO: 100 ◆",610,294,10,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
+
+        panel(c,270,326,390,316,0xA9152938,0x557AA9BC,18);
+        float cx=465,cy=470,radius=133;
+        float[] sweeps={144f,108f,72f,32.4f,3.6f};
+        int[] colors={0xFF267D9A,0xFF287B75,0xFF7553A5,0xFFB07835,0xFFB43B66};
+        float startAngle=-90f+royaleWheelRotation;
+        c.save();c.rotate(royaleWheelRotation,cx,cy);
+        float angle=-90f;
+        for(int i=0;i<sweeps.length;i++){
+            r.set(cx-radius,cy-radius,cx+radius,cy+radius);
+            p.setColor(colors[i]);p.setStyle(Paint.Style.FILL);
+            c.drawArc(r,angle,sweeps[i],true,p);
+            p.setColor(0xFFD8F3F5);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2f);
+            c.drawArc(r,angle,sweeps[i],true,p);
+            angle+=sweeps[i];
         }
-        panel(c,270,560,570,86,0xA91A3040,0x557AA9BC,14);
-        text(c,"PRÉVIA DO COSMÉTICO",290,586,10,0xFF69DCE5,Typeface.DEFAULT_BOLD);
-        text(c,"Escolha uma peça e veja exatamente o item antes de confirmar a compra.",290,610,9,0xFFBBD0D9,Typeface.DEFAULT);
-        text(c,"Sem roleta paga, chances ocultas ou prêmio aleatório.",290,630,9,0xFF8FAAB8,Typeface.DEFAULT);
+        p.setStyle(Paint.Style.FILL);
+        c.restore();
+        p.setColor(0xFFFFD27A);
+        Path pointer=new Path();pointer.moveTo(cx,cy-radius-14);pointer.lineTo(cx-15,cy-radius-39);
+        pointer.lineTo(cx+15,cy-radius-39);pointer.close();c.drawPath(pointer,p);
+        p.setColor(0xFF0B1B2A);c.drawCircle(cx,cy,36,p);
+        p.setColor(0xFFFFD27A);c.drawCircle(cx,cy,25,p);
+        text(c,"BU",cx,cy+7,19,0xFF10283A,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
+        if(royaleSpinning){
+            long elapsed=System.currentTimeMillis()-royaleSpinStartedAt;
+            float phase=Math.max(0f,Math.min(1f,elapsed/3900f));
+            float eased=1f-(float)Math.pow(1f-phase,3.0);
+            royaleWheelRotation=royaleSpinStartRotation+(royaleSpinEndRotation-royaleSpinStartRotation)*eased;
+            if(phase>=1f)finishRoyaleSpin();
+            else postInvalidateDelayed(16);
+        }
+        text(c,royaleSpinning?"SORTEANDO PRÊMIO...":"GIRE A ROLETA",465,625,10,
+            royaleSpinning?0xFFFFD27A:0xFF8BDCE7,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+
+        panel(c,680,326,532,316,0xA9152938,0x557AA9BC,18);
+        text(c,"PRÊMIOS E PROBABILIDADES",704,354,12,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+        for(int i=0;i<ROYALE_PRIZE_ITEMS.length;i++){
+            int item=ROYALE_PRIZE_ITEMS[i];
+            float y=370+i*43f;
+            boolean selected=royaleSelectedPreview==i;
+            panel(c,698,y,496,38,selected?0xCC285A67:0x77304758,
+                selected?0xFF65E4E5:0x335D8495,9);
+            circle(c,718,y+19,11,colors[i],0xFFB5D6E1);
+            text(c,SHOP_NAMES[item],740,y+16,9,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,ROYALE_CHANCES[i]+"%",1172,y+24,12,0xFFFFD27A,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
+            if(selected)text(c,"SELECIONADO",1090,y+15,7,0xFF8BE7DE,Typeface.DEFAULT_BOLD,Paint.Align.RIGHT);
+        }
+        text(c,"As chances totalizam 100%. Repetidos devolvem 100 diamantes.",704,598,8,0xFFB7CED8,Typeface.DEFAULT);
+        text(c,"PRÉVIA: "+SHOP_NAMES[ROYALE_PRIZE_ITEMS[royaleSelectedPreview]],704,618,9,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        pill(c,698,652,220,30,"TESTAR ITEM",0xFF176A75,Color.WHITE);
+        pill(c,938,652,256,30,royaleSpinning?"AGUARDE...":"GIRAR • 100 ◆",0xFF80551E,Color.WHITE);
+        if(!royaleResultMessage.isEmpty()){
+            panel(c,270,646,390,42,0xDD173E43,0xFF5ADACB,10);
+            text(c,royaleResultMessage,465,672,9,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        }
+    }
+
+    private void startRoyaleSpin() {
+        if(royaleSpinning)return;
+        if(profile.getDiamonds()<100L){toast("Diamantes insuficientes. O giro custa 100.");return;}
+        restoreRoyalePreview();
+        int roll=royaleRandom.nextInt(100),sum=0,prize=ROYALE_CHANCES.length-1;
+        for(int i=0;i<ROYALE_CHANCES.length;i++){sum+=ROYALE_CHANCES[i];if(roll<sum){prize=i;break;}}
+        float[] sweeps={144f,108f,72f,32.4f,3.6f};
+        float center=-90f;
+        for(int i=0;i<prize;i++)center+=sweeps[i];
+        center+=sweeps[prize]*.5f;
+        float delta=(-90f-center-royaleWheelRotation)%360f;
+        if(delta<0)delta+=360f;
+        royaleSpinStartRotation=royaleWheelRotation;
+        royaleSpinEndRotation=royaleWheelRotation+2160f+delta;
+        royalePendingPrize=prize;
+        royaleSpinStartedAt=System.currentTimeMillis();
+        royaleSpinning=true;
+        royaleResultMessage="";
+        postInvalidate();
+    }
+
+    private void finishRoyaleSpin() {
+        if(!royaleSpinning||royalePendingPrize<0)return;
+        int item=ROYALE_PRIZE_ITEMS[royalePendingPrize];
+        String result=profile.performRoyaleSpin(100L,SHOP_KEYS[item],0L,100L,SHOP_NAMES[item]);
+        royaleSpinning=false;
+        royalePendingPrize=-1;
+        if(result==null){royaleResultMessage="GIRO NÃO CONFIRMADO • SALDO PRESERVADO";toast("Não foi possível confirmar o giro. Saldo preservado.");}
+        else{
+            royaleRevealItem=item;royaleRevealUntil=System.currentTimeMillis()+1800L;
+            royaleResultMessage="PRÊMIO: "+result;
+            toast("Royale: "+result);
+        }
+        postInvalidate();
+    }
+
+    private void applyRoyalePreview(int prizeIndex) {
+        if(prizeIndex<0||prizeIndex>=ROYALE_PRIZE_ITEMS.length)return;
+        restoreRoyalePreview();
+        royalePreviewOriginalShirt=selectedShirt;
+        royalePreviewOriginalBoots=selectedBoots;
+        royalePreviewOriginalSet=selectedSet;
+        royalePreviewOriginalBeard=equippedBeard;
+        royalePreviewOriginalHelmet=equippedHelmet;
+        royalePreviewOriginalBackpack=equippedBackpack;
+        royalePreviewOriginalVest=equippedVest;
+        royalePreviewOriginalPants=selectedPants;
+        royalePreviewActive=true;
+        int item=ROYALE_PRIZE_ITEMS[prizeIndex];
+        if(item==3)game.setWardrobe(1,selectedBoots,selectedSet);
+        else if(item==7)game.setWardrobe(selectedShirt,1,selectedSet);
+        else if(item==11)game.setWardrobe(selectedShirt,selectedBoots,1);
+        else if(item==18)game.setEquipment(4,equippedHelmet,equippedBackpack,equippedVest);
+        else if(item==19)game.setPantsStyle(1);
+        toast("Prévia temporária ativada. Não houve compra.");
+    }
+
+    private void restoreRoyalePreview() {
+        if(!royalePreviewActive)return;
+        game.setWardrobe(royalePreviewOriginalShirt,royalePreviewOriginalBoots,royalePreviewOriginalSet);
+        game.setEquipment(royalePreviewOriginalBeard,royalePreviewOriginalHelmet,
+            royalePreviewOriginalBackpack,royalePreviewOriginalVest);
+        game.setPantsStyle(royalePreviewOriginalPants);
+        royalePreviewActive=false;
     }
 
     private void ensureStarterWardrobe() {
@@ -1553,35 +1667,32 @@ public final class HudOverlay extends View {
             for(int i=0;i<6;i++){
                 float rx=270+(i%3)*192f,ry=326+(i/3)*151f;
                 if(!hit(x,y,rx,ry,174,132))continue;
-                if(i==0){
+                if(i==0){page=ROYALE_SPIN;royaleSelectedPreview=0;return;}
+                if(i==1){
                     if(purchaseShopItem(18)){
                         equippedBeard=4;prefs.edit().putInt("equipped_beard",4).apply();
                         game.setEquipment(equippedBeard,equippedHelmet,equippedBackpack,equippedVest);
                     }
-                }else if(i==1){
+                }else if(i==2){
                     if(purchaseShopItem(19)){
                         selectedPants=1;prefs.edit().putInt("selected_pants",1).apply();
                         game.setPantsStyle(1);
                     }
                 }else{
-                    int[] destinations={-1,-1,INVENTORY,WARDROBE,SHOP,EVENTS};
+                    int[] destinations={-1,-1,-1,INVENTORY,WARDROBE,EVENTS};
                     page=destinations[i];
                 }
                 return;
             }
         }else if(page==ROYALE_SPIN){
-            if(hit(x,y,674,184,166,32)){page=ROYALE;return;}
-            int[] items={4,9,13};
-            for(int i=0;i<items.length;i++){
-                float rx=270+i*192f,ry=340;
-                if(hit(x,y,rx,ry,174,196)){
-                    if(purchaseShopItem(items[i])) {
-                        royaleRevealItem=items[i];royaleRevealUntil=System.currentTimeMillis()+1100L;
-                        postInvalidate();
-                    }
-                    return;
-                }
+            if(hit(x,y,674,184,166,32)){restoreRoyalePreview();page=ROYALE;return;}
+            if(royaleSpinning)return;
+            for(int i=0;i<ROYALE_PRIZE_ITEMS.length;i++){
+                float ry=370+i*43f;
+                if(hit(x,y,698,ry,496,38)){royaleSelectedPreview=i;postInvalidate();return;}
             }
+            if(hit(x,y,698,652,220,30)){applyRoyalePreview(royaleSelectedPreview);return;}
+            if(hit(x,y,938,652,256,30)){startRoyaleSpin();return;}
         }else if(page==MISSIONS){
             for(int i=0;i<MISSION_NAMES.length;i++){
                 float mx=270+i*192f;
