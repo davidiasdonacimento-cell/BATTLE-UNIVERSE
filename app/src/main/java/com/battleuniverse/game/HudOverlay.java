@@ -440,9 +440,11 @@ public final class HudOverlay extends View {
         text(c,"NÍVEL "+level+"  •  "+xp+" XP",382,374,13,0xFF9FC0CF,Typeface.DEFAULT_BOLD);
         text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,407,15,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS",382,432,11,0xFF82E5DC,Typeface.DEFAULT_BOLD);
+        text(c,"PARTIDAS "+profile.getMatchesPlayed()+"  •  VITÓRIAS "+profile.getWins()
+            +"  •  ELIMS "+profile.getEliminations(),292,452,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
         text(c,prefs.getBoolean("code_100k_redeemed",false)
             ?"CÓDIGO 100K JÁ RESGATADO NESTE PERFIL"
-            :"CÓDIGO SECRETO 100K DISPONÍVEL",292,458,10,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+            :"CÓDIGO SECRETO 100K DISPONÍVEL",292,472,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
         panel(c,270,486,570,58,googleSignedIn?0xCC176A75:0xA91A3040,
             googleSignedIn?0xFF58DDE6:0x335D8495,15);
         text(c,googleSignedIn?"CONTA VINCULADA • TOQUE PARA SINCRONIZAR":
@@ -633,18 +635,22 @@ public final class HudOverlay extends View {
         return status.contains("VITÓRIA")||status.contains("ELIMINADO");
     }
     private void applyMatchRewards(boolean victory) {
-        if(prefs.getBoolean("match_reward_recorded",false))return;
         int[] stats=game.getMatchStats();
         int kills=Math.max(0,game.getEliminations());
+        long sessionId=prefs.getLong("match_reward_session_id",0L);
+        if(prefs.getBoolean("match_reward_recorded",false)){
+            profile.recordMatch("match_"+sessionId,victory,kills,stats[0],game.getCollectedResources());
+            return;
+        }
         long diamonds=(victory?250L:60L)+kills*(victory?15L:10L);
         long xp=(victory?500L:120L)+kills*(victory?50L:25L);
-        long sessionId=prefs.getLong("match_reward_session_id",0L);
         long coins=(victory?120L:40L)+kills*5L;
         if(!profile.claimOnce("match_reward_"+sessionId,"match_reward_recorded",coins,diamonds,xp)){
             return;
         }
         prefs.edit().putLong("last_match_reward_diamonds",diamonds)
             .putLong("last_match_reward_xp",xp).putLong("last_match_reward_coins",coins).commit();
+        profile.recordMatch("match_"+sessionId,victory,kills,stats[0],game.getCollectedResources());
         recordMissionProgressFromMatch();
     }
     private void drawMatchResult(Canvas c,boolean victory) {
@@ -942,7 +948,8 @@ public final class HudOverlay extends View {
         text(c,xp+" XP TOTAL  •  "+levelProgress+" / 500 XP",913,558,9,0xFFB3C7D1,Typeface.DEFAULT_BOLD);
         p.setColor(0xFF233F4F);r.set(913,570,1224,579);c.drawRoundRect(r,5,5,p);
         p.setColor(0xFF55DDE7);r.set(913,570,913+311*(levelProgress/500f),579);c.drawRoundRect(r,5,5,p);
-        text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS  •  ◆ "+formatDiamonds(profile.getDiamonds()),913,601,9,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"PARTIDAS "+profile.getMatchesPlayed()+"  •  VITÓRIAS "+profile.getWins()
+            +"  •  ELIMS "+profile.getEliminations(),913,601,8,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         pill(c,913,615,154,29,"ABRIR MISSÕES",0xFF176A75,Color.WHITE);
         text(c,"Progresso local salvo neste aparelho",1080,634,8,0xFF8FAAB8,Typeface.DEFAULT);
     }
