@@ -1671,6 +1671,7 @@ void drawBuildPieces() {
     }
 }
 void firePulse() {
+    if(gMatchFinished)return;
     if(gWeaponType<0||gWeaponType>=4||!gWeaponOwned[static_cast<size_t>(gWeaponType)]) {
         setStatus("SEM ARMA • PROCURE UM EQUIPAMENTO NO CHÃO");return;
     }
