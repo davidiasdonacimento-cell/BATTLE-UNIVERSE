@@ -53,7 +53,7 @@ public final class MainActivity extends Activity {
             }
             @Override public void play() {
                 if(accountSync.isSignedIn()) {
-                    if(ContentPackInstaller.isInstalled(MainActivity.this))launchGame(true);
+                    if(ContentPackInstaller.isInstalled(MainActivity.this))startContentVerification();
                     else startContentSetup();
                 } else if(entryGate!=null) {
                     entryGate.setAccountState(accountSync.isConfigured(),false,"","Entre na sua conta antes de jogar.");
@@ -81,6 +81,38 @@ public final class MainActivity extends Activity {
                 "Entre na sua conta para continuar.");
     }
 
+    private void startContentVerification() {
+        if(contentInstalling||isFinishing())return;
+        if(accountSync==null||!accountSync.isSignedIn()) {
+            showEntryGate();
+            return;
+        }
+        contentInstalling=true;
+        loadingView=new ContentLoadingView(this);
+        setContentView(loadingView);
+        loadingView.setProgress(0,1,"VERIFICANDO OS ARQUIVOS DA PASTA DO JOGO...");
+        if(installer!=null)installer.shutdown();
+        installer=new ContentPackInstaller(this,new ContentPackInstaller.Listener() {
+            @Override public void onProgress(long done,long total,String status) {
+                if(loadingView!=null)loadingView.setProgress(done,total,status);
+            }
+            @Override public void onFileProgress(String name,int index,int count,long done,long size) {
+                if(loadingView!=null)loadingView.setFileProgress(name,index,count,done,size);
+            }
+            @Override public void onSuccess() {
+                contentInstalling=false;
+                if(!isFinishing()&&accountSync!=null&&accountSync.isSignedIn())launchGame(true);
+                else if(!isFinishing())showEntryGate();
+            }
+            @Override public void onFailure(String message) {
+                contentInstalling=false;
+                if(loadingView!=null)loadingView.setFailure(
+                    "A verificação encontrou um problema: "+message,
+                    ()->startContentSetup(),()->showEntryGate());
+            }
+        });
+        installer.verifyInstalled();
+    }
     private void startContentSetup() {
         if(contentInstalling||isFinishing())return;
         if(accountSync==null||!accountSync.isSignedIn()) {
