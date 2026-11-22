@@ -2,6 +2,7 @@ package com.battleuniverse.game;
 
 import android.content.Context;
 import android.opengl.GLSurfaceView;
+import android.util.Log;
 import android.view.MotionEvent;
 import java.util.Arrays;
 
@@ -25,7 +26,9 @@ public final class GameSurfaceView extends GLSurfaceView {
     public GameSurfaceView(Context context) {
         super(context);
         setEGLContextClientVersion(3);
-        setEGLConfigChooser(8,8,8,8,24,8);
+        // The engine uses depth testing but no stencil buffer. A 16-bit depth config
+        // is more widely available on mid-range mobile GPUs than 24/8.
+        setEGLConfigChooser(8,8,8,8,16,0);
         setPreserveEGLContextOnPause(true);
         setRenderer(new GameRenderer());
         setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
@@ -274,7 +277,13 @@ public final class GameSurfaceView extends GLSurfaceView {
         private long previous;
         @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,
                 javax.microedition.khronos.egl.EGLConfig config) {
-            nativeInit();
+            Log.i("BattleUniverse","Startup stage: GLSurfaceView surface created; initializing native engine");
+            try {
+                nativeInit();
+            } catch(Throwable error) {
+                Log.e("BattleUniverse","Java/JNI startup failure in nativeInit",error);
+                return;
+            }
             nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
             nativeSetGodMode(trainingGodMode);
             nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
@@ -284,6 +293,7 @@ public final class GameSurfaceView extends GLSurfaceView {
             if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
             nativeSetScreen(screenMode);
             previous=System.nanoTime();
+            Log.i("BattleUniverse","Startup stage: renderer initialization sequence completed");
         }
         @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,
                 int width,int height) {
