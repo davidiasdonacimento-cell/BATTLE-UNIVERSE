@@ -260,3 +260,12 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - `GameSurfaceView` usa configuração EGL com depth16 sem stencil não utilizado; a engine registra marcos de inicialização e trata falhas de alocação de malhas opcionais/terreno e erros de buffers OpenGL.
 - `MainActivity` exibe a categoria do encerramento anterior registrada pelo Android, quando disponível, para orientar o diagnóstico do travamento.
 - Estado: implementado na branch `fix/startup-graphics-memory-guard`; CI da revisão atual ainda pendente e sem teste físico no Redmi 12. Não declarar correção definitiva até validar no aparelho.
+
+## Modernização de estabilidade do renderer — 2026-11-22
+- Branch de trabalho: `feature/major-stability-modernization`.
+- Preservação: mudanças feitas em branch separada; nenhuma funcionalidade existente foi removida nesta etapa.
+- Implementado no código desta branch: redefinição explícita dos handles OpenGL e dos buffers de malha quando o Android recria o EGLContext; isso evita reutilizar nomes de recursos pertencentes ao contexto gráfico anterior.
+- Implementado no código desta branch: registro de fabricante, renderer, versão OpenGL ES e limite de textura para diagnóstico de GPU.
+- Implementado no código desta branch: restauração das escolhas mantidas pelo Java (personagem, modo, qualidade, sensibilidade, roupas, equipamentos, mapa, tela e configurações verificadas da Season 02) após a recriação da superfície.
+- Implementado no código desta branch: captura de falhas Java/JNI durante a restauração do renderer e durante a chamada do primeiro frame.
+- Ainda não comprovado: causa exata do crash relatado, compilação desta branch, funcionamento no Redmi 12 e correção definitiva do lobby. Captura de falha nativa (SIGSEGV/SIGABRT) e teste físico continuam obrigatórios.
