@@ -147,6 +147,11 @@ public final class MainActivity extends Activity {
         if(file!=null&&!file.isEmpty())editor.putString("last_file",file);
         editor.apply();
     }
+    /** Synchronous checkpoint immediately before a crash-sensitive startup boundary. */
+    private void recordStartupCheckpoint(String stage) {
+        if(diagnosticPrefs==null)return;
+        diagnosticPrefs.edit().putString("last_stage",stage).commit();
+    }
     private void showEntryGate() {
         if(isFinishing()||entryGate==null)return;
         if(gameSurface!=null)gameSurface.onPause();
@@ -238,13 +243,16 @@ public final class MainActivity extends Activity {
             startContentSetup();
             return;
         }
-        recordStartupStage("CRIANDO_SUPERFICIE_OPENGL","");
+        recordStartupCheckpoint("ANTES_DE_CRIAR_GAME_SURFACE");
         if(gameSurface!=null)gameSurface.onPause();
         FrameLayout root=new FrameLayout(this);
         int[] settings=ContentPackInstaller.readIslandSettings(this);
         recordStartupStage("CONFIGURACAO_SEASON02_CARREGADA", "");
         gameSurface=new GameSurfaceView(this,settings[0],settings[1]);
+        recordStartupCheckpoint("GAME_SURFACE_CRIADA");
+        recordStartupCheckpoint("ANTES_DE_CRIAR_HUD");
         hud=new HudOverlay(this,gameSurface,profilePrefs);
+        recordStartupCheckpoint("HUD_CRIADA");
         hud.setUsernameAccountActions((username,password,createAccount)->{
             if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
         },()->{
@@ -266,10 +274,13 @@ public final class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
         root.addView(hud,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
+        recordStartupCheckpoint("ANTES_DE_SET_CONTENT_VIEW");
         setContentView(root);
+        recordStartupCheckpoint("LAYOUT_DO_LOBBY_INSTALADO");
         gameLaunched=true;
-        recordStartupStage("SUPERFICIE_CRIADA_INICIANDO_RENDERER","");
+        recordStartupCheckpoint("ANTES_DE_INICIAR_RENDERER");
         gameSurface.onResume();
+        recordStartupCheckpoint("RENDERER_RETOMADO");
     }
 
     private void enterImmersiveMode() {
