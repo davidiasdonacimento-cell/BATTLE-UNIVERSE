@@ -332,7 +332,7 @@ manifest={"version":4,"title":"Battle Universe Season 02 — Pacote Mobile 2K",
 (OUT/"content-pack-manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
 
 # Embed the complete Season 02 archive in the APK. The app extracts this private asset on first launch.
-ASSET_DIR=Path("build/generated/season02Assets/season02")
+ASSET_DIR=Path("app/build/generated/season02Assets/season02")
 ASSET_DIR.mkdir(parents=True,exist_ok=True)
 shutil.copy2(archive,ASSET_DIR/"battle-universe-season-02-pack.zip")
 shutil.copy2(OUT/"content-pack-manifest.json",ASSET_DIR/"content-pack-manifest.json")
