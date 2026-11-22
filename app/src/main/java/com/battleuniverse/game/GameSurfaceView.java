@@ -2,6 +2,7 @@ package com.battleuniverse.game;
 
 import android.content.Context;
 import android.opengl.GLSurfaceView;
+import android.util.Log;
 import android.view.MotionEvent;
 import java.util.Arrays;
 
@@ -23,9 +24,23 @@ public final class GameSurfaceView extends GLSurfaceView {
     private float moveOriginX,moveOriginY,lastLookX,lastLookY;
 
     public GameSurfaceView(Context context) {
+        this(context,12,5,false);
+    }
+
+    /** Receives verified Season 02 settings before the GL renderer can start. */
+    public GameSurfaceView(Context context,int buildLimit,int resourceCount) {
+        this(context,buildLimit,resourceCount,true);
+    }
+
+    private GameSurfaceView(Context context,int buildLimit,int resourceCount,boolean packReady) {
         super(context);
+        contentBuildLimit=Math.max(4,Math.min(24,buildLimit));
+        contentResourceCount=Math.max(1,Math.min(12,resourceCount));
+        contentPackReady=packReady;
         setEGLContextClientVersion(3);
-        setEGLConfigChooser(8,8,8,8,24,8);
+        // The engine uses depth testing but no stencil buffer. A 16-bit depth config
+        // is more widely available on mid-range mobile GPUs than 24/8.
+        setEGLConfigChooser(8,8,8,8,16,0);
         setPreserveEGLContextOnPause(true);
         setRenderer(new GameRenderer());
         setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
@@ -272,29 +287,54 @@ public final class GameSurfaceView extends GLSurfaceView {
 
     private final class GameRenderer implements GLSurfaceView.Renderer {
         private long previous;
+        private boolean firstFrameLogged;
+        private boolean firstFrameCompletedLogged;
         @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,
                 javax.microedition.khronos.egl.EGLConfig config) {
-            nativeInit();
+            Log.i("BattleUniverse","Startup stage: GLSurfaceView surface created; initializing native engine");
+            try {
+                nativeInit();
+            } catch(Throwable error) {
+                Log.e("BattleUniverse","Java/JNI startup failure in nativeInit",error);
+                return;
+            }
             nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
             nativeSetGodMode(trainingGodMode);
             nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
             nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
             nativeSetPantsStyle(pantsStyle);
             nativeSetEquipment(beardStyle,helmetStyle,backpackStyle,vestStyle);
-            if(contentPackReady)nativeSetContentData(contentBuildLimit,contentResourceCount);
+            // Apply verified package configuration on the GL thread after nativeInit
+            // (nativeInit resets engine state) and before the first rendered frame.
+            if(contentPackReady) {
+                nativeSetContentData(contentBuildLimit,contentResourceCount);
+                Log.i("BattleUniverse","Startup stage: Season 02 settings applied to engine"
+                        +" (buildLimit="+contentBuildLimit+", resourceCount="+contentResourceCount+")");
+            } else {
+                Log.w("BattleUniverse","Startup stage: no verified Season 02 settings supplied");
+            }
             nativeSetScreen(screenMode);
             previous=System.nanoTime();
+            Log.i("BattleUniverse","Startup stage: renderer initialization sequence completed");
         }
         @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,
                 int width,int height) {
             nativeResize(width,height);
         }
         @Override public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl) {
+            if(!firstFrameLogged) {
+                firstFrameLogged=true;
+                Log.i("BattleUniverse","Startup stage: first native frame begin");
+            }
             long now=System.nanoTime();
             float dt=Math.min(0.05f,Math.max(0.001f,(now-previous)/1_000_000_000f));
             previous=now;
             float dx=lookDX,dy=lookDY;lookDX=lookDY=0;
             nativeRender(dt,moveX,moveY,dx,invertCameraY?-dy:dy,buttons);
+            if(!firstFrameCompletedLogged) {
+                firstFrameCompletedLogged=true;
+                Log.i("BattleUniverse","Startup stage: first native frame completed");
+            }
         }
     }
     static { System.loadLibrary("battleuniverse"); }

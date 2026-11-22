@@ -43,6 +43,7 @@ public final class EntryGateView extends FrameLayout {
     private boolean signedIn;
     private String currentUsername = "";
     private String deviceCode = "";
+    private String diagnosticsNotice = "";
 
     public EntryGateView(Context context) {
         super(context);
@@ -124,6 +125,10 @@ public final class EntryGateView extends FrameLayout {
 
     public void setActions(Actions value) { actions = value; }
 
+    public void setDiagnosticsNotice(String value) {
+        diagnosticsNotice = value == null ? "" : value.trim();
+    }
+
     public void setAccountState(boolean serverConfigured, boolean authenticated,
                                 String name, String message) {
         configured = serverConfigured;
@@ -136,10 +141,11 @@ public final class EntryGateView extends FrameLayout {
             status.setTextColor(0xFF71F0D7);
         } else {
             status.setText(message == null ? "" : message);
-            String lower = status.getText().toString().toLowerCase();
-            status.setTextColor(lower.contains("erro") || lower.contains("inválid")
-                    || lower.contains("falha") || lower.contains("indisponível")
-                    ? 0xFFFF9A91 : 0xFFB3C8D3);
+            status.setTextColor(0xFFB3C8D3);
+        }
+        if (!diagnosticsNotice.isEmpty()) {
+            status.append("\n" + diagnosticsNotice);
+            status.setTextColor(0xFFFFB18A);
         }
         if (!configured && !authenticated) {
             username.setEnabled(false);

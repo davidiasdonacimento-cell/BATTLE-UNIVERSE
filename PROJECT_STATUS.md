@@ -230,9 +230,33 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Estado: commits no GitHub; workflow de validação DEBUG está em execução. APK ainda não foi compilado nem testado no aparelho.
 
 
-## Pacote Season 02 salvo no celular e reutilizado — 2026-11-21
-- `ContentPackInstaller` agora salva o ZIP externo validado em `Downloads/Battle Universe/battle-universe-season-02-pack.zip` no Android 10+ por MediaStore.
-- Em nova instalação/atualização, procura esse ZIP no armazenamento compartilhado, copia para a área privada de trabalho e valida o SHA-256 antes de extrair. Não baixa novamente quando o arquivo existente está íntegro.
-- O ZIP é mantido após a instalação. Se estiver ausente, incompleto ou com hash incorreto, o instalador baixa uma nova cópia e substitui a salva.
-- Android 7–9 usa armazenamento externo específico do app como fallback.
-- Código publicado nos commits `1903fef`, `7c7ce21`, `af92026` e `6e51c0c`. A cópia privada temporária é removida após instalação bem-sucedida, mantendo o ZIP em Downloads; a checagem de espaço considera ZIP duplicado temporário e até 3 GiB de extração. Build Android e teste físico ainda não confirmados; o comportamento no aparelho permanece pendente de validação.
+## Histórico — cópia externa do pacote Season 02 (comportamento substituído)
+- Uma implementação anterior salvava o ZIP em `Downloads/Battle Universe` e tentava reutilizá-lo em instalações posteriores.
+- Esse comportamento foi substituído pela regra de download novo após reinstalação ou limpeza dos dados do aplicativo. O ZIP externo não é mais consultado pelo instalador.
+- Os arquivos antigos que já estão em Downloads são preservados; o instalador não os apaga nem os sobrescreve.
+
+## Resgate de códigos promocionais no jogo — implementação em andamento
+- A HUD nativa recebeu uma página dedicada **CÓDIGO PROMOCIONAL**, acessível pelo botão da Loja, preservando as demais páginas e funcionalidades.
+- A tela aceita códigos configurados pelo ADMIN (4–32 caracteres: letras, números, sublinhado e hífen), em vez de limitar o cliente ao código fixo 100K.
+- O cliente envia o código à rota autenticada `POST /v1/game/rewards/redeem`; a API/PostgreSQL valida validade, ativação, limite global e resgate único por conta.
+- A resposta do servidor informa a quantidade efetivamente creditada e o saldo da carteira online; o cliente não cria nem altera diamantes localmente.
+- O estado desta alteração é **implementado no código da branch**. Compilação CI, artefato APK e teste no Redmi 12 ainda pendentes; não declarar a tela compilada ou testada até obter essas evidências.
+
+
+## Regra atual do pacote Season 02 — download novo após instalação limpa
+- O instalador não procura, abre, valida nem reutiliza ZIPs em `Downloads` ou em outras pastas compartilhadas.
+- Quando o conteúdo privado do aplicativo não existe — como após desinstalar/reinstalar o jogo ou usar “Limpar dados” — o APK consulta o manifesto remoto, baixa novamente o pacote oficial por Wi-Fi e valida o SHA-256 antes de extrair.
+- Uma tentativa interrompida pode continuar usando somente o arquivo parcial privado do próprio aplicativo; esse arquivo é apagado pelo Android ao desinstalar ou limpar os dados. Não é um ZIP externo reutilizado.
+- O instalador não grava uma cópia do ZIP em Downloads. Qualquer ZIP antigo que já esteja nessa pasta permanece intocado e é ignorado.
+- Se o conteúdo já estiver instalado e os dados do aplicativo forem mantidos, o jogo continua abrindo sem baixar novamente a cada inicialização.
+- A checagem de espaço considera um ZIP privado temporário mais até 3 GiB de extração; não reserva espaço para uma segunda cópia externa.
+- Implementação na branch `fix/always-fresh-season02-download`; compilação CI e teste no Redmi 12 ainda pendentes.
+
+
+
+## Verificação integral dos arquivos e diagnóstico de inicialização — 2026-11-22
+- `ContentPackInstaller.verifyInstalled()` confere todos os arquivos listados em `battle-content/manifest.json`, validando caminho, existência, tamanho e SHA-256 antes de abrir a engine 3D.
+- A verificação acontece na inicialização do jogo e exibe progresso por arquivo. Se houver falha, o jogador pode iniciar reparo, que baixa novamente o pacote oficial; ZIPs antigos em Downloads continuam ignorados e intocados.
+- `GameSurfaceView` usa configuração EGL com depth16 sem stencil não utilizado; a engine registra marcos de inicialização e trata falhas de alocação de malhas opcionais/terreno e erros de buffers OpenGL.
+- `MainActivity` exibe a categoria do encerramento anterior registrada pelo Android, quando disponível, para orientar o diagnóstico do travamento.
+- Estado: implementado na branch `fix/startup-graphics-memory-guard`; CI da revisão atual ainda pendente e sem teste físico no Redmi 12. Não declarar correção definitiva até validar no aparelho.

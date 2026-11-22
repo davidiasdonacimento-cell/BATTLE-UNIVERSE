@@ -233,3 +233,19 @@ A fase permanece em desenvolvimento até build Android, testes automatizados, te
 - Se o arquivo público não existir ou falhar na integridade, o instalador baixa uma nova cópia e substitui o arquivo salvo.
 - Em Android 7–9, a cópia fica no diretório externo específico do aplicativo, sem permissão ampla.
 - Estado: código publicado nos commits `1903fef`, `7c7ce21`, `af92026` e `6e51c0c`; compilação Android e teste físico ainda pendentes. Não declarar a função validada no aparelho até concluir esses testes.
+
+
+## Analisador do arquivo Season 02 por nome — 2026-11-21
+- Na inicialização/instalação, procurar o ZIP Season 02 pelo nome canônico e por variantes numéricas comuns criadas ao baixar novamente (`-1`, `(1)` etc.), em Downloads raiz ou subpastas.
+- Não confiar apenas no nome: conferir tamanho esperado e SHA-256 do manifesto remoto antes de reutilizar. Se inválido/ausente, baixar novamente por Wi-Fi; nunca ativar dados sem validação.
+- Exibir estados reais de análise, busca e validação; se os dados já estiverem instalados e válidos, abrir o jogo sem reinstalar o pacote.
+- Implementação registrada na branch `feature/season02-download-file-analyzer`; CI e teste físico pendentes.
+
+
+## Diagnóstico de inicialização e verificação da pasta Season 02 — 2026-11-22
+- Antes de abrir a engine, o cliente percorre os arquivos de `battle-content/manifest.json`, confere caminhos confinados à pasta privada, presença, tamanho e SHA-256.
+- A tela de entrada mostra o progresso da verificação; arquivo ausente ou corrompido leva à opção de reinstalar o pacote oficial.
+- A engine registra etapas de criação de shaders, programa, buffers e malhas; exceções de alocação em meshes opcionais e terreno são tratadas.
+- A configuração EGL foi ajustada para RGBA8888 + depth16 sem stencil, pois o jogo não usa stencil.
+- O Android informa na próxima abertura a categoria do encerramento anterior quando disponível (crash nativo, crash Java, ANR ou baixa memória).
+- Estado: código na branch `fix/startup-graphics-memory-guard`; CI da revisão atual pendente; teste físico Redmi 12/Android 15 pendente. Não declarar a causa do crash nem a correção definitiva sem evidência no aparelho.

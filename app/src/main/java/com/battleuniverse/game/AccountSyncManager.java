@@ -151,9 +151,13 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 JSONObject body=new JSONObject();body.put("code",rawCode==null?"":rawCode.trim());
                 JSONObject result=request("POST","/v1/game/rewards/redeem",body,session.getToken());
                 JSONObject wallet=result.optJSONObject("wallet");
-                long diamonds=wallet==null?0:wallet.optLong("diamonds",0);
-                if(callback!=null)main.post(()->{if(!closed)callback.onResult(true,diamonds,
-                    "Código resgatado no servidor: +100.000 diamantes. Carteira online atualizada.");});
+                long diamonds=wallet==null?result.optLong("diamonds",0):wallet.optLong("diamonds",0);
+                long added=result.optLong("diamonds_added",0);
+                String confirmedCode=result.optString("code",rawCode==null?"":rawCode.trim().toUpperCase(Locale.ROOT));
+                String message=added>0
+                    ?"Código "+confirmedCode+" resgatado: +"+added+" diamantes. Saldo online: "+diamonds+"."
+                    :"Código "+confirmedCode+" confirmado pelo servidor. Saldo online: "+diamonds+" diamantes.";
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(true,diamonds,message);});
             } catch(ApiException e) {
                 if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,e.getMessage());});
             } catch(Exception e) {

@@ -104,8 +104,8 @@ sphere(v,f,(0,.92,0),(.14,.13,.14),18,10)
 cylinder(v,f,(0,.82,0),(0,1.1,0),.035,16)
 write_obj("energy_emitter",v,f)
 
-# Five 4K PBR material sets. The pixel data is authored texture content, not padding.
-N=4096
+# Mobile PBR material sets: 2K albedo/roughness and 1K normal/AO. The pixel data is authored texture content, not padding.
+N=2048
 def make_texture_set(name,base,seed,kind):
     rng=np.random.default_rng(seed)
     small=Image.fromarray(rng.integers(0,256,(256,256),dtype=np.uint8)).resize(
@@ -147,7 +147,7 @@ def make_texture_set(name,base,seed,kind):
     albedo=np.empty((N,N,3),dtype=np.uint8)
     for channel in range(3):
         albedo[:,:,channel]=(np.clip(base[channel]+lum*(0.85+channel*.13),0,1)*255).astype(np.uint8)
-    Image.fromarray(albedo,"RGB").save(ROOT/f"textures/{name}_albedo_4k.png",compress_level=1)
+    Image.fromarray(albedo,"RGB").save(ROOT/f"textures/{name}_albedo_2k.png",compress_level=1)
     del albedo,lum,microf,coarse,pattern
 
     # Normal maps are derived from a detailed height field and upscaled smoothly.
@@ -159,22 +159,22 @@ def make_texture_set(name,base,seed,kind):
     norm=np.sqrt(nx*nx+ny*ny+nz*nz)
     normal=np.stack([nx/norm*.5+.5,ny/norm*.5+.5,nz/norm*.5+.5],axis=-1)
     normal8=(np.clip(normal,0,1)*255).astype(np.uint8)
-    Image.fromarray(normal8,"RGB").resize((N,N),Image.Resampling.BICUBIC).save(
-        ROOT/f"textures/{name}_normal_4k.png",compress_level=1)
+    Image.fromarray(normal8,"RGB").save(
+        ROOT/f"textures/{name}_normal_1k.png",compress_level=1)
     del height,gx,gy,nx,ny,nz,norm,normal,normal8
 
     # Full-resolution roughness carries actual per-pixel surface variation.
     rr=np.random.default_rng(seed+31)
     rough=rr.integers(32,240,(N,N),dtype=np.uint8)
-    Image.fromarray(rough,"L").save(ROOT/f"textures/{name}_roughness_4k.png",compress_level=1)
+    Image.fromarray(rough,"L").save(ROOT/f"textures/{name}_roughness_2k.png",compress_level=1)
     del rough
 
     # Lower-resolution ambient occlusion for mobile-friendly sampling.
     ao_small=rs.integers(90,245,(1024,1024),dtype=np.uint8)
-    Image.fromarray(ao_small,"L").resize((2048,2048),Image.Resampling.BICUBIC).save(
-        ROOT/f"textures/{name}_ao_2k.png",compress_level=1)
+    Image.fromarray(ao_small,"L").save(
+        ROOT/f"textures/{name}_ao_1k.png",compress_level=1)
     del ao_small
-    print("Generated 4K material:",name,flush=True)
+    print("Generated mobile material:",name,flush=True)
 
 make_texture_set("island_ground",(.30,.39,.23),1001,"ground")
 make_texture_set("tropical_rock",(.34,.33,.29),2002,"rock")
@@ -221,11 +221,11 @@ world_materials={
 material_catalog={"materials":{},"world_bindings":world_materials}
 for material in sorted({name for group in world_materials.values() for name in group}):
     material_catalog["materials"][material]={
-      "albedo":f"textures/{material}_albedo_4k.png",
-      "normal":f"textures/{material}_normal_4k.png",
-      "roughness":f"textures/{material}_roughness_4k.png",
-      "ambient_occlusion":f"textures/{material}_ao_2k.png",
-      "resolution":"4096x4096"
+      "albedo":f"textures/{material}_albedo_2k.png",
+      "normal":f"textures/{material}_normal_1k.png",
+      "roughness":f"textures/{material}_roughness_2k.png",
+      "ambient_occlusion":f"textures/{material}_ao_1k.png",
+      "resolution":"2048x2048 albedo/roughness; 1024x1024 normal/AO"
     }
 (ROOT/"materials/biome_materials.json").write_text(
     json.dumps(material_catalog,ensure_ascii=False,indent=2),encoding="utf-8")
@@ -298,18 +298,18 @@ required=[
  "worlds/island.json","worlds/neon_city.json","worlds/desert_storm.json",
  "characters/roster.json","models/operator_field.obj","models/transport_plane.obj",
  "models/energy_emitter.obj","models/build_wall.obj",
- "textures/island_ground_albedo_4k.png","textures/island_ground_normal_4k.png",
- "textures/desert_sand_albedo_4k.png","audio/transport_engine.wav",
+ "textures/island_ground_albedo_2k.png","textures/island_ground_normal_1k.png",
+ "textures/desert_sand_albedo_2k.png","audio/transport_engine.wav",
  "effects/weapons.json","materials/biome_materials.json"]
-pack_manifest={"pack_id":"battle_universe_season_02","version":3,
- "title":"Battle Universe — Conteúdo Expandido 4K",
- "engine":"Android OpenGL ES 3.0","texture_resolution":"4096x4096",
+pack_manifest={"pack_id":"battle_universe_season_02","version":4,
+ "title":"Battle Universe — Season 02 Mobile 2K",
+ "engine":"Android OpenGL ES 3.0","texture_resolution":"2048x2048 albedo/roughness; 1024x1024 normal/AO",
  "world_count":8,"files":files,"required":required}
 (ROOT/"manifest.json").write_text(json.dumps(pack_manifest,ensure_ascii=False,indent=2),encoding="utf-8")
 (ROOT/"PACK_README.txt").write_text(
  "BATTLE UNIVERSE SEASON 02 CONTENT PACK\n"
  "Original OBJ meshes: field operator, transport airplane, energy emitter, build pieces, hangar, lookout tower, supply crate and training target.\n"
- "Five full 4K PBR-style material sets: albedo, normal, roughness and ambient-occlusion maps.\n"
+ "Mobile PBR material sets: 2K albedo/roughness and 1K normal/ambient-occlusion maps.\n"
  "Eight world configuration files, roster, missions, fictional energy weapon metadata, GLSL ES 3.0 shaders and four ambient audio loops.\n",
  encoding="utf-8")
 
@@ -319,15 +319,15 @@ with zipfile.ZipFile(archive,"w",zipfile.ZIP_DEFLATED,compresslevel=1) as z:
     for item in sorted(ROOT.rglob("*")):
         if item.is_file():z.write(item,item.relative_to(ROOT).as_posix())
 size=archive.stat().st_size
-if size<1024*1024*1024:
-    raise SystemExit(f"Content pack below the 1 GiB real-content target ({size} bytes); refusing to publish incomplete assets.")
-if size>5*1024*1024*1024:
-    raise SystemExit(f"Content pack exceeds the 5 GiB distribution limit ({size} bytes).")
+if size<1024*1024:
+    raise SystemExit(f"Content pack is unexpectedly small ({size} bytes); refusing to publish incomplete assets.")
+if size>400*1024*1024:
+    raise SystemExit(f"Season 02 exceeds the 400 MiB mobile package limit ({size} bytes).")
 h=hashlib.sha256()
 with archive.open("rb") as inp:
     for chunk in iter(lambda:inp.read(4*1024*1024),b""):h.update(chunk)
-manifest={"version":3,"title":"Battle Universe Season 02 — Pacote 4K",
- "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v3/battle-universe-season-02-pack.zip",
+manifest={"version":4,"title":"Battle Universe Season 02 — Pacote Mobile 2K",
+ "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v4/battle-universe-season-02-pack.zip",
  "size_bytes":size,"sha256":h.hexdigest()}
 (OUT/"content-pack-manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
 print(f"Season 02 pack: {size/1024/1024:.1f} MiB; {len(files)} real hashed resources; SHA-256 {manifest['sha256']}",flush=True)
