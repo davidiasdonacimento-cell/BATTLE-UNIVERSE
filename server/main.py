@@ -127,6 +127,8 @@ class PromoCode(Base):
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False)
     max_uses: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Legacy production schema requires this column too; keep both limits synchronized.
+    max_redemptions: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     active: Mapped[bool] = mapped_column(nullable=False, default=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -252,6 +254,7 @@ def migrate_promo_code_schema() -> None:
     """Add fields missing from the legacy promo_codes table without deleting existing rows."""
     statements = (
         "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS max_uses INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS max_redemptions INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS uses INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL",
@@ -666,7 +669,8 @@ def owner_create_promo_code(body: PromoCreateBody, db: Session = Depends(db_sess
         raise HTTPException(409, "Já existe um código com esse nome.")
     expires = datetime.now(timezone.utc) + timedelta(days=body.expires_in_days) if body.expires_in_days else None
     row = PromoCode(code=code, diamonds=body.diamonds, max_uses=body.max_uses,
-                    uses=0, active=True, expires_at=expires, created_by=owner)
+                    max_redemptions=body.max_uses, uses=0, active=True,
+                    expires_at=expires, created_by=owner)
     db.add(row)
     try:
         # Persist the promo code independently: a legacy audit-table schema must
