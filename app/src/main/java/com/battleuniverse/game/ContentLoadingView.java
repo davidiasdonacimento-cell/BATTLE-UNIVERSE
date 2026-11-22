@@ -19,7 +19,7 @@ public final class ContentLoadingView extends View {
     private float realProgress;
     private String status="PREPARANDO SUA PRIMEIRA ENTRADA...";
     private String error="";
-    private Runnable retryAction,backAction,selectZipAction;
+    private Runnable retryAction,backAction,selectZipAction,downloadAction;
     private float scale=1f,offsetX,offsetY;
 
     public ContentLoadingView(Context context) {
@@ -47,6 +47,7 @@ public final class ContentLoadingView extends View {
     }
 
     public void setSelectZipAction(Runnable action) { selectZipAction=action; }
+    public void setDownloadAction(Runnable action) { downloadAction=action; }
 
     public void setFailure(String message,Runnable retry,Runnable back) {
         error=message==null?"Não foi possível preparar os recursos.":message;
@@ -118,8 +119,10 @@ public final class ContentLoadingView extends View {
             text(canvas,"VOLTAR AO MENU",830,499,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
             text(canvas,shortText(error,108),640,690,9,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
         }
-        panel(canvas,440,555,400,54,0xFF123D50,0xFF67EDE5);
-        text(canvas,"SELECIONAR ARQUIVO ZIP DO CELULAR",640,589,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        panel(canvas,180,555,440,54,0xFF123D50,0xFF67EDE5);
+        panel(canvas,660,555,440,54,0xFF17384D,0xFF66A9D4);
+        text(canvas,"BAIXAR AUTOMATICAMENTE",400,589,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        text(canvas,"SELECIONAR ARQUIVO .ZIP",880,589,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
         for(int i=0;i<7;i++) {
             float pulse=(float)Math.sin(t*3.1f-i*.62f);
             paint.setColor(pulse>0?0xFF67EDE5:0x553C8C9C);
@@ -172,8 +175,10 @@ public final class ContentLoadingView extends View {
     @Override public boolean onTouchEvent(MotionEvent event) {
         if(event.getActionMasked()==MotionEvent.ACTION_UP) {
             float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
-            if(y>=550&&y<=615&&x>=440&&x<=840&&selectZipAction!=null) {
-                selectZipAction.run();performClick();return true;
+            if(y>=550&&y<=615) {
+                if(x>=180&&x<=620&&downloadAction!=null) downloadAction.run();
+                else if(x>=660&&x<=1100&&selectZipAction!=null) selectZipAction.run();
+                performClick();return true;
             }
             if(!error.isEmpty()&&y>=460&&y<=525) {
                 if(x>=275&&x<=625&&retryAction!=null)retryAction.run();
