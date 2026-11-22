@@ -417,8 +417,20 @@ void createCube() {
     addFace(v,{n,n,p},{n,n,n},{p,n,n},{p,n,p},{0,-1,0});
     addFace(v,{p,n,p},{p,p,p},{n,p,p},{n,n,p},{0,0,1});
     addFace(v,{n,n,n},{n,p,n},{p,p,n},{p,n,n},{0,0,-1});
-    glGenBuffers(1,&gCubeVbo); glBindBuffer(GL_ARRAY_BUFFER,gCubeVbo);
+    while(glGetError()!=GL_NO_ERROR) {}
+    glGenBuffers(1,&gCubeVbo);
+    if(gCubeVbo==0) {
+        __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Startup stage: cube buffer allocation failed");
+        return;
+    }
+    glBindBuffer(GL_ARRAY_BUFFER,gCubeVbo);
     glBufferData(GL_ARRAY_BUFFER,static_cast<GLsizeiptr>(v.size()*sizeof(float)),v.data(),GL_STATIC_DRAW);
+    const GLenum error=glGetError();
+    if(error!=GL_NO_ERROR) {
+        __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Startup stage: cube upload failed (GL=0x%x)",error);
+        glDeleteBuffers(1,&gCubeVbo);
+        gCubeVbo=0;
+    }
 }
 bool initializeGraphics() {
     const char* vsSource=
@@ -439,7 +451,12 @@ bool initializeGraphics() {
     GLuint vs=compileShader(GL_VERTEX_SHADER,vsSource);
     GLuint fs=compileShader(GL_FRAGMENT_SHADER,fsSource);
     if (!vs||!fs) return false;
-    gProgram=glCreateProgram(); glAttachShader(gProgram,vs); glAttachShader(gProgram,fs);
+    gProgram=glCreateProgram();
+    if(!gProgram) {
+        __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Startup stage: glCreateProgram failed");
+        glDeleteShader(vs); glDeleteShader(fs); return false;
+    }
+    glAttachShader(gProgram,vs); glAttachShader(gProgram,fs);
     glLinkProgram(gProgram); glDeleteShader(vs); glDeleteShader(fs);
     GLint linked=GL_FALSE; glGetProgramiv(gProgram,GL_LINK_STATUS,&linked);
     if (linked!=GL_TRUE) {
@@ -450,8 +467,15 @@ bool initializeGraphics() {
     gMvpLocation=glGetUniformLocation(gProgram,"uMVP");
     gModelLocation=glGetUniformLocation(gProgram,"uModel");
     gColorLocation=glGetUniformLocation(gProgram,"uColor");
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: creating cube buffer");
     createCube();
-    gSphereMesh=buildSphere(); gCylinderMesh=buildCylinder(); gConeMesh=buildCone();
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: creating primitive meshes");
+    gSphereMesh=buildSphere();
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: sphere ready");
+    gCylinderMesh=buildCylinder();
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: cylinder ready");
+    gConeMesh=buildCone();
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: cone ready");
     // Build only the active map at startup. Allocating all eight 3D terrain
     // meshes at once wastes GPU memory and can terminate the app on phones.
     const size_t activeMap=static_cast<size_t>(std::clamp(gSelectedMap,0,7));
@@ -1930,8 +1954,17 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetMap(JNIEnv*,jclass,jint id
     // This JNI call is queued on the GLSurfaceView render thread, so creating
     // the newly selected terrain here keeps GL work on the correct context.
     const size_t mapIndex=static_cast<size_t>(gSelectedMap);
-    if(gProgram&&gMapTerrainMeshes[mapIndex].vbo==0)
-        gMapTerrainMeshes[mapIndex]=buildMapTerrain(gSelectedMap);
+    if(gProgram&&gMapTerrainMeshes[mapIndex].vbo==0) {
+        try {
+            gMapTerrainMeshes[mapIndex]=buildMapTerrain(gSelectedMap);
+            if(gMapTerrainMeshes[mapIndex].vbo==0)
+                __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Selected map terrain unavailable: %d",gSelectedMap);
+        } catch(const std::bad_alloc&) {
+            __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Not enough memory for selected map terrain: %d",gSelectedMap);
+        } catch(const std::exception& error) {
+            __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Selected map terrain failed: %s",error.what());
+        }
+    }
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint id) {
@@ -1978,6 +2011,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetContentData(JNIEnv*,jclass
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
+    try {
     __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: nativeInit begin");
     gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
     gScreenMode=0;gSelectedCharacter=0;gSelectedMap=0;gSelectedMode=0;gQuality=1;
@@ -2004,6 +2038,16 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     }
     __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: OpenGL resources ready");
     updateStatus();
+    } catch(const std::bad_alloc&) {
+        __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Startup exception: native memory allocation failed");
+        setStatus("MEMÓRIA INSUFICIENTE AO INICIAR O UNIVERSO");
+    } catch(const std::exception& error) {
+        __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Startup exception: %s",error.what());
+        setStatus("FALHA AO PREPARAR A ENGINE 3D");
+    } catch(...) {
+        __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Startup exception: unknown native failure");
+        setStatus("FALHA NATIVA AO INICIAR O JOGO");
+    }
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeResize(JNIEnv*,jclass,jint width,jint height) {
