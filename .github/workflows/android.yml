@@ -54,7 +54,7 @@ jobs:
           python -m unittest discover -s server/tests -v
       - name: Build expanded Season 02 4K content package
         run: python scripts/build_content_pack.py
-      - name: Verify external Season 02 package (50–400 MiB)
+      - name: Verify external Season 02 package (50–370 MiB)
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -66,7 +66,7 @@ jobs:
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           size = pack.stat().st_size
           assert manifest["version"] == 4, "Versão da Season 02 inesperada"
-          assert 50*1024**2 <= size <= 400*1024**2, f"Pacote fora de 50–400 MiB: {size}"
+          assert 50*1024**2 <= size <= 370*1024**2, f"Pacote fora de 50–370 MiB: {size}"
           assert manifest["size_bytes"] == size, "Tamanho não confere com manifesto"
           digest = hashlib.sha256()
           with pack.open("rb") as stream:
@@ -127,7 +127,7 @@ jobs:
           ls -lh app/build/outputs/apk/debug/app-debug.apk build/admin-debug.apk
           ls -lh build/battle-universe-season-02-pack.zip
           test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 52428800
-          test $(stat -c%s build/battle-universe-season-02-pack.zip) -le 419430400
+          test $(stat -c%s build/battle-universe-season-02-pack.zip) -le 387973120
       - name: Publish verified Season 02 4K data pack
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
