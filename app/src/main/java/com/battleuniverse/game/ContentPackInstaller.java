@@ -170,39 +170,25 @@ public final class ContentPackInstaller {
             File installed=new File(root,"battle-content");
             File backup=new File(root,"battle-content-backup");
             try {
-                postProgress(0,1,"CONSULTANDO A VERSÃO DA TEMPORADA 02...");
-                JSONObject manifest=readRemoteManifest();
+                postProgress(0,1,"LENDO A TEMPORADA 02 INCLUÍDA NO APK...");
+                JSONObject manifest=readEmbeddedManifest();
                 String expectedHash=manifest.getString("sha256").toLowerCase(Locale.US);
                 long expectedSize=manifest.getLong("size_bytes");
                 int version=manifest.getInt("version");
-                if(version!=PACK_VERSION) throw new Exception("Versão de conteúdo incompatível com este APK.");
+                if(version!=PACK_VERSION) throw new Exception("A Season 02 incluída não corresponde a esta versão do APK.");
                 if(expectedSize<MIN_DOWNLOAD_BYTES||expectedSize>MAX_DOWNLOAD_BYTES)
-                    throw new Exception("O pacote Season 02 ultrapassa o limite móvel de 400 MB ou está vazio.");
-                // Never inspect or reuse ZIP files from shared Downloads. A fresh app install
-                // or cleared app data must fetch a new archive from the official release.
+                    throw new Exception("O conteúdo incluído no APK está fora do limite de 400 MB.");
                 StatFs storage=new StatFs(root.getAbsolutePath());
-                long needed=expectedSize+MAX_EXTRACTED_BYTES+256L*1024L*1024L;
+                long needed=expectedSize+MAX_EXTRACTED_BYTES+128L*1024L*1024L;
                 if(storage.getAvailableBytes()<needed)
-                    throw new Exception("Espaço insuficiente para baixar e instalar o conteúdo. Libere pelo menos "+
+                    throw new Exception("Espaço insuficiente para instalar o conteúdo incluído. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
-                if(!isWifiConnected())
-                    throw new Exception("Conecte-se ao Wi-Fi para baixar novamente a Season 02.");
-                boolean privateArchiveReady=archive.isFile()&&archive.length()==expectedSize;
-                if(privateArchiveReady&&!sha256(archive).equals(expectedHash)) {
-                    archive.delete();
-                    privateArchiveReady=false;
-                }
-                if(!privateArchiveReady) {
-                    postProgress(0,expectedSize,"BAIXANDO UM PACOTE NOVO DA TEMPORADA 02...");
-                    downloadArchive(archive,expectedSize);
-                } else {
-                    postProgress(expectedSize,expectedSize,"DOWNLOAD PRIVADO COMPLETO • VALIDANDO...");
-                }
-                postProgress(expectedSize,expectedSize,"DOWNLOAD CONCLUÍDO • CONFERINDO A INTEGRIDADE...");
+                postProgress(0,expectedSize,"PREPARANDO CONTEÚDO DO PRÓPRIO APK...");
+                copyEmbeddedArchive(archive,expectedSize);
                 String actualHash=sha256(archive);
                 if(!actualHash.equals(expectedHash)) {
                     archive.delete();
-                    throw new Exception("A verificação SHA-256 do conteúdo integrado falhou. Tente baixar novamente.");
+                    throw new Exception("A verificação SHA-256 do conteúdo do APK falhou. Reinstale o aplicativo.");
                 }
                 postProgress(0,1,"PREPARANDO OS RECURSOS DO UNIVERSO...");
                 deleteTree(staging);
@@ -212,7 +198,7 @@ public final class ContentPackInstaller {
                 JSONObject installedInfo=new JSONObject();
                 installedInfo.put("version",version);
                 installedInfo.put("archive_sha256",actualHash);
-                installedInfo.put("source","verified_github_release");
+                installedInfo.put("source","embedded_apk_asset");
                 installedInfo.put("installed_at",System.currentTimeMillis());
                 try(FileOutputStream out=new FileOutputStream(new File(staging,"installed.json"))) {
                     out.write(installedInfo.toString().getBytes("UTF-8"));
@@ -240,6 +226,54 @@ public final class ContentPackInstaller {
         });
     }
 
+
+    private JSONObject readEmbeddedManifest() throws Exception {
+        try(InputStream in=appContext.getAssets().open("season02/content-pack-manifest.json");
+            ByteArrayOutputStream out=new ByteArrayOutputStream()) {
+            byte[] buffer=new byte[4096];int count,total=0;
+            while((count=in.read(buffer))!=-1) {
+                total+=count;
+                if(total>65536) throw new Exception("Manifesto incluído no APK excede o limite.");
+                out.write(buffer,0,count);
+            }
+            JSONObject manifest=new JSONObject(out.toString("UTF-8"));
+            if(!manifest.optString("sha256","").matches("[a-fA-F0-9]{64}"))
+                throw new Exception("Hash do conteúdo incluído inválido.");
+            long size=manifest.optLong("size_bytes",-1L);
+            if(size<MIN_DOWNLOAD_BYTES||size>MAX_DOWNLOAD_BYTES)
+                throw new Exception("Tamanho do conteúdo incluído inválido.");
+            return manifest;
+        }
+    }
+
+    private void copyEmbeddedArchive(File output,long expectedSize) throws Exception {
+        if(output.exists()&&!output.delete())
+            throw new Exception("Não foi possível preparar a cópia privada do conteúdo.");
+        long copied=0L,lastReport=0L;
+        try(InputStream in=new BufferedInputStream(appContext.getAssets().open(
+                "season02/battle-universe-season-02-pack.zip"));
+            FileOutputStream out=new FileOutputStream(output)) {
+            byte[] buffer=new byte[65536];int count;
+            while((count=in.read(buffer))!=-1) {
+                copied+=count;
+                if(copied>expectedSize||copied>MAX_DOWNLOAD_BYTES)
+                    throw new Exception("O conteúdo embutido excedeu o tamanho declarado.");
+                out.write(buffer,0,count);
+                if(copied-lastReport>=1048576L) {
+                    postProgress(copied,expectedSize,"COPIANDO RECURSOS INCLUÍDOS NO APK...");
+                    postFileProgress("CONTEÚDO DO APK",1,1,copied,expectedSize);
+                    lastReport=copied;
+                }
+            }
+            out.getFD().sync();
+        }
+        if(copied!=expectedSize) {
+            output.delete();
+            throw new Exception("O conteúdo incluído no APK está incompleto.");
+        }
+        postProgress(copied,expectedSize,"CONTEÚDO DO APK COPIADO • VALIDANDO...");
+        postFileProgress("CONTEÚDO DO APK",1,1,copied,expectedSize);
+    }
 
     private boolean isWifiConnected() {
         ConnectivityManager manager=(ConnectivityManager)appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
