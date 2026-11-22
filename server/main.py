@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 import hashlib
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
@@ -15,6 +16,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 from pwdlib import PasswordHash
 from sqlalchemy import DateTime, Integer, String, Text, BigInteger, ForeignKey, UniqueConstraint, create_engine, select, func, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -666,12 +668,25 @@ def owner_create_promo_code(body: PromoCreateBody, db: Session = Depends(db_sess
     row = PromoCode(code=code, diamonds=body.diamonds, max_uses=body.max_uses,
                     uses=0, active=True, expires_at=expires, created_by=owner)
     db.add(row)
-    audit(db, owner, "promo_created", code, {"diamonds": body.diamonds, "max_uses": body.max_uses})
     try:
-        db.commit(); db.refresh(row)
+        # Persist the promo code independently: a legacy audit-table schema must
+        # never roll back a valid code or make creation appear to fail.
+        db.commit()
+        db.refresh(row)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Já existe um código com esse nome ou os dados violam uma regra do banco.")
+    except Exception as exc:
+        db.rollback()
+        logging.getLogger("battle_universe").exception("PROMO_CODE_INSERT_FAILED")
+        raise HTTPException(500, "Falha ao salvar o código promocional no banco.")
+
+    try:
+        audit(db, owner, "promo_created", code, {"diamonds": body.diamonds, "max_uses": body.max_uses})
+        db.commit()
     except Exception:
         db.rollback()
-        raise HTTPException(409, "Não foi possível criar o código promocional.")
+        logging.getLogger("battle_universe").exception("PROMO_CODE_AUDIT_FAILED")
     return {"id": row.id, "code": row.code, "diamonds": row.diamonds,
             "max_uses": row.max_uses, "uses": row.uses,
             "expires_at": row.expires_at.isoformat() if row.expires_at else None}
