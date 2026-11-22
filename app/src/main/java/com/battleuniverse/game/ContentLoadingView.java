@@ -19,7 +19,7 @@ public final class ContentLoadingView extends View {
     private float realProgress;
     private String status="PREPARANDO SUA PRIMEIRA ENTRADA...";
     private String error="";
-    private Runnable retryAction,backAction;
+    private Runnable retryAction,backAction,selectZipAction;
     private float scale=1f,offsetX,offsetY;
 
     public ContentLoadingView(Context context) {
@@ -45,6 +45,8 @@ public final class ContentLoadingView extends View {
         if(size>0)realProgress=Math.max(realProgress,Math.min(1f,(float)done/(float)size));
         postInvalidate();
     }
+
+    public void setSelectZipAction(Runnable action) { selectZipAction=action; }
 
     public void setFailure(String message,Runnable retry,Runnable back) {
         error=message==null?"Não foi possível preparar os recursos.":message;
@@ -109,23 +111,22 @@ public final class ContentLoadingView extends View {
         text(canvas,status,640,516,13,0xFF82E4E5,Typeface.create("sans-serif",Typeface.BOLD),Paint.Align.CENTER);
         text(canvas,"OPERADORES  •  MAPAS  •  EQUIPAMENTOS  •  EXPERIÊNCIA",640,548,9,0xFF789EAF,Typeface.DEFAULT,Paint.Align.CENTER);
 
-        // Animated light sequence, not a percentage or simulated progress indicator.
+        if(!error.isEmpty()) {
+            panel(canvas,275,465,350,54,0xFF16475B,0xFF53DDE7);
+            panel(canvas,655,465,350,54,0xFF263545,0xFF6F8798);
+            text(canvas,"TENTAR NOVAMENTE",450,499,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,"VOLTAR AO MENU",830,499,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,shortText(error,108),640,690,9,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
+        }
+        panel(canvas,440,555,400,54,0xFF123D50,0xFF67EDE5);
+        text(canvas,"SELECIONAR ARQUIVO ZIP DO CELULAR",640,589,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
         for(int i=0;i<7;i++) {
             float pulse=(float)Math.sin(t*3.1f-i*.62f);
             paint.setColor(pulse>0?0xFF67EDE5:0x553C8C9C);
-            canvas.drawCircle(610+i*10,594,2.2f+Math.max(0,pulse)*2.2f,paint);
+            canvas.drawCircle(610+i*10,640,2.2f+Math.max(0,pulse)*2.2f,paint);
         }
-        text(canvas,"A EXPERIÊNCIA SERÁ INICIADA APÓS A VERIFICAÇÃO DOS RECURSOS",640,652,8,0xFF66899A,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-
-        if(!error.isEmpty()) {
-            panel(canvas,275,565,350,58,0xFF16475B,0xFF53DDE7);
-            panel(canvas,655,565,350,58,0xFF263545,0xFF6F8798);
-            text(canvas,"TENTAR NOVAMENTE",450,601,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-            text(canvas,"VOLTAR AO MENU",830,601,12,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-            text(canvas,shortText(error,108),640,680,9,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
-        } else {
-            postInvalidateDelayed(45);
-        }
+        text(canvas,"TAMBÉM É POSSÍVEL USAR O ZIP ORIGINAL SEM EXTRAIR",640,680,8,0xFF66899A,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        if(error.isEmpty()) postInvalidateDelayed(45);
         canvas.restore();
     }
 
@@ -169,9 +170,12 @@ public final class ContentLoadingView extends View {
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
-        if(event.getActionMasked()==MotionEvent.ACTION_UP&&!error.isEmpty()) {
+        if(event.getActionMasked()==MotionEvent.ACTION_UP) {
             float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
-            if(y>=550&&y<=635) {
+            if(y>=550&&y<=615&&x>=440&&x<=840&&selectZipAction!=null) {
+                selectZipAction.run();performClick();return true;
+            }
+            if(!error.isEmpty()&&y>=460&&y<=525) {
                 if(x>=275&&x<=625&&retryAction!=null)retryAction.run();
                 else if(x>=655&&x<=1005&&backAction!=null)backAction.run();
                 performClick();
