@@ -230,13 +230,10 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Estado: commits no GitHub; workflow de validação DEBUG está em execução. APK ainda não foi compilado nem testado no aparelho.
 
 
-## Pacote Season 02 salvo no celular e reutilizado — 2026-11-21
-- `ContentPackInstaller` agora salva o ZIP externo validado em `Downloads/Battle Universe/battle-universe-season-02-pack.zip` no Android 10+ por MediaStore.
-- Em nova instalação/atualização, procura esse ZIP no armazenamento compartilhado, copia para a área privada de trabalho e valida o SHA-256 antes de extrair. Não baixa novamente quando o arquivo existente está íntegro.
-- O ZIP é mantido após a instalação. Se estiver ausente, incompleto ou com hash incorreto, o instalador baixa uma nova cópia e substitui a salva.
-- Android 7–9 usa armazenamento externo específico do app como fallback.
-- Código publicado nos commits `1903fef`, `7c7ce21`, `af92026` e `6e51c0c`. A cópia privada temporária é removida após instalação bem-sucedida, mantendo o ZIP em Downloads; a checagem de espaço considera ZIP duplicado temporário e até 3 GiB de extração. Build Android e teste físico ainda não confirmados; o comportamento no aparelho permanece pendente de validação.
-
+## Histórico — cópia externa do pacote Season 02 (comportamento substituído)
+- Uma implementação anterior salvava o ZIP em `Downloads/Battle Universe` e tentava reutilizá-lo em instalações posteriores.
+- Esse comportamento foi substituído pela regra de download novo após reinstalação ou limpeza dos dados do aplicativo. O ZIP externo não é mais consultado pelo instalador.
+- Os arquivos antigos que já estão em Downloads são preservados; o instalador não os apaga nem os sobrescreve.
 
 ## Resgate de códigos promocionais no jogo — implementação em andamento
 - A HUD nativa recebeu uma página dedicada **CÓDIGO PROMOCIONAL**, acessível pelo botão da Loja, preservando as demais páginas e funcionalidades.
@@ -246,9 +243,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - O estado desta alteração é **implementado no código da branch**. Compilação CI, artefato APK e teste no Redmi 12 ainda pendentes; não declarar a tela compilada ou testada até obter essas evidências.
 
 
-## Analisador do pacote Season 02 pelo nome — implementação em andamento
-- Na entrada do jogo, o instalador procura o arquivo `battle-universe-season-02-pack.zip` e cópias com sufixo numérico, inclusive nomes como `battle-universe-season-02-pack-1.zip` e `battle-universe-season-02-pack (1).zip`.
-- No Android 10+, a busca percorre a coleção Downloads e aceita a pasta Downloads raiz ou subpastas; Android 7–9 mantém o diretório externo privado do aplicativo.
-- O candidato só é reutilizado se nome, tamanho esperado e SHA-256 do manifesto remoto coincidirem. Arquivos com mesmo nome mas conteúdo inválido são ignorados; se nenhum candidato válido existir, o jogo baixa uma nova cópia via Wi-Fi.
-- O carregamento mostra estados de análise, busca pelo nome e validação. Quando o conteúdo extraído já está instalado e válido, `isInstalled()` continua permitindo abrir o jogo sem reinstalar o pacote.
-- Estado: implementado na branch `feature/season02-download-file-analyzer`; CI Android e teste no aparelho pendentes.
+## Regra atual do pacote Season 02 — download novo após instalação limpa
+- O instalador não procura, abre, valida nem reutiliza ZIPs em `Downloads` ou em outras pastas compartilhadas.
+- Quando o conteúdo privado do aplicativo não existe — como após desinstalar/reinstalar o jogo ou usar “Limpar dados” — o APK consulta o manifesto remoto, baixa novamente o pacote oficial por Wi-Fi e valida o SHA-256 antes de extrair.
+- Uma tentativa interrompida pode continuar usando somente o arquivo parcial privado do próprio aplicativo; esse arquivo é apagado pelo Android ao desinstalar ou limpar os dados. Não é um ZIP externo reutilizado.
+- Após baixar, o instalador salva uma cópia nova em `Downloads/Battle Universe` com nome exclusivo por data/hora. ZIPs antigos do usuário não são apagados nem sobrescritos.
+- Se o conteúdo já estiver instalado e os dados do aplicativo forem mantidos, o jogo continua abrindo sem baixar novamente a cada inicialização.
+- Implementação na branch `fix/always-fresh-season02-download`; compilação CI e teste no Redmi 12 ainda pendentes.
+
