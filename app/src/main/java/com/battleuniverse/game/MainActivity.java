@@ -247,11 +247,14 @@ public final class MainActivity extends Activity {
         if(gameSurface!=null)gameSurface.onPause();
         FrameLayout root=new FrameLayout(this);
         int[] settings=ContentPackInstaller.readIslandSettings(this);
-        recordStartupStage("CONFIGURACAO_SEASON02_CARREGADA", "");
+        recordStartupCheckpoint("CONFIGURACAO_SEASON02_CARREGADA");
         gameSurface=new GameSurfaceView(this,settings[0],settings[1]);
         recordStartupCheckpoint("GAME_SURFACE_CRIADA");
+        recordStartupCheckpoint("GAME_SURFACE_CRIADA");
+        recordStartupCheckpoint("ANTES_DE_CRIAR_HUD");
         recordStartupCheckpoint("ANTES_DE_CRIAR_HUD");
         hud=new HudOverlay(this,gameSurface,profilePrefs);
+        recordStartupCheckpoint("HUD_CRIADA");
         recordStartupCheckpoint("HUD_CRIADA");
         hud.setUsernameAccountActions((username,password,createAccount)->{
             if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
