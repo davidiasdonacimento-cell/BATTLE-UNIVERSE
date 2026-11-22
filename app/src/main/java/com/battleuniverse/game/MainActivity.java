@@ -241,9 +241,9 @@ public final class MainActivity extends Activity {
         recordStartupStage("CRIANDO_SUPERFICIE_OPENGL","");
         if(gameSurface!=null)gameSurface.onPause();
         FrameLayout root=new FrameLayout(this);
-        gameSurface=new GameSurfaceView(this);
         int[] settings=ContentPackInstaller.readIslandSettings(this);
-        gameSurface.setContentPackData(settings[0],settings[1]);
+        recordStartupStage("CONFIGURACAO_SEASON02_CARREGADA", "");
+        gameSurface=new GameSurfaceView(this,settings[0],settings[1]);
         hud=new HudOverlay(this,gameSurface,profilePrefs);
         hud.setUsernameAccountActions((username,password,createAccount)->{
             if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
