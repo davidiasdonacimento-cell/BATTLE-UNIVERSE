@@ -88,6 +88,7 @@ public final class ContentPackInstaller {
         if(running) return;
         running=true;
         worker.execute(()->{
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
             try {
                 File root=new File(appContext.getFilesDir(),"battle-content");
                 String rootPath=root.getCanonicalPath()+File.separator;
@@ -149,6 +150,9 @@ public final class ContentPackInstaller {
                 }
                 postProgress(total,total,"ARQUIVOS VERIFICADOS • ABRINDO O JOGO...");
                 main.post(()->{running=false;listener.onSuccess();});
+            } catch(OutOfMemoryError memoryError) {
+                main.post(()->{running=false;listener.onFailure(
+                    "Memória insuficiente durante a verificação. Feche outros aplicativos e tente novamente.");});
             } catch(Exception error) {
                 String message=error.getMessage()==null?"Falha ao verificar a pasta do jogo.":error.getMessage();
                 main.post(()->{running=false;listener.onFailure(message);});
