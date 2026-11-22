@@ -106,7 +106,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk build/distribution/Battle-Universe-debug-single.apk
           ls -lh build/distribution/
       - name: Publish direct APK download (no artifact ZIP)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-build-${{ github.run_number }}
