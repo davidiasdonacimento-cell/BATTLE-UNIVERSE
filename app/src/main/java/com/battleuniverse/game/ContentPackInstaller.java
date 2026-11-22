@@ -27,7 +27,7 @@ import java.util.zip.ZipFile;
 
 public final class ContentPackInstaller {
     private static final long MIN_DOWNLOAD_BYTES = 50L * 1024L * 1024L;
-    private static final long MAX_DOWNLOAD_BYTES = 400L * 1024L * 1024L;
+    private static final long MAX_DOWNLOAD_BYTES = 370L * 1024L * 1024L;
     private static final long MAX_EXTRACTED_BYTES = 3L * 1024L * 1024L * 1024L;
     private static final int PACK_VERSION = 4;
     private static final String MANIFEST_URL = "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v4/content-pack-manifest.json";
@@ -103,7 +103,7 @@ public final class ContentPackInstaller {
                 int version=manifest.getInt("version");
                 if(version!=PACK_VERSION) throw new Exception("Versão de conteúdo incompatível com este APK.");
                 if(expectedSize<MIN_DOWNLOAD_BYTES||expectedSize>MAX_DOWNLOAD_BYTES)
-                    throw new Exception("O pacote Season 02 precisa ter entre 50 e 400 MiB.");
+                    throw new Exception("O pacote Season 02 precisa ter entre 50 e 370 MiB.");
                 StatFs storage=new StatFs(root.getAbsolutePath());
                 long needed=expectedSize*2L+256L*1024L*1024L;
                 if(storage.getAvailableBytes()<needed)
@@ -187,7 +187,7 @@ public final class ContentPackInstaller {
                     throw new Exception("Hash do pacote inválido no manifesto.");
                 long size=manifest.optLong("size_bytes",-1L);
                 if(size<MIN_DOWNLOAD_BYTES||size>MAX_DOWNLOAD_BYTES)
-                    throw new Exception("O pacote remoto está fora do limite de 50 a 400 MiB.");
+                    throw new Exception("O pacote remoto está fora do limite de 50 a 370 MiB.");
                 return manifest;
             }
         } finally {connection.disconnect();}
