@@ -105,12 +105,13 @@ jobs:
           mkdir -p build/distribution
           cp app/build/outputs/apk/debug/app-debug.apk build/distribution/Battle-Universe-debug-single.apk
           ls -lh build/distribution/
-      - name: Upload DEBUG APK separately
-        if: success()
-        uses: actions/upload-artifact@v4
+      - name: Publish direct APK download (no artifact ZIP)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
-          name: battle-universe-debug-apk
-          path: build/distribution/Battle-Universe-debug-single.apk
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
+          tag_name: android-build-${{ github.run_number }}
+          name: BATTLE UNIVERSE Android ${{ github.run_number }}
+          body: "Download direto do APK único. A Season 02 está incorporada no APK. Esta compilação é DEBUG e serve para teste no dispositivo."
+          prerelease: true
+          files: build/distribution/Battle-Universe-debug-single.apk
+          fail_on_unmatched_files: true
