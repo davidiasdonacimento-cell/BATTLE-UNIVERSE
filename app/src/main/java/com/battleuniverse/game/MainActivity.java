@@ -5,6 +5,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.content.SharedPreferences;
+import android.content.Intent;
+import android.net.Uri;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -20,6 +22,8 @@ public final class MainActivity extends Activity {
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private boolean gameLaunched;
     private boolean contentInstalling;
+    private static final int REQUEST_SEASON02_ZIP=2301;
+    private Uri pendingSeasonZip;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -89,6 +93,7 @@ public final class MainActivity extends Activity {
         }
         contentInstalling=true;
         loadingView=new ContentLoadingView(this);
+        loadingView.setSelectZipAction(()->openSeasonZipPicker());
         setContentView(loadingView);
         loadingView.setProgress(0,0,"PREPARANDO SUA PRIMEIRA ENTRADA...");
         if(installer!=null)installer.shutdown();
@@ -113,7 +118,30 @@ public final class MainActivity extends Activity {
                     ()->startContentSetup(),()->showEntryGate());
             }
         });
-        installer.start();
+        if(pendingSeasonZip!=null) {
+            Uri selected=pendingSeasonZip;
+            pendingSeasonZip=null;
+            installer.startFromUri(selected);
+        } else installer.start();
+    }
+
+    private void openSeasonZipPicker() {
+        if(contentInstalling) return;
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/zip");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/zip","application/x-zip-compressed","application/octet-stream"});
+        startActivityForResult(intent,REQUEST_SEASON02_ZIP);
+    }
+
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=REQUEST_SEASON02_ZIP||resultCode!=RESULT_OK||data==null||data.getData()==null) return;
+        Uri selected=data.getData();
+        final int flags=data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try { getContentResolver().takePersistableUriPermission(selected,flags); } catch(Exception ignored) { }
+        pendingSeasonZip=selected;
+        startContentSetup();
     }
 
     private void launchGame(boolean contentPackReady) {
