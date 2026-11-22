@@ -47,7 +47,7 @@ PROFILE_FIELDS = {
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
     "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
     "wear_set_cerrado", "wear_beard_old", "wear_pants_angelical", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
-    "nickname", "xp", "coins", "diamonds", "profile_schema_version", "coins_wallet_initialized",
+    "nickname", "xp", "diamonds", "profile_schema_version",
     "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
     "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result", "match_history",
     "economy_ledger", "royale_history", "royale_spin_count",
@@ -55,7 +55,7 @@ PROFILE_FIELDS = {
     "mission_claimed_0", "mission_claimed_1", "mission_claimed_2", "wardrobe_starter_v2_granted",
     "shop_frame_neon", "shop_emblem_bloob", "shop_title_champion",
     "match_reward_session_id", "match_reward_recorded",
-    "last_match_reward_diamonds", "last_match_reward_xp", "last_match_reward_coins",
+    "last_match_reward_diamonds", "last_match_reward_xp",
 }
 
 class Base(DeclarativeBase):
@@ -118,6 +118,27 @@ class DailyRewardClaim(Base):
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=100)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class PromoCode(Base):
+    __tablename__ = "promo_codes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
+    diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    max_uses: Mapped[int] = mapped_column(Integer, nullable=False)
+    uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class PromoRedemption(Base):
+    __tablename__ = "promo_redemptions"
+    __table_args__ = (UniqueConstraint("player_id", "promo_id", name="uq_promo_player_redemption"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    promo_id: Mapped[int] = mapped_column(ForeignKey("promo_codes.id", ondelete="CASCADE"), index=True, nullable=False)
+    diamonds_awarded: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -178,6 +199,15 @@ class RoyaleSpinBody(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
 
+class PromoRedeemBody(BaseModel):
+    code: str = Field(min_length=3, max_length=32)
+
+class PromoCreateBody(BaseModel):
+    code: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    diamonds: int = Field(gt=0, le=1000000)
+    max_uses: int = Field(default=1, ge=1, le=1000000)
+    expires_in_days: int | None = Field(default=None, ge=1, le=3650)
+
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
 
@@ -218,6 +248,14 @@ def audit(db: Session, admin: str, action: str, target: str = "", details: dict[
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    # One-currency migration: transfer legacy coin balances into diamonds once.
+    with SessionLocal() as db:
+        wallets = db.scalars(select(PlayerWallet).where(PlayerWallet.coins > 0)).all()
+        for wallet in wallets:
+            wallet.diamonds += wallet.coins
+            wallet.coins = 0
+        if wallets:
+            db.commit()
     # Owner pairing code stays in the hosting environment and is never embedded in the APK.
     if OWNER_PAIRING_CODE and len(OWNER_PAIRING_CODE) < 32:
         raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
@@ -319,6 +357,9 @@ def update_profile(body: ProfileBody, db: Session = Depends(db_session),
                    player: Player = Depends(current_player)) -> dict[str, Any]:
     if len(body.profile) > 80:
         raise HTTPException(413, "Perfil excede o limite de campos.")
+    if {"coins", "diamonds", "economy_ledger", "last_match_reward_diamonds",
+        "last_match_reward_coins", "match_reward_recorded"}.intersection(body.profile):
+        raise HTTPException(403, "Carteira e recompensas são controladas exclusivamente pelo servidor.")
     clean: dict[str, Any] = {}
     for key, value in body.profile.items():
         if key in PROFILE_FIELDS and (isinstance(value, (str, bool, int, float)) or value is None):
@@ -564,6 +605,63 @@ def owner_pair(body: OwnerPairBody) -> dict[str, Any]:
         raise HTTPException(401, "Código de ativação inválido.")
     return {"access_token": issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES),
             "token_type": "bearer", "expires_in": OWNER_TOKEN_MINUTES * 60}
+
+@app.post("/v1/promo-codes/redeem")
+def redeem_promo_code(body: PromoRedeemBody, db: Session = Depends(db_session),
+                      player: Player = Depends(current_player)):
+    code = body.code.strip().upper()
+    promo = db.scalar(select(PromoCode).where(PromoCode.code == code).with_for_update())
+    now = datetime.now(timezone.utc)
+    if promo is None or not promo.active:
+        raise HTTPException(404, "Código promocional inválido ou inativo.")
+    if promo.expires_at is not None and promo.expires_at <= now:
+        raise HTTPException(410, "Este código promocional expirou.")
+    if promo.uses >= promo.max_uses:
+        raise HTTPException(409, "Este código promocional atingiu o limite de resgates.")
+    if db.scalar(select(PromoRedemption.id).where(PromoRedemption.player_id == player.id,
+            PromoRedemption.promo_id == promo.id)) is not None:
+        raise HTTPException(409, "Você já resgatou este código.")
+    wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
+        db.add(wallet); db.flush()
+    wallet.diamonds += promo.diamonds
+    promo.uses += 1
+    db.add(PromoRedemption(player_id=player.id, promo_id=promo.id, diamonds_awarded=promo.diamonds))
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(409, "O resgate não pôde ser confirmado. Atualize a carteira e tente novamente.")
+    return {"redeemed": True, "code": code, "diamonds_awarded": promo.diamonds,
+            "diamonds_balance": wallet.diamonds, "message": "Diamantes adicionados à carteira."}
+
+@app.get("/v1/owner/promo-codes")
+def owner_list_promo_codes(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    rows = db.scalars(select(PromoCode).order_by(PromoCode.id.desc()).limit(100)).all()
+    return {"promo_codes": [{"id": row.id, "code": row.code, "diamonds": row.diamonds,
+            "uses": row.uses, "max_uses": row.max_uses, "active": row.active,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None} for row in rows]}
+
+@app.post("/v1/owner/promo-codes", status_code=201)
+def owner_create_promo_code(body: PromoCreateBody, db: Session = Depends(db_session),
+                            owner: str = Depends(current_owner)):
+    code = body.code.strip().upper()
+    if db.scalar(select(PromoCode.id).where(PromoCode.code == code)) is not None:
+        raise HTTPException(409, "Já existe um código com esse nome.")
+    expires = datetime.now(timezone.utc) + timedelta(days=body.expires_in_days) if body.expires_in_days else None
+    row = PromoCode(code=code, diamonds=body.diamonds, max_uses=body.max_uses,
+                    uses=0, active=True, expires_at=expires, created_by=owner)
+    db.add(row)
+    audit(db, owner, "promo_created", code, {"diamonds": body.diamonds, "max_uses": body.max_uses})
+    try:
+        db.commit(); db.refresh(row)
+    except Exception:
+        db.rollback()
+        raise HTTPException(409, "Não foi possível criar o código promocional.")
+    return {"id": row.id, "code": row.code, "diamonds": row.diamonds,
+            "max_uses": row.max_uses, "uses": row.uses,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None}
 
 @app.get("/v1/owner/overview")
 def admin_overview(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
