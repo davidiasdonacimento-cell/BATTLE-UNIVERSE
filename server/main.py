@@ -342,7 +342,7 @@ def login(body: LoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
     if control and control.state != "active":
         raise HTTPException(403, "Esta conta está suspensa ou encerrada.")
     if db.get(PlayerWallet, player.id) is None:
-        db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+        db.add(PlayerWallet(player_id=player.id, coins=0, diamonds=0))
         db.commit()
     return {"access_token": issue_token(str(player.id), username, "player", ACCESS_TOKEN_MINUTES),
             "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60, "player": player_payload(player)}
@@ -516,9 +516,8 @@ def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depen
         wallet = db.get(PlayerWallet, player.id)
         if existing is None:
             raise HTTPException(503, "Não foi possível confirmar a recompensa diária.")
-        return {"claimed": False, "reward_day": day, "coins": existing.coins,
-                "diamonds": existing.diamonds,
-                "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
+        return {"claimed": False, "reward_day": day, "diamonds_awarded": existing.diamonds,
+                "wallet": {"diamonds": wallet.diamonds if wallet else 0}}
     return {"claimed": True, "reward_day": day, "diamonds_awarded": 100,
             "wallet": {"diamonds": wallet.diamonds}}
 
