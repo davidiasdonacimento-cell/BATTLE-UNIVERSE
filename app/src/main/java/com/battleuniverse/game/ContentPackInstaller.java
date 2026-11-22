@@ -100,8 +100,7 @@ public final class ContentPackInstaller {
             File backup=new File(root,"battle-content-backup");
             long expectedPackSize=-1L;
             try {
-                postProgress(0,1,"PREPARANDO A PRIMEIRA CONFIGURAÇÃO...");
-                if(!isWifiConnected()) throw new Exception("A Season 02 é instalada somente por Wi-Fi. Conecte-se a uma rede Wi-Fi e tente novamente.");
+                postProgress(0,1,"ANALISANDO SEASON 02 E PROCURANDO O ARQUIVO PELO NOME...");
                 JSONObject manifest=readRemoteManifest();
                 String expectedHash=manifest.getString("sha256").toLowerCase(Locale.US);
                 long expectedSize=manifest.getLong("size_bytes");
@@ -115,17 +114,17 @@ public final class ContentPackInstaller {
                 if(storage.getAvailableBytes()<needed)
                     throw new Exception("Espaço insuficiente para configurar o conteúdo. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
-                boolean restored=restoreSavedArchive(archive,expectedSize);
-                if(!restored) downloadArchive(archive,expectedSize);
-                postProgress(expectedSize,expectedSize,"CONFERINDO A INTEGRIDADE DO CONTEÚDO...");
-                String actualHash=sha256(archive);
-                if(!actualHash.equals(expectedHash) && restored) {
-                    archive.delete();
-                    restored=false;
-                    postProgress(0,expectedSize,"O ARQUIVO SALVO NÃO PASSOU NA VERIFICAÇÃO. BAIXANDO UMA CÓPIA NOVA...");
+                postProgress(0,expectedSize,"PROCURANDO O PACOTE SEASON 02 PELO NOME EM DOWNLOADS...");
+                boolean restored=restoreSavedArchive(archive,expectedSize,expectedHash);
+                if(!restored) {
+                    if(!isWifiConnected())
+                        throw new Exception("Não encontrei um pacote Season 02 válido no celular. Conecte-se ao Wi-Fi para baixar.");
                     downloadArchive(archive,expectedSize);
-                    actualHash=sha256(archive);
                 }
+                postProgress(expectedSize,expectedSize,restored
+                    ?"PACOTE EXISTENTE ENCONTRADO E VALIDADO • SEM NOVO DOWNLOAD..."
+                    :"DOWNLOAD CONCLUÍDO • CONFERINDO A INTEGRIDADE...");
+                String actualHash=sha256(archive);
                 if(!actualHash.equals(expectedHash))
                     throw new Exception("A verificação SHA-256 do conteúdo integrado falhou.");
                 if(!restored) saveArchiveToDownloads(archive);
@@ -170,19 +169,21 @@ public final class ContentPackInstaller {
     private static final String SAVED_ARCHIVE_FOLDER = "Download/Battle Universe/";
 
     /** Restore the public Downloads copy to the private working file without downloading it again. */
-    private boolean restoreSavedArchive(File output,long expectedSize) throws Exception {
+    private boolean restoreSavedArchive(File output,long expectedSize,String expectedHash) throws Exception {
         if(Build.VERSION.SDK_INT>=29) {
             Uri collection=MediaStore.Downloads.EXTERNAL_CONTENT_URI;
-            String[] columns={MediaStore.Downloads._ID,MediaStore.Downloads.SIZE,MediaStore.Downloads.RELATIVE_PATH};
-            String selection=MediaStore.Downloads.DISPLAY_NAME+"=?";
+            String[] columns={MediaStore.Downloads._ID,MediaStore.Downloads.SIZE,
+                MediaStore.Downloads.RELATIVE_PATH,MediaStore.Downloads.DISPLAY_NAME};
+            String selection=MediaStore.Downloads.DISPLAY_NAME+" LIKE ?";
+            String[] selectionArgs={"battle-universe-season-02-pack%.zip"};
             try(Cursor cursor=appContext.getContentResolver().query(
-                    collection,columns,selection,new String[]{SAVED_ARCHIVE_NAME},
+                    collection,columns,selection,selectionArgs,
                     MediaStore.Downloads.DATE_MODIFIED+" DESC")) {
                 if(cursor!=null) while(cursor.moveToNext()) {
+                    String name=cursor.getString(3);
                     String relative=cursor.getString(2);
-                    if(relative==null||!SAVED_ARCHIVE_FOLDER.equals(relative)) continue;
-                    long size=cursor.getLong(1);
-                    if(size!=expectedSize) continue;
+                    if(!isRecognizedArchiveName(name)||!isDownloadsPath(relative)) continue;
+                    if(cursor.getLong(1)!=expectedSize) continue;
                     Uri uri=Uri.withAppendedPath(collection,cursor.getString(0));
                     try(InputStream in=new BufferedInputStream(appContext.getContentResolver().openInputStream(uri));
                         FileOutputStream out=new FileOutputStream(output,false)) {
@@ -194,28 +195,55 @@ public final class ContentPackInstaller {
                             out.write(buffer,0,count);
                         }
                         out.getFD().sync();
-                        if(copied==expectedSize) {
-                            postProgress(copied,expectedSize,"PACOTE EXISTENTE ENCONTRADO NO CELULAR...");
+                        if(copied==expectedSize&&sha256(output).equalsIgnoreCase(expectedHash)) {
+                            postProgress(copied,expectedSize,"PACOTE EXISTENTE ENCONTRADO E VALIDADO PELO NOME...");
                             return true;
                         }
                     } catch(Exception ignored) {
-                        output.delete();
+                        // A candidate with the right name but invalid content is skipped.
                     }
+                    output.delete();
                 }
             }
         } else {
-            File publicCopy=new File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),SAVED_ARCHIVE_NAME);
-            if(publicCopy.isFile()&&publicCopy.length()==expectedSize) {
-                try(InputStream in=new FileInputStream(publicCopy);FileOutputStream out=new FileOutputStream(output,false)) {
-                    byte[] buffer=new byte[65536];int count;
-                    while((count=in.read(buffer))!=-1) out.write(buffer,0,count);
-                    out.getFD().sync();
+            File publicFolder=appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if(publicFolder!=null&&publicFolder.isDirectory()) {
+                File[] candidates=publicFolder.listFiles((dir,name)->isRecognizedArchiveName(name));
+                if(candidates!=null) for(File candidate:candidates) {
+                    if(!candidate.isFile()||candidate.length()!=expectedSize) continue;
+                    try(InputStream in=new BufferedInputStream(new FileInputStream(candidate));
+                        FileOutputStream out=new FileOutputStream(output,false)) {
+                        byte[] buffer=new byte[65536];int count;long copied=0;
+                        while((count=in.read(buffer))!=-1) {
+                            copied+=count;
+                            if(copied>expectedSize) break;
+                            out.write(buffer,0,count);
+                        }
+                        out.getFD().sync();
+                        if(copied==expectedSize&&sha256(output).equalsIgnoreCase(expectedHash)) {
+                            postProgress(copied,expectedSize,"PACOTE EXISTENTE ENCONTRADO E VALIDADO PELO NOME...");
+                            return true;
+                        }
+                    } catch(Exception ignored) {
+                        // Continue checking other matching filenames.
+                    }
+                    output.delete();
                 }
-                return output.length()==expectedSize;
             }
         }
         output.delete();
         return false;
+    }
+
+    private static boolean isRecognizedArchiveName(String name) {
+        if(name==null)return false;
+        return name.matches("(?i)^battle-universe-season-02-pack(?:[- _]\\(?[0-9]+\\)?)?\\.zip$");
+    }
+
+    private static boolean isDownloadsPath(String relativePath) {
+        if(relativePath==null)return false;
+        String normalized=relativePath.replace('\\\\','/').toLowerCase(Locale.US);
+        return normalized.equals("download/")||normalized.startsWith("download/");
     }
 
     /** Keep a verified archive in the user's Downloads folder; it is intentionally not deleted after extraction. */
