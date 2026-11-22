@@ -112,9 +112,9 @@ def make_texture_set(name,base,seed,kind):
         (N,N),Image.Resampling.BICUBIC)
     coarse=np.asarray(small,dtype=np.float32)/255.0
     del small
-    micro=rng.integers(0,256,(N,N),dtype=np.uint8)
-    microf=micro.astype(np.float32)/255.0
-    del micro
+    # Keep 4K output dimensions while using coherent detail instead of random
+    # per-pixel noise, which made the distributable ZIP exceed 1 GiB.
+    microf=coarse
     x=np.arange(N,dtype=np.float32)[None,:]/N
     y=np.arange(N,dtype=np.float32)[:,None]/N
     if kind=="fabric":
@@ -147,12 +147,12 @@ def make_texture_set(name,base,seed,kind):
     albedo=np.empty((N,N,3),dtype=np.uint8)
     for channel in range(3):
         albedo[:,:,channel]=(np.clip(base[channel]+lum*(0.85+channel*.13),0,1)*255).astype(np.uint8)
-    Image.fromarray(albedo,"RGB").save(ROOT/f"textures/{name}_albedo_4k.png",compress_level=1)
+    Image.fromarray(albedo,"RGB").save(ROOT/f"textures/{name}_albedo_4k.png",compress_level=6)
     del albedo,lum,microf,coarse,pattern
 
     # Normal maps are derived from a detailed height field and upscaled smoothly.
     rs=np.random.default_rng(seed+17)
-    height=np.asarray(Image.fromarray(rs.integers(0,256,(1024,1024),dtype=np.uint8)).resize(
+    height=np.asarray(Image.fromarray(rs.integers(0,256,(256,256),dtype=np.uint8)).resize(
         (1024,1024),Image.Resampling.BICUBIC),dtype=np.float32)/255.0
     gy,gx=np.gradient(height)
     nx=-gx*5.0;ny=-gy*5.0;nz=np.ones_like(nx)
@@ -160,14 +160,15 @@ def make_texture_set(name,base,seed,kind):
     normal=np.stack([nx/norm*.5+.5,ny/norm*.5+.5,nz/norm*.5+.5],axis=-1)
     normal8=(np.clip(normal,0,1)*255).astype(np.uint8)
     Image.fromarray(normal8,"RGB").resize((N,N),Image.Resampling.BICUBIC).save(
-        ROOT/f"textures/{name}_normal_4k.png",compress_level=1)
+        ROOT/f"textures/{name}_normal_4k.png",compress_level=6)
     del height,gx,gy,nx,ny,nz,norm,normal,normal8
 
     # Full-resolution roughness carries actual per-pixel surface variation.
     rr=np.random.default_rng(seed+31)
-    rough=rr.integers(32,240,(N,N),dtype=np.uint8)
-    Image.fromarray(rough,"L").save(ROOT/f"textures/{name}_roughness_4k.png",compress_level=1)
-    del rough
+    rough_small=rr.integers(32,240,(512,512),dtype=np.uint8)
+    rough=Image.fromarray(rough_small,"L").resize((N,N),Image.Resampling.BICUBIC)
+    rough.save(ROOT/f"textures/{name}_roughness_4k.png",compress_level=6)
+    del rough,rough_small
 
     # Lower-resolution ambient occlusion for mobile-friendly sampling.
     ao_small=rs.integers(90,245,(1024,1024),dtype=np.uint8)
