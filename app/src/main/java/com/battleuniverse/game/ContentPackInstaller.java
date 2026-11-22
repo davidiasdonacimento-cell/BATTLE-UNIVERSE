@@ -189,40 +189,84 @@ public final class ContentPackInstaller {
     private void copySelectedArchive(Uri source,File output,long expectedSize) throws Exception {
         String displayName="";
         try(Cursor cursor=appContext.getContentResolver().query(source,
-                new String[]{android.provider.OpenableColumns.DISPLAY_NAME,
-                             android.provider.OpenableColumns.SIZE},null,null,null)) {
-            if(cursor!=null&&cursor.moveToFirst()) {
-                displayName=cursor.getString(0);
-                if(!cursor.isNull(1)) {
-                    long reported=cursor.getLong(1);
-                    if(reported>0&&reported!=expectedSize)
-                        throw new Exception("O ZIP selecionado não corresponde ao tamanho da Season 02.");
-                }
-            }
+                new String[]{android.provider.OpenableColumns.DISPLAY_NAME},null,null,null)) {
+            if(cursor!=null&&cursor.moveToFirst()) displayName=cursor.getString(0);
         }
-        if(displayName!=null&&!displayName.toLowerCase(Locale.US).endsWith(".zip"))
+        if(displayName!=null&&!displayName.isEmpty()&&!displayName.toLowerCase(Locale.US).endsWith(".zip"))
             throw new Exception("Selecione o arquivo .zip original da Season 02, sem extrair.");
+
+        File incoming=new File(output.getParentFile(),"battle-content-selected.zip");
+        incoming.delete();
         try(InputStream in=new BufferedInputStream(appContext.getContentResolver().openInputStream(source));
-            FileOutputStream out=new FileOutputStream(output,false)) {
+            FileOutputStream out=new FileOutputStream(incoming,false)) {
             if(in==null) throw new Exception("Não foi possível abrir o ZIP selecionado.");
             byte[] buffer=new byte[65536];int count;long copied=0,lastReport=0;
+            long maxAccepted=MAX_DOWNLOAD_BYTES+64L*1024L*1024L;
             while((count=in.read(buffer))!=-1) {
                 copied+=count;
-                if(copied>expectedSize||copied>MAX_DOWNLOAD_BYTES)
-                    throw new Exception("O ZIP selecionado é maior que o pacote esperado.");
+                if(copied>maxAccepted) throw new Exception("O arquivo ZIP selecionado excede o limite permitido.");
                 out.write(buffer,0,count);
                 if(copied-lastReport>=4L*1024L*1024L) {
-                    postProgress(copied,expectedSize,"LENDO O ZIP ORIGINAL...");
+                    postProgress(copied,Math.max(expectedSize,copied),"LENDO O ZIP ORIGINAL...");
                     lastReport=copied;
                 }
             }
             out.getFD().sync();
-            if(copied!=expectedSize)
-                throw new Exception("O ZIP está incompleto ou não é o pacote Season 02 correto.");
         } catch(Exception error) {
-            output.delete();
+            incoming.delete();
             throw error;
         }
+
+        if(incoming.length()==expectedSize) {
+            if(output.exists()&&!output.delete()) throw new Exception("Não foi possível preparar o ZIP para validação.");
+            if(!incoming.renameTo(output)) {
+                try(InputStream in=new FileInputStream(incoming);FileOutputStream out=new FileOutputStream(output,false)) {
+                    byte[] buffer=new byte[65536];int n;
+                    while((n=in.read(buffer))!=-1) out.write(buffer,0,n);
+                    out.getFD().sync();
+                }
+                incoming.delete();
+            }
+        } else {
+            // GitHub Actions downloads an artifact as an outer ZIP. Accept it only
+            // when it contains the exact inner Season 02 archive expected by the manifest.
+            boolean found=false;
+            try(ZipFile outer=new ZipFile(incoming)) {
+                Enumeration<? extends ZipEntry> entries=outer.entries();
+                while(entries.hasMoreElements()) {
+                    ZipEntry entry=entries.nextElement();
+                    String name=entry.getName().replace('\\','/');
+                    if(entry.isDirectory()||!(name.equals(SAVED_ARCHIVE_NAME)||
+                            name.endsWith("/"+SAVED_ARCHIVE_NAME))) continue;
+                    if(entry.getSize()!=expectedSize)
+                        throw new Exception("O ZIP interno do artefato tem tamanho diferente do manifesto.");
+                    try(InputStream in=new BufferedInputStream(outer.getInputStream(entry));
+                        FileOutputStream out=new FileOutputStream(output,false)) {
+                        byte[] buffer=new byte[65536];int n;long copied=0;
+                        while((n=in.read(buffer))!=-1) {
+                            copied+=n;
+                            if(copied>expectedSize) throw new Exception("O ZIP interno excede o tamanho esperado.");
+                            out.write(buffer,0,n);
+                        }
+                        out.getFD().sync();
+                        if(copied!=expectedSize) throw new Exception("O ZIP interno do artefato está incompleto.");
+                    }
+                    found=true;
+                    break;
+                }
+            } catch(Exception error) {
+                output.delete();
+                incoming.delete();
+                throw error;
+            }
+            incoming.delete();
+            if(!found) throw new Exception("Este ZIP não contém o pacote Season 02 esperado. Selecione o ZIP do pacote ou o ZIP do artefato do GitHub.");
+        }
+        if(output.length()!=expectedSize) {
+            output.delete();
+            throw new Exception("O ZIP selecionado não corresponde ao tamanho declarado da Season 02.");
+        }
+        postProgress(expectedSize,expectedSize,"ZIP ORIGINAL IDENTIFICADO • VALIDANDO...");
     }
 
     /** Restore the public Downloads copy to the private working file without downloading it again. */
