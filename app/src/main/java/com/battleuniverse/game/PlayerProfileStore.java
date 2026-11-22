@@ -39,6 +39,14 @@ public final class PlayerProfileStore {
         }
     }
 
+    /** Replaces the cached balance with the server-authoritative wallet value. */
+    public boolean setAuthoritativeDiamonds(long balance) {
+        if (balance < 0L) return false;
+        synchronized (LOCK) {
+            return prefs.edit().putLong("diamonds", balance).putLong("coins", 0L).commit();
+        }
+    }
+
     public long getXp() { return Math.max(0L, prefs.getLong("xp", 0L)); }
     public long getDiamonds() { return Math.max(0L, prefs.getLong("diamonds", 0L)); }
     public long getCoins() { return 0L; }
