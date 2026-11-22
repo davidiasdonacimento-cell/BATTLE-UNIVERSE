@@ -6,6 +6,7 @@
 #include <atomic>
 #include <array>
 #include <cmath>
+#include <exception>
 #include <mutex>
 #include <sstream>
 #include <iomanip>
@@ -417,7 +418,7 @@ void createCube() {
     addFace(v,{n,n,p},{n,n,n},{p,n,n},{p,n,p},{0,-1,0});
     addFace(v,{p,n,p},{p,p,p},{n,p,p},{n,n,p},{0,0,1});
     addFace(v,{n,n,n},{n,p,n},{p,p,n},{p,n,n},{0,0,-1});
-    while(glGetError()!=GL_NO_ERROR) {}
+    for(int i=0;i<16&&glGetError()!=GL_NO_ERROR;++i) {}
     glGenBuffers(1,&gCubeVbo);
     if(gCubeVbo==0) {
         __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Startup stage: cube buffer allocation failed");
