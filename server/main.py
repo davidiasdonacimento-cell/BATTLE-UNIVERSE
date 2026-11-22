@@ -484,7 +484,7 @@ def recover_account(body: RecoverAccountBody, db: Session = Depends(db_session))
 def get_wallet(db: Session = Depends(db_session), player: Player = Depends(current_player)):
     wallet = db.get(PlayerWallet, player.id)
     if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
         db.commit()
         db.refresh(wallet)
@@ -501,7 +501,7 @@ def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depen
                 "wallet": {"diamonds": wallet.diamonds if wallet else 0}}
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
         db.flush()
     wallet.diamonds += 100
@@ -540,7 +540,7 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
                 "replayed": True}
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
         db.flush()
     if wallet.diamonds < ROYALE_COST:
