@@ -233,3 +233,10 @@ A fase permanece em desenvolvimento até build Android, testes automatizados, te
 - Se o arquivo público não existir ou falhar na integridade, o instalador baixa uma nova cópia e substitui o arquivo salvo.
 - Em Android 7–9, a cópia fica no diretório externo específico do aplicativo, sem permissão ampla.
 - Estado: código publicado nos commits `1903fef`, `7c7ce21`, `af92026` e `6e51c0c`; compilação Android e teste físico ainda pendentes. Não declarar a função validada no aparelho até concluir esses testes.
+
+
+## Analisador do arquivo Season 02 por nome — 2026-11-21
+- Na inicialização/instalação, procurar o ZIP Season 02 pelo nome canônico e por variantes numéricas comuns criadas ao baixar novamente (`-1`, `(1)` etc.), em Downloads raiz ou subpastas.
+- Não confiar apenas no nome: conferir tamanho esperado e SHA-256 do manifesto remoto antes de reutilizar. Se inválido/ausente, baixar novamente por Wi-Fi; nunca ativar dados sem validação.
+- Exibir estados reais de análise, busca e validação; se os dados já estiverem instalados e válidos, abrir o jogo sem reinstalar o pacote.
+- Implementação registrada na branch `feature/season02-download-file-analyzer`; CI e teste físico pendentes.
