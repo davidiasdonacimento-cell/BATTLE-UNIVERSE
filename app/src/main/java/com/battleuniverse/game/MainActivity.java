@@ -11,6 +11,8 @@ import android.content.SharedPreferences;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 
 public final class MainActivity extends Activity {
     private GameSurfaceView gameSurface;
@@ -19,6 +21,7 @@ public final class MainActivity extends Activity {
     private ContentLoadingView loadingView;
     private AccountSyncManager accountSync;
     private SharedPreferences profilePrefs;
+    private SharedPreferences diagnosticPrefs;
     private EntryGateView entryGate;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private boolean gameLaunched;
@@ -29,7 +32,9 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         enterImmersiveMode();
+        diagnosticPrefs=getSharedPreferences("battle_universe_diagnostics",MODE_PRIVATE);
         previousExitNotice=readPreviousExitNotice();
+        recordStartupStage("TELA_INICIAL","");
         profilePrefs=getSharedPreferences("battle_universe_profile",MODE_PRIVATE);
         entryGate=new EntryGateView(this);
         entryGate.setDiagnosticsNotice(previousExitNotice);
@@ -96,9 +101,51 @@ public final class MainActivity extends Activity {
             }
             String description=exit.getDescription();
             if(description==null)description="";
-            if(description.length()>180)description=description.substring(0,180);
-            return "DIAGNÓSTICO DA ÚLTIMA ABERTURA: "+reason+(description.isEmpty()?"":" • "+description);
+            if(description.length()>120)description=description.substring(0,120);
+            String stage=diagnosticPrefs==null?"":diagnosticPrefs.getString("last_stage","");
+            String file=diagnosticPrefs==null?"":diagnosticPrefs.getString("last_file","");
+            String traceHint=readCrashHint(exit);
+            StringBuilder report=new StringBuilder("DIAGNÓSTICO DA ÚLTIMA ABERTURA: ").append(reason);
+            if(!stage.isEmpty())report.append(" • ETAPA: ").append(stage);
+            if(!file.isEmpty())report.append(" • ARQUIVO: ").append(file);
+            if(!description.isEmpty())report.append(" • ").append(description);
+            if(!traceHint.isEmpty())report.append(" • ERRO: ").append(traceHint);
+            return report.toString();
         } catch(Exception ignored) { return ""; }
+    }
+
+    private String readCrashHint(ApplicationExitInfo exit) {
+        if(Build.VERSION.SDK_INT<31)return "";
+        try(InputStream input=exit.getTraceInputStream()) {
+            if(input==null)return "";
+            ByteArrayOutputStream output=new ByteArrayOutputStream();
+            byte[] buffer=new byte[2048];
+            int count,total=0;
+            while((count=input.read(buffer))!=-1&&total<32768) {
+                int allowed=Math.min(count,32768-total);
+                output.write(buffer,0,allowed);
+                total+=allowed;
+            }
+            String trace=output.toString("UTF-8");
+            String[] markers={"Caused by:","FATAL EXCEPTION","OutOfMemoryError","SIGSEGV","SIGABRT"};
+            for(String marker:markers) {
+                int at=trace.lastIndexOf(marker);
+                if(at>=0) {
+                    int end=trace.indexOf('\\n',at);
+                    String line=end>at?trace.substring(at,end):trace.substring(at);
+                    line=line.replace('\\r',' ').trim();
+                    return line.length()>150?line.substring(0,150):line;
+                }
+            }
+        } catch(Exception ignored) { }
+        return "";
+    }
+
+    private void recordStartupStage(String stage,String file) {
+        if(diagnosticPrefs==null)return;
+        SharedPreferences.Editor editor=diagnosticPrefs.edit().putString("last_stage",stage);
+        if(file!=null&&!file.isEmpty())editor.putString("last_file",file);
+        editor.apply();
     }
     private void showEntryGate() {
         if(isFinishing()||entryGate==null)return;
@@ -116,23 +163,28 @@ public final class MainActivity extends Activity {
             return;
         }
         contentInstalling=true;
+        recordStartupStage("INICIANDO_VERIFICACAO_DA_PASTA","");
         loadingView=new ContentLoadingView(this);
         setContentView(loadingView);
         loadingView.setProgress(0,1,"VERIFICANDO OS ARQUIVOS DA PASTA DO JOGO...");
         if(installer!=null)installer.shutdown();
         installer=new ContentPackInstaller(this,new ContentPackInstaller.Listener() {
             @Override public void onProgress(long done,long total,String status) {
+                recordStartupStage(status,"");
                 if(loadingView!=null)loadingView.setProgress(done,total,status);
             }
             @Override public void onFileProgress(String name,int index,int count,long done,long size) {
+                recordStartupStage("VERIFICANDO_ARQUIVO",name);
                 if(loadingView!=null)loadingView.setFileProgress(name,index,count,done,size);
             }
             @Override public void onSuccess() {
+                recordStartupStage("VERIFICACAO_CONCLUIDA","");
                 contentInstalling=false;
                 if(!isFinishing()&&accountSync!=null&&accountSync.isSignedIn())launchGame(true);
                 else if(!isFinishing())showEntryGate();
             }
             @Override public void onFailure(String message) {
+                recordStartupStage("FALHA_NA_VERIFICACAO",message);
                 contentInstalling=false;
                 if(loadingView!=null)loadingView.setFailure(
                     "A verificação encontrou um problema: "+message,
@@ -186,6 +238,7 @@ public final class MainActivity extends Activity {
             startContentSetup();
             return;
         }
+        recordStartupStage("CRIANDO_SUPERFICIE_OPENGL","");
         if(gameSurface!=null)gameSurface.onPause();
         FrameLayout root=new FrameLayout(this);
         gameSurface=new GameSurfaceView(this);
@@ -215,6 +268,7 @@ public final class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
         gameLaunched=true;
+        recordStartupStage("SUPERFICIE_CRIADA_INICIANDO_RENDERER","");
         gameSurface.onResume();
     }
 
