@@ -235,6 +235,7 @@ public final class ContentPackInstaller {
         return false;
     }
 
+    /** Recognize the canonical ZIP name and Android/browser duplicate suffixes such as -1 and (1). */
     private static boolean isRecognizedArchiveName(String name) {
         if(name==null)return false;
         return name.matches("(?i)^battle-universe-season-02-pack(?:[- _]\\(?[0-9]+\\)?)?\\.zip$");
