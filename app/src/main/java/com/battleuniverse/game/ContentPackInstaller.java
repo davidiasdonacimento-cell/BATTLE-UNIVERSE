@@ -2,7 +2,6 @@ package com.battleuniverse.game;
 
 import android.content.Context;
 import android.content.ContentValues;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -100,7 +99,7 @@ public final class ContentPackInstaller {
             File backup=new File(root,"battle-content-backup");
             long expectedPackSize=-1L;
             try {
-                postProgress(0,1,"ANALISANDO SEASON 02 E PROCURANDO O ARQUIVO PELO NOME...");
+                postProgress(0,1,"CONSULTANDO A VERSÃO DA TEMPORADA 02...");
                 JSONObject manifest=readRemoteManifest();
                 String expectedHash=manifest.getString("sha256").toLowerCase(Locale.US);
                 long expectedSize=manifest.getLong("size_bytes");
@@ -109,25 +108,22 @@ public final class ContentPackInstaller {
                 if(version!=PACK_VERSION) throw new Exception("Versão de conteúdo incompatível com este APK.");
                 if(expectedSize<MIN_DOWNLOAD_BYTES||expectedSize>MAX_DOWNLOAD_BYTES)
                     throw new Exception("O pacote Season 02 precisa ter entre 1 e 5 GiB.");
-                postProgress(0,expectedSize,"PROCURANDO O PACOTE SEASON 02 PELO NOME EM DOWNLOADS...");
-                boolean restored=restoreSavedArchive(archive,expectedSize,expectedHash);
+                // Never inspect or reuse ZIP files from shared Downloads. A fresh app install
+                // or cleared app data must fetch a new archive from the official release.
                 StatFs storage=new StatFs(root.getAbsolutePath());
-                long needed=(restored?expectedSize:expectedSize*2L)+MAX_EXTRACTED_BYTES+256L*1024L*1024L;
+                long needed=expectedSize*2L+MAX_EXTRACTED_BYTES+256L*1024L*1024L;
                 if(storage.getAvailableBytes()<needed)
-                    throw new Exception("Espaço insuficiente para configurar o conteúdo. Libere pelo menos "+
+                    throw new Exception("Espaço insuficiente para baixar e instalar o conteúdo. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
-                if(!restored) {
-                    if(!isWifiConnected())
-                        throw new Exception("Não encontrei um pacote Season 02 válido no celular. Conecte-se ao Wi-Fi para baixar.");
-                    downloadArchive(archive,expectedSize);
-                }
-                postProgress(expectedSize,expectedSize,restored
-                    ?"PACOTE EXISTENTE ENCONTRADO E VALIDADO • SEM NOVO DOWNLOAD..."
-                    :"DOWNLOAD CONCLUÍDO • CONFERINDO A INTEGRIDADE...");
-                String actualHash=restored?expectedHash:sha256(archive);
+                if(!isWifiConnected())
+                    throw new Exception("Conecte-se ao Wi-Fi para baixar novamente a Season 02.");
+                postProgress(0,expectedSize,"BAIXANDO UM PACOTE NOVO DA TEMPORADA 02...");
+                downloadArchive(archive,expectedSize);
+                postProgress(expectedSize,expectedSize,"DOWNLOAD CONCLUÍDO • CONFERINDO A INTEGRIDADE...");
+                String actualHash=sha256(archive);
                 if(!actualHash.equals(expectedHash))
                     throw new Exception("A verificação SHA-256 do conteúdo integrado falhou.");
-                if(!restored) saveArchiveToDownloads(archive);
+                saveArchiveToDownloads(archive);
                 postProgress(0,1,"PREPARANDO OS RECURSOS DO UNIVERSO...");
                 deleteTree(staging);
                 if(!staging.mkdirs()&&!staging.isDirectory())
@@ -150,7 +146,7 @@ public final class ContentPackInstaller {
                     throw new Exception("Falha ao ativar os dados. A versão anterior foi preservada.");
                 }
                 deleteTree(backup);
-                archive.delete(); // Keep the shared Downloads copy; remove only the private working copy.
+                archive.delete(); // Remove only the private working copy after successful installation.
                 postProgress(1,1,"PACOTE SALVO NO CELULAR • UNIVERSO CONFIGURADO...");
 
                 main.post(()->{running=false;listener.onSuccess();});
@@ -165,102 +161,20 @@ public final class ContentPackInstaller {
     }
 
 
-    private static final String SAVED_ARCHIVE_NAME = "battle-universe-season-02-pack.zip";
     private static final String SAVED_ARCHIVE_FOLDER = "Download/Battle Universe/";
 
-    /** Restore the public Downloads copy to the private working file without downloading it again. */
-    private boolean restoreSavedArchive(File output,long expectedSize,String expectedHash) throws Exception {
-        if(Build.VERSION.SDK_INT>=29) {
-            Uri collection=MediaStore.Downloads.EXTERNAL_CONTENT_URI;
-            String[] columns={MediaStore.Downloads._ID,MediaStore.Downloads.SIZE,
-                MediaStore.Downloads.RELATIVE_PATH,MediaStore.Downloads.DISPLAY_NAME};
-            String selection=MediaStore.Downloads.DISPLAY_NAME+" LIKE ?";
-            String[] selectionArgs={"battle-universe-season-02-pack%.zip"};
-            try(Cursor cursor=appContext.getContentResolver().query(
-                    collection,columns,selection,selectionArgs,
-                    MediaStore.Downloads.DATE_MODIFIED+" DESC")) {
-                if(cursor!=null) while(cursor.moveToNext()) {
-                    String name=cursor.getString(3);
-                    String relative=cursor.getString(2);
-                    if(!isRecognizedArchiveName(name)||!isDownloadsPath(relative)) continue;
-                    if(cursor.getLong(1)!=expectedSize) continue;
-                    Uri uri=Uri.withAppendedPath(collection,cursor.getString(0));
-                    try(InputStream in=new BufferedInputStream(appContext.getContentResolver().openInputStream(uri));
-                        FileOutputStream out=new FileOutputStream(output,false)) {
-                        if(in==null) continue;
-                        byte[] buffer=new byte[65536];int count;long copied=0;
-                        while((count=in.read(buffer))!=-1) {
-                            copied+=count;
-                            if(copied>expectedSize) throw new Exception("O arquivo salvo excede o tamanho esperado.");
-                            out.write(buffer,0,count);
-                        }
-                        out.getFD().sync();
-                        if(copied==expectedSize&&sha256(output).equalsIgnoreCase(expectedHash)) {
-                            postProgress(copied,expectedSize,"PACOTE EXISTENTE ENCONTRADO E VALIDADO PELO NOME...");
-                            return true;
-                        }
-                    } catch(Exception ignored) {
-                        // A candidate with the right name but invalid content is skipped.
-                    }
-                    output.delete();
-                }
-            }
-        } else {
-            File publicFolder=appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-            if(publicFolder!=null&&publicFolder.isDirectory()) {
-                File[] candidates=publicFolder.listFiles((dir,name)->isRecognizedArchiveName(name));
-                if(candidates!=null) for(File candidate:candidates) {
-                    if(!candidate.isFile()||candidate.length()!=expectedSize) continue;
-                    try(InputStream in=new BufferedInputStream(new FileInputStream(candidate));
-                        FileOutputStream out=new FileOutputStream(output,false)) {
-                        byte[] buffer=new byte[65536];int count;long copied=0;
-                        while((count=in.read(buffer))!=-1) {
-                            copied+=count;
-                            if(copied>expectedSize) break;
-                            out.write(buffer,0,count);
-                        }
-                        out.getFD().sync();
-                        if(copied==expectedSize&&sha256(output).equalsIgnoreCase(expectedHash)) {
-                            postProgress(copied,expectedSize,"PACOTE EXISTENTE ENCONTRADO E VALIDADO PELO NOME...");
-                            return true;
-                        }
-                    } catch(Exception ignored) {
-                        // Continue checking other matching filenames.
-                    }
-                    output.delete();
-                }
-            }
-        }
-        output.delete();
-        return false;
-    }
-
-    /** Recognize the canonical ZIP name and Android/browser duplicate suffixes such as -1 and (1). */
-    private static boolean isRecognizedArchiveName(String name) {
-        if(name==null)return false;
-        return name.matches("(?i)^battle-universe-season-02-pack(?:[- _]\\(?[0-9]+\\)?)?\\.zip$");
-    }
-
-    private static boolean isDownloadsPath(String relativePath) {
-        if(relativePath==null)return false;
-        String normalized=relativePath.replace('\\','/').toLowerCase(Locale.US);
-        return normalized.equals("download/")||normalized.startsWith("download/");
-    }
-
-    /** Keep a verified archive in the user's Downloads folder; it is intentionally not deleted after extraction. */
+    /** Save this fresh download without replacing or deleting any ZIP the user already has. */
     private void saveArchiveToDownloads(File source) throws Exception {
+        String archiveName="battle-universe-season-02-pack-"+System.currentTimeMillis()+".zip";
         if(Build.VERSION.SDK_INT>=29) {
             Uri collection=MediaStore.Downloads.EXTERNAL_CONTENT_URI;
-            String selection=MediaStore.Downloads.DISPLAY_NAME+"=? AND "+MediaStore.Downloads.RELATIVE_PATH+"=?";
-            appContext.getContentResolver().delete(collection,selection,
-                    new String[]{SAVED_ARCHIVE_NAME,SAVED_ARCHIVE_FOLDER});
             ContentValues values=new ContentValues();
-            values.put(MediaStore.Downloads.DISPLAY_NAME,SAVED_ARCHIVE_NAME);
+            values.put(MediaStore.Downloads.DISPLAY_NAME,archiveName);
             values.put(MediaStore.Downloads.MIME_TYPE,"application/zip");
             values.put(MediaStore.Downloads.RELATIVE_PATH,SAVED_ARCHIVE_FOLDER);
             values.put(MediaStore.Downloads.IS_PENDING,1);
             Uri target=appContext.getContentResolver().insert(collection,values);
-            if(target==null) throw new Exception("Não foi possível salvar o pacote na pasta Downloads.");
+            if(target==null) throw new Exception("Não foi possível salvar o novo pacote na pasta Downloads.");
             boolean complete=false;
             try {
                 try(InputStream in=new FileInputStream(source);
@@ -282,14 +196,14 @@ public final class ContentPackInstaller {
             File folder=appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
             if(folder==null) throw new Exception("Armazenamento externo indisponível.");
             if(!folder.exists()&&!folder.mkdirs()) throw new Exception("Não foi possível criar a pasta de downloads.");
-            File target=new File(folder,SAVED_ARCHIVE_NAME);
+            File target=new File(folder,archiveName);
             try(InputStream in=new FileInputStream(source);FileOutputStream out=new FileOutputStream(target,false)) {
                 byte[] buffer=new byte[65536];int count;
                 while((count=in.read(buffer))!=-1) out.write(buffer,0,count);
                 out.getFD().sync();
             }
         }
-        postProgress(source.length(),source.length(),"PACOTE SALVO NO CELULAR...");
+        postProgress(source.length(),source.length(),"NOVO PACOTE SALVO EM DOWNLOADS...");
     }
 
     private boolean isWifiConnected() {
