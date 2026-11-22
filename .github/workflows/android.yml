@@ -62,50 +62,16 @@ jobs:
               assert z.testzip() is None, "APK DEBUG corrompido"
           print(f"APK DEBUG verificado: {apk.stat().st_size} bytes")
           PY
-      - name: Build optimized Season 02 mobile content package
-        run: python scripts/build_content_pack.py
-      - name: Verify external Season 02 package (maximum 400 MiB)
+      - name: Verify optimized RELEASE APK under 100 MiB
         run: |
           python - <<'PY'
           from pathlib import Path
-          from zipfile import ZipFile
-          import hashlib, json
-          pack = Path("build/battle-universe-season-02-pack.zip")
-          manifest_path = Path("build/content-pack-manifest.json")
-          assert pack.is_file() and manifest_path.is_file(), "Pacote externo ou manifesto ausente"
-          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-          size = pack.stat().st_size
-          assert manifest["version"] == 4, "Versão da Season 02 inesperada"
-          assert 1024**2 <= size <= 400*1024**2, f"Pacote fora do limite de 1 MiB–400 MiB: {size}"
-          assert manifest["size_bytes"] == size, "Tamanho não confere com manifesto"
-          digest = hashlib.sha256()
-          with pack.open("rb") as stream:
-              for chunk in iter(lambda: stream.read(4*1024*1024), b""): digest.update(chunk)
-          assert digest.hexdigest() == manifest["sha256"], "SHA-256 externo inválido"
-          with ZipFile(pack) as archive:
-              assert archive.testzip() is None, "ZIP externo corrompido"
-              assert "manifest.json" in archive.namelist(), "Manifesto interno ausente"
-          print(f"Season 02 mobile validado: {size/1024/1024:.1f} MiB / SHA-256 {digest.hexdigest()}")
-          PY
-      - name: Verify DEBUG game APK under 100 MiB
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          from zipfile import ZipFile
-          import subprocess
-          apk = Path("app/build/outputs/apk/debug/app-debug.apk")
-          assert apk.is_file() and 0 < apk.stat().st_size <= 100*1024*1024, f"APK DEBUG ausente ou acima de 100 MiB: {apk.stat().st_size if apk.exists() else 0}"
-          with ZipFile(apk) as z:
-              names = set(z.namelist())
-              assert "classes.dex" in names, "DEX ausente no APK DEBUG"
-              assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Engine ARM64 ausente"
-              assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Engine ARMv7 ausente"
-              assert z.testzip() is None, "APK DEBUG corrompido"
-          app_id = subprocess.check_output(["apkanalyzer", "manifest", "application-id", str(apk)], text=True).strip()
-          debuggable = subprocess.check_output(["apkanalyzer", "manifest", "debuggable", str(apk)], text=True).strip()
-          assert app_id == "com.battleuniverse.game.debug", f"Application ID inesperado: {app_id}"
-          assert debuggable == "true", f"APK não está marcado como DEBUG: {debuggable}"
-          print(f"APK DEBUG verificado: {apk.stat().st_size} bytes; applicationId={app_id}")
+          apks = list(Path("app/build/outputs/apk/release").glob("app-release*.apk"))
+          assert apks, "APK RELEASE não foi gerado"
+          for apk in apks:
+              size = apk.stat().st_size
+              assert 0 < size <= 100*1024*1024, f"APK RELEASE acima de 100 MiB: {size}"
+              print(f"APK RELEASE verificado: {size} bytes")
           PY
       - name: Build optimized Season 02 mobile content package
         run: python scripts/build_content_pack.py
