@@ -317,7 +317,7 @@ def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str,
     player = Player(username=username, password_hash=password_hash.hash(body.password), profile={})
     db.add(player)
     db.flush()
-    db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+    db.add(PlayerWallet(player_id=player.id, coins=0, diamonds=0))
     db.add(RecoveryCredential(player_id=player.id, code_hash=recovery_digest(recovery_code)))
     db.add(player)
     try:
@@ -488,8 +488,7 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
         db.add(wallet)
         db.commit()
         db.refresh(wallet)
-    return {"coins": wallet.coins, "diamonds": wallet.diamonds,
-            "currency": "virtual", "authority": "server"}
+    return {"diamonds": wallet.diamonds, "currency": "diamonds", "authority": "server"}
 
 @app.post("/v1/game/rewards/daily")
 def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depends(current_player)):
@@ -498,17 +497,15 @@ def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depen
         DailyRewardClaim.player_id == player.id, DailyRewardClaim.reward_day == day))
     if existing is not None:
         wallet = db.get(PlayerWallet, player.id)
-        return {"claimed": False, "reward_day": day, "coins": existing.coins,
-                "diamonds": existing.diamonds,
-                "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
+        return {"claimed": False, "reward_day": day, "diamonds_awarded": existing.diamonds,
+                "wallet": {"diamonds": wallet.diamonds if wallet else 0}}
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
         db.add(wallet)
         db.flush()
-    wallet.coins += 250
     wallet.diamonds += 100
-    claim = DailyRewardClaim(player_id=player.id, reward_day=day, coins=250, diamonds=100)
+    claim = DailyRewardClaim(player_id=player.id, reward_day=day, coins=0, diamonds=100)
     db.add(claim)
     try:
         db.commit()
@@ -522,8 +519,8 @@ def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depen
         return {"claimed": False, "reward_day": day, "coins": existing.coins,
                 "diamonds": existing.diamonds,
                 "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
-    return {"claimed": True, "reward_day": day, "coins": 250, "diamonds": 100,
-            "wallet": {"coins": wallet.coins, "diamonds": wallet.diamonds}}
+    return {"claimed": True, "reward_day": day, "diamonds_awarded": 100,
+            "wallet": {"diamonds": wallet.diamonds}}
 
 @app.get("/v1/royale/config")
 def royale_config(player: Player = Depends(current_player)):
