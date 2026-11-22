@@ -131,9 +131,9 @@ public final class MainActivity extends Activity {
             for(String marker:markers) {
                 int at=trace.lastIndexOf(marker);
                 if(at>=0) {
-                    int end=trace.indexOf('\\n',at);
+                    int end=trace.indexOf('\n',at);
                     String line=end>at?trace.substring(at,end):trace.substring(at);
-                    line=line.replace('\\r',' ').trim();
+                    line=line.replace('\r',' ').trim();
                     return line.length()>150?line.substring(0,150):line;
                 }
             }
