@@ -27,11 +27,11 @@ import java.util.UUID;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18;
+        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18, PROMO=19;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "COFRE","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
-        "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
-    private static final int[] NAV_PAGES={HOME,CHARACTERS,MODES_PAGE,MAPS_PAGE,INVENTORY,SETTINGS,PROFILE,SHOP,ROYALE,MISSIONS,WARDROBE,EVENTS,FRIENDS,MAIL,ACHIEVEMENTS};
+        "EVENTOS","EQUIPE","CORREIO","CONQUISTAS","CÓDIGOS"};
+    private static final int[] NAV_PAGES={HOME,CHARACTERS,MODES_PAGE,MAPS_PAGE,INVENTORY,SETTINGS,PROFILE,SHOP,ROYALE,MISSIONS,WARDROBE,EVENTS,FRIENDS,MAIL,ACHIEVEMENTS,PROMO};
     private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
         "CAMISA TÁTICA","CAMISA NEON","CAMISA FROST","CAMISA DESERTO",
         "BOTAS COMBATE","BOTAS NEON","BOTAS FROST","BOTAS DOURADAS",
@@ -79,6 +79,8 @@ public final class HudOverlay extends View {
     public interface UsernameAccountAction {
         void authenticate(String username, String password, boolean createAccount);
     }
+    public interface PromoRedeemAction { void redeem(String code,PromoRedeemResult callback); }
+    public interface PromoRedeemResult { void onResult(boolean success,long balance,String message); }
     public interface RoyaleSpinAction {
         void spin(String requestId,RoyaleResult callback);
     }
@@ -98,6 +100,7 @@ public final class HudOverlay extends View {
     private String deviceIdentity="";
     private long onlineCoins=-1L,onlineDiamonds=-1L;
     private RoyaleSpinAction royaleSpinAction;
+    private PromoRedeemAction promoRedeemAction;
     private DailyRewardAction dailyRewardAction;
     private boolean royaleRequesting,royaleServerDuplicate;
     private String royaleServerPrizeName="";
@@ -283,6 +286,7 @@ public final class HudOverlay extends View {
         else if(page==FRIENDS)drawFriendsPage(c);
         else if(page==MAIL)drawMailPage(c);
         else if(page==ACHIEVEMENTS)drawAchievementsPage(c);
+        else if(page==PROMO)drawPromoPage(c);
         else if(page==PREMATCH)drawPreMatch(c);
     }
     private void drawHome(Canvas c){
@@ -713,6 +717,17 @@ public final class HudOverlay extends View {
         text(c,"Cada peça pode ser removida sem alterar as outras categorias.",270,650,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
     }
 
+    private void drawPromoPage(Canvas c) {
+        eyebrow(c,270,175,"RECOMPENSAS OFICIAIS • CONTA ONLINE");
+        title(c,"CÓDIGOS PROMOCIONAIS",270,224);
+        panel(c,290,270,850,300,0xDD102638,0xFF2C8195,20);
+        text(c,"RESGATE SEU CÓDIGO",330,330,19,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Digite um código publicado pela equipe BATTLE UNIVERSE.",330,372,11,0xFFB6CDD8,Typeface.DEFAULT);
+        text(c,"Os diamantes entram diretamente na carteira online após a confirmação do servidor.",330,405,10,0xFF83DDE6,Typeface.DEFAULT_BOLD);
+        pill(c,330,455,340,58,"RESGATAR CÓDIGO",0xFF14788A,Color.WHITE);
+        text(c,"Cada código pode ser resgatado uma única vez por conta e respeita o limite definido pelo administrador.",330,545,9,0xFF9DB5C2,Typeface.DEFAULT);
+    }
+
     private void drawRoyalePage(Canvas c) {
         eyebrow(c,270,175,"ROYALE • RECOMPENSAS E RELÍQUIAS");
         title(c,"MENU ROYALE",270,224);
@@ -806,6 +821,24 @@ public final class HudOverlay extends View {
             panel(c,270,646,390,42,0xDD173E43,0xFF5ADACB,10);
             text(c,royaleResultMessage,465,672,9,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
         }
+    }
+
+    private void showPromoRedeemDialog() {
+        if(promoRedeemAction==null){toast("Conexão de códigos ainda não está disponível neste APK.");return;}
+        if(!googleSignedIn){toast("Entre na sua conta para resgatar códigos.");return;}
+        EditText input=new EditText(getContext());input.setSingleLine(true);input.setHint("Ex.: BATTLE2026");
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        LinearLayout box=new LinearLayout(getContext());box.setPadding(24,8,24,4);box.addView(input);
+        new AlertDialog.Builder(getContext()).setTitle("RESGATAR CÓDIGO")
+            .setMessage("O código será validado pelo servidor. Cada conta pode usar cada código uma vez.")
+            .setView(box).setNegativeButton("CANCELAR",null)
+            .setPositiveButton("RESGATAR",(dialog,which)->{
+                String code=input.getText().toString().trim();
+                promoRedeemAction.redeem(code,(success,balance,message)->{
+                    if(success)onlineDiamonds=balance;
+                    toast(message==null?"Resposta do servidor recebida.":message);invalidate();
+                });
+            }).show();
     }
 
     private void startRoyaleSpin() {
@@ -1589,6 +1622,8 @@ public final class HudOverlay extends View {
             if(hit(x,y,950,362,298,78)){page=SHOP;return;}
             if(hit(x,y,950,456,298,78)){page=EVENTS;return;}
             if(hit(x,y,950,550,298,78)){page=MISSIONS;return;}
+        }else if(page==PROMO){
+            if(hit(x,y,330,455,340,58)){showPromoRedeemDialog();return;}
         }else if(page==PREMATCH){
             if(hit(x,y,270,636,170,34)){page=HOME;return;}
             if(hit(x,y,862,636,350,34)){beginOfflineMatch();return;}
@@ -1820,6 +1855,7 @@ public final class HudOverlay extends View {
         onlineCoins=Math.max(0L,coins);onlineDiamonds=Math.max(0L,diamonds);invalidate();
     }
     public void setRoyaleSpinAction(RoyaleSpinAction action) { royaleSpinAction=action; }
+    public void setPromoRedeemAction(PromoRedeemAction action) { promoRedeemAction=action; }
     public void setDailyRewardAction(DailyRewardAction action) { dailyRewardAction=action; }
     public void setDeviceIdentity(String code) { deviceIdentity=code==null?"":code; invalidate(); }
     public void setRecoveryCodeAction(Runnable action) { recoveryCodeAction=action; }
