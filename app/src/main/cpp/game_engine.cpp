@@ -437,7 +437,11 @@ bool initializeGraphics() {
     gColorLocation=glGetUniformLocation(gProgram,"uColor");
     createCube();
     gSphereMesh=buildSphere(); gCylinderMesh=buildCylinder(); gConeMesh=buildCone();
-    for(int map=0;map<8;++map) gMapTerrainMeshes[static_cast<size_t>(map)]=buildMapTerrain(map);
+    // Build only the active map at startup. Allocating all eight 3D terrain
+    // meshes at once wastes GPU memory and can terminate the app on phones.
+    const size_t activeMap=static_cast<size_t>(std::clamp(gSelectedMap,0,7));
+    if(gMapTerrainMeshes[activeMap].vbo==0)
+        gMapTerrainMeshes[activeMap]=buildMapTerrain(static_cast<int>(activeMap));
     gSphereVbo=gSphereMesh.vbo; gSphereCount=gSphereMesh.count;
     gCylinderVbo=gCylinderMesh.vbo; gCylinderCount=gCylinderMesh.count;
     gConeVbo=gConeMesh.vbo; gConeCount=gConeMesh.count;
@@ -1899,6 +1903,11 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,j
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMap(JNIEnv*,jclass,jint id) {
     gSelectedMap=std::clamp(static_cast<int>(id),0,7);
+    // This JNI call is queued on the GLSurfaceView render thread, so creating
+    // the newly selected terrain here keeps GL work on the correct context.
+    const size_t mapIndex=static_cast<size_t>(gSelectedMap);
+    if(gProgram&&gMapTerrainMeshes[mapIndex].vbo==0)
+        gMapTerrainMeshes[mapIndex]=buildMapTerrain(gSelectedMap);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetMode(JNIEnv*,jclass,jint id) {
