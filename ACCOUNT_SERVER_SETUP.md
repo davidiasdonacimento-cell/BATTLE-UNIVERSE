@@ -39,7 +39,7 @@ A chave de assinatura precisa ser a mesma que assinou o APK que está instalado 
 ## Carteira online e códigos promocionais
 
 - GET /v1/accounts/me/wallet retorna a carteira autoritativa player_wallets.
-- POST /v1/game/rewards/redeem recebe { "code": "100K" } e concede 100.000 diamantes virtuais uma única vez por conta. O banco registra a chave do código por jogador; repetir o pedido não concede novamente.
+- POST /v1/game/rewards/redeem recebe { "code": "CODIGO" } e valida o código ativo cadastrado pelo ADMIN. O servidor credita a quantidade de diamantes configurada no PostgreSQL uma única vez por conta, respeitando o limite global de resgates; repetir o pedido não concede novamente. O código legado 100K permanece disponível se estiver ativo no cadastro do servidor.
 - O saldo antigo de moedas/diamantes salvo no perfil é migrado uma única vez para a carteira na primeira consulta. O ledger antigo é usado para preservar o estado de resgate anterior do código 100K.
 - coins e diamonds não podem mais ser enviados pelo cliente em PATCH /v1/accounts/me/profile. A carteira é lida e alterada por endpoints próprios.
 - POST /v1/game/rewards/daily concede a recompensa diária pelo servidor. POST /v1/royale/spin debita e registra giros no servidor.
