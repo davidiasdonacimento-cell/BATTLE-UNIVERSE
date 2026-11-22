@@ -32,6 +32,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         default void onRecoveryCode(String recoveryCode) {}
     }
     public interface WalletListener { void onWallet(long coins,long diamonds,String message); }
+    public interface PromoListener { void onResult(boolean success,long balance,String message); }
     public interface RoyaleListener {
         void onResult(boolean success,String prizeId,String prizeName,boolean duplicate,long balance,String message);
     }
@@ -39,8 +40,8 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         void onResult(boolean claimed,long coins,long diamonds,String message);
     }
     private static final Set<String> LONG_PROFILE_KEYS=new HashSet<>(Arrays.asList(
-        "xp","coins","diamonds","missions_day","match_reward_session_id",
-        "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
+        "xp","diamonds","missions_day","match_reward_session_id",
+        "last_match_reward_diamonds","last_match_reward_xp"
     ));
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
@@ -50,7 +51,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
         "wear_set_volcano","wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical",
         "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name",
-        "nickname","xp","coins","diamonds","profile_schema_version","coins_wallet_initialized",
+        "nickname","xp","diamonds","profile_schema_version",
         "matches_played","match_wins","match_kills","match_damage","match_resources",
         "last_match_kills","last_match_damage","last_match_resources","last_match_result","match_history",
         "economy_ledger","royale_history","royale_spin_count",
@@ -119,10 +120,29 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         network.execute(()->{
             try {
                 JSONObject result=request("GET","/v1/accounts/me/wallet",null,session.getToken());
-                long coins=result.optLong("coins",0),diamonds=result.optLong("diamonds",0);
+                long coins=0,diamonds=result.optLong("diamonds",0);
                 if(callback!=null)main.post(()->{if(!closed)callback.onWallet(coins,diamonds,"Carteira online atualizada.");});
             } catch(Exception e) {
                 if(callback!=null)main.post(()->{if(!closed)callback.onWallet(0,0,"Não foi possível atualizar a carteira online.");});
+            }
+        });
+    }
+
+    public void redeemPromoCode(String rawCode,PromoListener callback) {
+        if(!isSignedIn()){if(callback!=null)main.post(()->callback.onResult(false,0,"Entre na conta para resgatar um código."));return;}
+        String code=rawCode==null?"":rawCode.trim().toUpperCase(Locale.ROOT);
+        if(!code.matches("[A-Z0-9_-]{3,32}")){if(callback!=null)main.post(()->callback.onResult(false,0,"Digite um código válido."));return;}
+        network.execute(()->{
+            try {
+                JSONObject body=new JSONObject();body.put("code",code);
+                JSONObject result=request("POST","/v1/promo-codes/redeem",body,session.getToken());
+                long balance=result.optLong("diamonds_balance",0);
+                long awarded=result.optLong("diamonds_awarded",0);
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(true,balance,"Código resgatado: +"+awarded+" diamantes.");});
+            } catch(ApiException e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,e.getMessage());});
+            } catch(Exception e) {
+                if(callback!=null)main.post(()->{if(!closed)callback.onResult(false,0,"Falha ao comunicar com o servidor.");});
             }
         });
     }
@@ -152,10 +172,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             try {
                 JSONObject result=request("POST","/v1/game/rewards/daily",new JSONObject(),session.getToken());
                 JSONObject wallet=result.optJSONObject("wallet");
-                long coins=wallet==null?0:wallet.optLong("coins",0);
+                long coins=0;
                 long diamonds=wallet==null?0:wallet.optLong("diamonds",0);
                 boolean claimed=result.optBoolean("claimed",false);
-                String message=claimed?"Presente diário recebido: +250 moedas e +100 diamantes."
+                String message=claimed?"Presente diário recebido: +100 diamantes."
                         :"O presente de hoje já foi resgatado.";
                 if(callback!=null)main.post(()->{if(!closed)callback.onResult(claimed,coins,diamonds,message);});
             } catch(Exception e) {
