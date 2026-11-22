@@ -40,8 +40,8 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         void onResult(boolean claimed,long coins,long diamonds,String message);
     }
     private static final Set<String> LONG_PROFILE_KEYS=new HashSet<>(Arrays.asList(
-        "xp","diamonds","missions_day","match_reward_session_id",
-        "last_match_reward_diamonds","last_match_reward_xp"
+        "xp","missions_day","match_reward_session_id",
+        "last_match_reward_xp"
     ));
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
@@ -51,10 +51,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
         "wear_set_volcano","wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical",
         "equipped_beard","equipped_helmet","equipped_backpack","equipped_vest","selected_pants","character_display_name",
-        "nickname","xp","diamonds","profile_schema_version",
+        "nickname","xp","profile_schema_version",
         "matches_played","match_wins","match_kills","match_damage","match_resources",
         "last_match_kills","last_match_damage","last_match_resources","last_match_result","match_history",
-        "economy_ledger","royale_history","royale_spin_count",
+        "royale_history","royale_spin_count",
         "mission_matches","mission_eliminations","mission_crystals","missions_day",
         "mission_claimed_0","mission_claimed_1","mission_claimed_2","wardrobe_starter_v2_granted",
         "shop_frame_neon","shop_emblem_bloob","shop_title_champion",
