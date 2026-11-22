@@ -51,6 +51,7 @@ public final class ContentPackInstaller {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile boolean running;
+    private volatile Uri selectedArchiveUri;
 
     public ContentPackInstaller(Context context,Listener listener) {
         appContext=context.getApplicationContext();
@@ -89,6 +90,12 @@ public final class ContentPackInstaller {
         return new int[]{12,5};
     }
 
+    public void startFromUri(Uri archiveUri) {
+        if(archiveUri==null) throw new IllegalArgumentException("Arquivo ZIP inválido.");
+        selectedArchiveUri=archiveUri;
+        start();
+    }
+
     public void start() {
         if(running) return;
         running=true;
@@ -115,8 +122,17 @@ public final class ContentPackInstaller {
                 if(storage.getAvailableBytes()<needed)
                     throw new Exception("Espaço insuficiente para configurar o conteúdo. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
-                boolean restored=restoreSavedArchive(archive,expectedSize);
-                if(!restored) downloadArchive(archive,expectedSize);
+                boolean imported=selectedArchiveUri!=null;
+                boolean restored=false;
+                if(imported) {
+                    Uri source=selectedArchiveUri;
+                    selectedArchiveUri=null;
+                    copySelectedArchive(source,archive,expectedSize);
+                    postProgress(expectedSize,expectedSize,"ARQUIVO ZIP SELECIONADO • CONFERINDO...");
+                } else {
+                    restored=restoreSavedArchive(archive,expectedSize);
+                    if(!restored) downloadArchive(archive,expectedSize);
+                }
                 postProgress(expectedSize,expectedSize,"CONFERINDO A INTEGRIDADE DO CONTEÚDO...");
                 String actualHash=sha256(archive);
                 if(!actualHash.equals(expectedHash) && restored) {
@@ -168,6 +184,46 @@ public final class ContentPackInstaller {
 
     private static final String SAVED_ARCHIVE_NAME = "battle-universe-season-02-pack.zip";
     private static final String SAVED_ARCHIVE_FOLDER = "Download/Battle Universe/";
+
+    /** Copies the user's original ZIP as-is; extraction and validation happen afterward. */
+    private void copySelectedArchive(Uri source,File output,long expectedSize) throws Exception {
+        String displayName="";
+        try(Cursor cursor=appContext.getContentResolver().query(source,
+                new String[]{android.provider.OpenableColumns.DISPLAY_NAME,
+                             android.provider.OpenableColumns.SIZE},null,null,null)) {
+            if(cursor!=null&&cursor.moveToFirst()) {
+                displayName=cursor.getString(0);
+                if(!cursor.isNull(1)) {
+                    long reported=cursor.getLong(1);
+                    if(reported>0&&reported!=expectedSize)
+                        throw new Exception("O ZIP selecionado não corresponde ao tamanho da Season 02.");
+                }
+            }
+        }
+        if(displayName!=null&&!displayName.toLowerCase(Locale.US).endsWith(".zip"))
+            throw new Exception("Selecione o arquivo .zip original da Season 02, sem extrair.");
+        try(InputStream in=new BufferedInputStream(appContext.getContentResolver().openInputStream(source));
+            FileOutputStream out=new FileOutputStream(output,false)) {
+            if(in==null) throw new Exception("Não foi possível abrir o ZIP selecionado.");
+            byte[] buffer=new byte[65536];int count;long copied=0,lastReport=0;
+            while((count=in.read(buffer))!=-1) {
+                copied+=count;
+                if(copied>expectedSize||copied>MAX_DOWNLOAD_BYTES)
+                    throw new Exception("O ZIP selecionado é maior que o pacote esperado.");
+                out.write(buffer,0,count);
+                if(copied-lastReport>=4L*1024L*1024L) {
+                    postProgress(copied,expectedSize,"LENDO O ZIP ORIGINAL...");
+                    lastReport=copied;
+                }
+            }
+            out.getFD().sync();
+            if(copied!=expectedSize)
+                throw new Exception("O ZIP está incompleto ou não é o pacote Season 02 correto.");
+        } catch(Exception error) {
+            output.delete();
+            throw error;
+        }
+    }
 
     /** Restore the public Downloads copy to the private working file without downloading it again. */
     private boolean restoreSavedArchive(File output,long expectedSize) throws Exception {
