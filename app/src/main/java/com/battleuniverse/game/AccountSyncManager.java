@@ -32,6 +32,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         void onAccountState(boolean serverConfigured,boolean signedIn,String username,String message);
         default void onDeviceIdentity(String deviceCode) {}
         default void onRecoveryCode(String recoveryCode) {}
+        default void onApiHealth(boolean online,String message) {}
     }
     public interface WalletListener { void onWallet(long coins,long diamonds,String message); }
     public interface PromoCodeListener { void onResult(boolean success,long diamonds,String message); }
@@ -80,28 +81,32 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private final AccountSessionStore session;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final ExecutorService network=Executors.newSingleThreadExecutor();
-    // Health checks run separately so a slow API can never block account actions or game startup.
+    // Health checks use a separate worker and never gate entry into the lobby.
     private final ExecutorService healthNetwork=Executors.newSingleThreadExecutor();
-    private final Runnable healthMonitor=()->{
-        if(closed)return;
-        try {
-            healthNetwork.execute(()->{
-                try {
-                    request("GET","/health",null,null);
-                    Log.i("BattleUniverseAPI","API_HEALTH=ONLINE");
-                } catch(Exception error) {
-                    String detail=error.getMessage()==null?error.getClass().getSimpleName():error.getMessage();
-                    if(detail.length()>160)detail=detail.substring(0,160);
-                    Log.w("BattleUniverseAPI","API_HEALTH=UNAVAILABLE; game session remains independent: "+detail);
-                }
-            });
-        } catch(java.util.concurrent.RejectedExecutionException ignored) { }
-        if(!closed)main.postDelayed(healthMonitor,60000L);
+    private volatile boolean closed;
+    private final Runnable healthMonitor=new Runnable() {
+        @Override public void run() {
+            if(closed)return;
+            try {
+                healthNetwork.execute(()->{
+                    try {
+                        request("GET","/health",null,null);
+                        Log.i("BattleUniverseAPI","API_HEALTH=ONLINE");
+                        if(listener!=null)main.post(()->{if(!closed)listener.onApiHealth(true,"API ONLINE");});
+                    } catch(Exception error) {
+                        String detail=error.getMessage()==null?error.getClass().getSimpleName():error.getMessage();
+                        if(detail.length()>120)detail=detail.substring(0,120);
+                        Log.w("BattleUniverseAPI","API_HEALTH=UNAVAILABLE; lobby remains available: "+detail);
+                        if(listener!=null)main.post(()->{if(!closed)listener.onApiHealth(false,"API OFFLINE • LOBBY LIBERADO");});
+                    }
+                });
+            } catch(java.util.concurrent.RejectedExecutionException ignored) { }
+            if(!closed)main.postDelayed(this,60000L);
+        }
     };
     // The debounce callback runs on the UI thread; network I/O must be queued on the executor.
     private final Runnable saveRunnable=this::enqueueSaveProfile;
     private final String baseUrl;
-    private volatile boolean closed;
     private final AtomicBoolean recoveryBusy=new AtomicBoolean(false);
     private boolean listening,applying;
     private String status="";
@@ -110,11 +115,11 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         String url=BuildConfig.ACCOUNT_API_BASE_URL==null?"":BuildConfig.ACCOUNT_API_BASE_URL.trim();
         while(url.endsWith("/"))url=url.substring(0,url.length()-1);baseUrl=url;
         publish(isConfigured(),isSignedIn(),getUsername(),isConfigured()?"Servidor de contas configurado.":"Servidor ainda não configurado neste APK.");
-        if(isConfigured())main.postDelayed(healthMonitor,5000L);
     }
     public boolean isConfigured(){return baseUrl.startsWith("https://")||(BuildConfig.DEBUG&&baseUrl.startsWith("http://"));}
     public boolean isSignedIn(){return isConfigured()&&!session.getToken().isEmpty()&&session.getExpiresAt()>System.currentTimeMillis()/1000L;}
     public String getUsername(){return session.getUsername();}
+    public void checkApiHealthNow(){if(isConfigured()&&!closed){main.removeCallbacks(healthMonitor);main.post(healthMonitor);}}
     public void restoreExistingSession(){
         if(!isConfigured()||closed)return;
         if(!isSignedIn()){if(!session.getToken().isEmpty())session.clear();publish(true,false,"","Entre uma vez para manter sua conta conectada neste aparelho.");return;}
