@@ -26,11 +26,11 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public final class ContentPackInstaller {
-    private static final long MIN_DOWNLOAD_BYTES = 1024L * 1024L * 1024L;
-    private static final long MAX_DOWNLOAD_BYTES = 5L * 1024L * 1024L * 1024L;
-    private static final long MAX_EXTRACTED_BYTES = 3L * 1024L * 1024L * 1024L;
-    private static final int PACK_VERSION = 3;
-    private static final String MANIFEST_URL = "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v3/content-pack-manifest.json";
+    private static final long MIN_DOWNLOAD_BYTES = 1024L * 1024L;
+    private static final long MAX_DOWNLOAD_BYTES = 400L * 1024L * 1024L;
+    private static final long MAX_EXTRACTED_BYTES = 600L * 1024L * 1024L;
+    private static final int PACK_VERSION = 4;
+    private static final String MANIFEST_URL = "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v4/content-pack-manifest.json";
     private static final String ARCHIVE_URL = "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v3/battle-universe-season-02-pack.zip";
 
     public interface Listener {
@@ -57,7 +57,7 @@ public final class ContentPackInstaller {
         File island=new File(root,"worlds/island.json");
         File model=new File(root,"models/operator_field.obj");
         File plane=new File(root,"models/transport_plane.obj");
-        File texture=new File(root,"textures/island_ground_albedo_4k.png");
+        File texture=new File(root,"textures/island_ground_albedo_2k.png");
         if(!marker.isFile()||!island.isFile()||!model.isFile()||!plane.isFile()||!texture.isFile()) return false;
         try(FileInputStream in=new FileInputStream(marker)) {
             byte[] data=new byte[(int)Math.min(marker.length(),8192)];
@@ -177,7 +177,7 @@ public final class ContentPackInstaller {
                 int version=manifest.getInt("version");
                 if(version!=PACK_VERSION) throw new Exception("Versão de conteúdo incompatível com este APK.");
                 if(expectedSize<MIN_DOWNLOAD_BYTES||expectedSize>MAX_DOWNLOAD_BYTES)
-                    throw new Exception("O pacote Season 02 precisa ter entre 1 e 5 GiB.");
+                    throw new Exception("O pacote Season 02 ultrapassa o limite móvel de 400 MB ou está vazio.");
                 // Never inspect or reuse ZIP files from shared Downloads. A fresh app install
                 // or cleared app data must fetch a new archive from the official release.
                 StatFs storage=new StatFs(root.getAbsolutePath());
@@ -278,7 +278,7 @@ public final class ContentPackInstaller {
                     throw new Exception("Hash do pacote inválido no manifesto.");
                 long size=manifest.optLong("size_bytes",-1L);
                 if(size<MIN_DOWNLOAD_BYTES||size>MAX_DOWNLOAD_BYTES)
-                    throw new Exception("O pacote remoto está fora do limite de 1 a 5 GiB.");
+                    throw new Exception("O pacote remoto ultrapassa o limite móvel de 400 MB ou está vazio.");
                 return manifest;
             }
         } finally {connection.disconnect();}
