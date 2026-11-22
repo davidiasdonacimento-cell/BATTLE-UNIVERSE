@@ -1,7 +1,7 @@
 name: BATTLE UNIVERSE Android
 on:
   push:
-    branches: [ main, integrated-season02-online-royale, feature/season02-download-file-analyzer ]
+    branches: [ main, integrated-season02-online-royale, feature/season02-download-file-analyzer, feature/single-apk-season02 ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -55,7 +55,7 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile
           apk = Path("app/build/outputs/apk/debug/app-debug.apk")
-          assert apk.is_file() and 0 < apk.stat().st_size <= 450*1024*1024, f"APK DEBUG ausente ou acima de 100 MiB: {apk.stat().st_size if apk.exists() else 0}"
+          assert apk.is_file() and 0 < apk.stat().st_size <= 450*1024*1024, f"APK DEBUG ausente ou acima de 450 MiB: {apk.stat().st_size if apk.exists() else 0}"
           with ZipFile(apk) as z:
               names = set(z.namelist())
               assert "classes.dex" in names, "DEX ausente no APK DEBUG"
@@ -74,7 +74,7 @@ jobs:
           assert apks, "APK RELEASE não foi gerado"
           for apk in apks:
               size = apk.stat().st_size
-              assert 0 < size <= 450*1024*1024, f"APK RELEASE acima de 100 MiB: {size}"
+              assert 0 < size <= 450*1024*1024, f"APK RELEASE acima de 450 MiB: {size}"
               print(f"APK RELEASE verificado: {size} bytes")
           PY
       - name: Verify embedded Season 02 source package (maximum 400 MiB)
@@ -110,7 +110,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: battle-universe-debug-apk
-          path: build/distribution/Battle-Universe-debug.apk
+          path: build/distribution/Battle-Universe-debug-single.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
