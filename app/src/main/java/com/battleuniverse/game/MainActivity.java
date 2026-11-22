@@ -64,7 +64,9 @@ public final class MainActivity extends Activity {
             }
             @Override public void play() {
                 if(accountSync.isSignedIn()) {
-                    if(ContentPackInstaller.isInstalled(MainActivity.this))startContentVerification();
+                    // Installed content is opened immediately; full file hashing is not repeated
+                    // every time the player presses PLAY.
+                    if(ContentPackInstaller.isInstalled(MainActivity.this))launchGame(true);
                     else startContentSetup();
                 } else if(entryGate!=null) {
                     entryGate.setAccountState(accountSync.isConfigured(),false,"","Entre na sua conta antes de jogar.");
