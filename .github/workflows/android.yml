@@ -25,17 +25,21 @@ jobs:
           BATTLE_UNIVERSE_KEY_ALIAS: ${{ secrets.BATTLE_UNIVERSE_KEY_ALIAS }}
           BATTLE_UNIVERSE_KEY_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEY_PASSWORD }}
         run: |
-          if [ -n "$BATTLE_UNIVERSE_KEYSTORE_BASE64" ]; then
-            printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/battle-universe.jks"
-            {
-              echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/battle-universe.jks"
-              echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
-              echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
-              echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
-            } >> "$GITHUB_ENV"
-            echo "Stable APK signing key loaded."
+          if [ -n "$BATTLE_UNIVERSE_KEYSTORE_BASE64" ] && [ -n "$BATTLE_UNIVERSE_KEYSTORE_PASSWORD" ] && [ -n "$BATTLE_UNIVERSE_KEY_ALIAS" ] && [ -n "$BATTLE_UNIVERSE_KEY_PASSWORD" ]; then
+            if printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/battle-universe.jks" 2>/dev/null && [ -s "$RUNNER_TEMP/battle-universe.jks" ]; then
+              {
+                echo "BU_KEYSTORE_PATH=$RUNNER_TEMP/battle-universe.jks"
+                echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
+                echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
+                echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
+              } >> "$GITHUB_ENV"
+              echo "Stable APK signing material decoded."
+            else
+              rm -f "$RUNNER_TEMP/battle-universe.jks"
+              echo "::warning::Signing secret is malformed. Continuing with the temporary debug key; this APK is not an update-compatible release."
+            fi
           else
-            echo "No stable signing key: GitHub's temporary debug key will be used."
+            echo "Stable signing secrets are incomplete. Using GitHub's temporary debug key."
           fi
       - name: Set up Python
         uses: actions/setup-python@v5
