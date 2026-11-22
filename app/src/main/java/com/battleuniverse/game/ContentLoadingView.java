@@ -43,7 +43,7 @@ public final class ContentLoadingView extends View {
     /** Shows the actual file being checked so a stalled verification has a visible checkpoint. */
     public void setFileProgress(String name,int index,int count,long done,long size) {
         if(size>0)realProgress=Math.max(realProgress,Math.min(1f,(float)done/(float)size));
-        String file=name==null?"":name.replace('\\\\','/');
+        String file=name==null?"":name.replace('\\','/');
         int slash=file.lastIndexOf('/');
         if(slash>=0)file=file.substring(slash+1);
         status="VERIFICANDO ARQUIVO "+index+"/"+count+(file.isEmpty()?"":" • "+shortText(file,30));
