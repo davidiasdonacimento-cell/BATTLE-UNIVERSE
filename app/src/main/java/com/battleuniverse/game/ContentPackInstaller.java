@@ -120,7 +120,7 @@ public final class ContentPackInstaller {
                 postProgress(0,total,"VERIFICANDO OS ARQUIVOS INSTALADOS...");
                 for(int i=0;i<files.length();i++) {
                     JSONObject item=files.getJSONObject(i);
-                    String path=item.getString("path").replace('\\\\','/');
+                    String path=item.getString("path").replace('\\','/');
                     if(path.isEmpty()||path.startsWith("/")||path.equals("..")||path.contains("../"))
                         throw new Exception("Caminho inseguro no manifesto: "+path);
                     File file=new File(root,path);
@@ -141,7 +141,7 @@ public final class ContentPackInstaller {
                 JSONArray required=manifest.optJSONArray("required");
                 if(required==null) throw new Exception("Lista de recursos obrigatórios ausente.");
                 for(int i=0;i<required.length();i++) {
-                    String path=required.getString(i).replace('\\\\','/');
+                    String path=required.getString(i).replace('\\','/');
                     File file=new File(root,path);
                     if(path.isEmpty()||path.startsWith("/")||path.contains("../")
                             ||!file.getCanonicalPath().startsWith(rootPath)||!file.isFile())
