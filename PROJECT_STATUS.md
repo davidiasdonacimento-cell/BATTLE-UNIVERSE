@@ -247,7 +247,8 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - O instalador não procura, abre, valida nem reutiliza ZIPs em `Downloads` ou em outras pastas compartilhadas.
 - Quando o conteúdo privado do aplicativo não existe — como após desinstalar/reinstalar o jogo ou usar “Limpar dados” — o APK consulta o manifesto remoto, baixa novamente o pacote oficial por Wi-Fi e valida o SHA-256 antes de extrair.
 - Uma tentativa interrompida pode continuar usando somente o arquivo parcial privado do próprio aplicativo; esse arquivo é apagado pelo Android ao desinstalar ou limpar os dados. Não é um ZIP externo reutilizado.
-- Após baixar, o instalador salva uma cópia nova em `Downloads/Battle Universe` com nome exclusivo por data/hora. ZIPs antigos do usuário não são apagados nem sobrescritos.
+- O instalador não grava uma cópia do ZIP em Downloads. Qualquer ZIP antigo que já esteja nessa pasta permanece intocado e é ignorado.
 - Se o conteúdo já estiver instalado e os dados do aplicativo forem mantidos, o jogo continua abrindo sem baixar novamente a cada inicialização.
+- A checagem de espaço considera um ZIP privado temporário mais até 3 GiB de extração; não reserva espaço para uma segunda cópia externa.
 - Implementação na branch `fix/always-fresh-season02-download`; compilação CI e teste no Redmi 12 ainda pendentes.
 
