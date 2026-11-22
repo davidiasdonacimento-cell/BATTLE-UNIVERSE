@@ -31,7 +31,7 @@ public final class ContentPackInstaller {
     private static final long MAX_EXTRACTED_BYTES = 3L * 1024L * 1024L * 1024L;
     private static final int PACK_VERSION = 4;
     private static final String MANIFEST_URL = "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v4/content-pack-manifest.json";
-    private static final String ARCHIVE_URL = "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v3/battle-universe-season-02-pack.zip";
+    private static final String ARCHIVE_URL = "https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v4/battle-universe-season-02-pack.zip";
 
     public interface Listener {
         void onProgress(long downloaded,long total,String status);
