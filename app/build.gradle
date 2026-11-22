@@ -19,7 +19,7 @@ android {
     buildFeatures { buildConfig true }
     buildTypes {
         debug { applicationIdSuffix ".debug"; versionNameSuffix "-debug"; debuggable true }
-        release { minifyEnabled false; debuggable false }
+        release { minifyEnabled true; shrinkResources true; debuggable false; proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro" }
     }
     externalNativeBuild { cmake { path file("src/main/cpp/CMakeLists.txt"); version "3.22.1" } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
