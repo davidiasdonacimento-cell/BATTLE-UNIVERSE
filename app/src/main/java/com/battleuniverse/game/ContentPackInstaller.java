@@ -97,13 +97,11 @@ public final class ContentPackInstaller {
             File staging=new File(root,"battle-content-staging");
             File installed=new File(root,"battle-content");
             File backup=new File(root,"battle-content-backup");
-            long expectedPackSize=-1L;
             try {
                 postProgress(0,1,"CONSULTANDO A VERSÃO DA TEMPORADA 02...");
                 JSONObject manifest=readRemoteManifest();
                 String expectedHash=manifest.getString("sha256").toLowerCase(Locale.US);
                 long expectedSize=manifest.getLong("size_bytes");
-                expectedPackSize=expectedSize;
                 int version=manifest.getInt("version");
                 if(version!=PACK_VERSION) throw new Exception("Versão de conteúdo incompatível com este APK.");
                 if(expectedSize<MIN_DOWNLOAD_BYTES||expectedSize>MAX_DOWNLOAD_BYTES)
@@ -117,12 +115,23 @@ public final class ContentPackInstaller {
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
                 if(!isWifiConnected())
                     throw new Exception("Conecte-se ao Wi-Fi para baixar novamente a Season 02.");
-                postProgress(0,expectedSize,"BAIXANDO UM PACOTE NOVO DA TEMPORADA 02...");
-                downloadArchive(archive,expectedSize);
+                boolean privateArchiveReady=archive.isFile()&&archive.length()==expectedSize;
+                if(privateArchiveReady&&!sha256(archive).equals(expectedHash)) {
+                    archive.delete();
+                    privateArchiveReady=false;
+                }
+                if(!privateArchiveReady) {
+                    postProgress(0,expectedSize,"BAIXANDO UM PACOTE NOVO DA TEMPORADA 02...");
+                    downloadArchive(archive,expectedSize);
+                } else {
+                    postProgress(expectedSize,expectedSize,"DOWNLOAD PRIVADO COMPLETO • VALIDANDO...");
+                }
                 postProgress(expectedSize,expectedSize,"DOWNLOAD CONCLUÍDO • CONFERINDO A INTEGRIDADE...");
                 String actualHash=sha256(archive);
-                if(!actualHash.equals(expectedHash))
-                    throw new Exception("A verificação SHA-256 do conteúdo integrado falhou.");
+                if(!actualHash.equals(expectedHash)) {
+                    archive.delete();
+                    throw new Exception("A verificação SHA-256 do conteúdo integrado falhou. Tente baixar novamente.");
+                }
                 saveArchiveToDownloads(archive);
                 postProgress(0,1,"PREPARANDO OS RECURSOS DO UNIVERSO...");
                 deleteTree(staging);
