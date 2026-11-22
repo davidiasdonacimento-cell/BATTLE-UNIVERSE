@@ -144,7 +144,7 @@ public final class EntryGateView extends FrameLayout {
             status.setTextColor(0xFFB3C8D3);
         }
         if (!diagnosticsNotice.isEmpty()) {
-            status.append("\\n" + diagnosticsNotice);
+            status.append("\n" + diagnosticsNotice);
             status.setTextColor(0xFFFFB18A);
         }
         if (!configured && !authenticated) {
