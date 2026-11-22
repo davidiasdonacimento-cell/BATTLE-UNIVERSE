@@ -67,6 +67,7 @@ public final class ContentLoadingView extends View {
         if(value.contains("VALIDADO")||value.contains("CONFERINDO")||value.contains("SHA-256"))return "VALIDANDO A INTEGRIDADE DO UNIVERSO...";
         if(value.contains("INSTALANDO")||value.contains("EXTRAINDO"))return "MONTANDO OS RECURSOS DO MUNDO...";
         if(value.contains("CONFIGURANDO")||value.contains("PREPARANDO")||value.contains("PACOTE"))return "SINCRONIZANDO A TEMPORADA 02...";
+        if(value.contains("UNIVERSO PRONTO"))return "INICIANDO O LOBBY 3D...";
         if(value.contains("UNIVERSO CONFIGURADO")||value.contains("ABRINDO"))return "ABRINDO OS PORTÕES DO UNIVERSO...";
         return "ALINHANDO OS RECURSOS DO UNIVERSO...";
     }
