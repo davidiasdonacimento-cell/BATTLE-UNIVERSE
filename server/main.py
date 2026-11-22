@@ -47,7 +47,7 @@ PROFILE_FIELDS = {
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
     "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
     "wear_set_cerrado", "wear_beard_old", "wear_pants_angelical", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
-    "nickname", "profile_schema_version",
+    "nickname", "xp", "profile_schema_version",
     "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
     "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result", "match_history",
     "royale_history", "royale_spin_count",
