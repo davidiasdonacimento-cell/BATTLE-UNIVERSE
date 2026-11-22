@@ -109,13 +109,13 @@ public final class ContentPackInstaller {
                 if(version!=PACK_VERSION) throw new Exception("Versão de conteúdo incompatível com este APK.");
                 if(expectedSize<MIN_DOWNLOAD_BYTES||expectedSize>MAX_DOWNLOAD_BYTES)
                     throw new Exception("O pacote Season 02 precisa ter entre 1 e 5 GiB.");
+                postProgress(0,expectedSize,"PROCURANDO O PACOTE SEASON 02 PELO NOME EM DOWNLOADS...");
+                boolean restored=restoreSavedArchive(archive,expectedSize,expectedHash);
                 StatFs storage=new StatFs(root.getAbsolutePath());
-                long needed=expectedSize*2L+MAX_EXTRACTED_BYTES+256L*1024L*1024L;
+                long needed=(restored?expectedSize:expectedSize*2L)+MAX_EXTRACTED_BYTES+256L*1024L*1024L;
                 if(storage.getAvailableBytes()<needed)
                     throw new Exception("Espaço insuficiente para configurar o conteúdo. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
-                postProgress(0,expectedSize,"PROCURANDO O PACOTE SEASON 02 PELO NOME EM DOWNLOADS...");
-                boolean restored=restoreSavedArchive(archive,expectedSize,expectedHash);
                 if(!restored) {
                     if(!isWifiConnected())
                         throw new Exception("Não encontrei um pacote Season 02 válido no celular. Conecte-se ao Wi-Fi para baixar.");
@@ -124,7 +124,7 @@ public final class ContentPackInstaller {
                 postProgress(expectedSize,expectedSize,restored
                     ?"PACOTE EXISTENTE ENCONTRADO E VALIDADO • SEM NOVO DOWNLOAD..."
                     :"DOWNLOAD CONCLUÍDO • CONFERINDO A INTEGRIDADE...");
-                String actualHash=sha256(archive);
+                String actualHash=restored?expectedHash:sha256(archive);
                 if(!actualHash.equals(expectedHash))
                     throw new Exception("A verificação SHA-256 do conteúdo integrado falhou.");
                 if(!restored) saveArchiveToDownloads(archive);
@@ -242,7 +242,7 @@ public final class ContentPackInstaller {
 
     private static boolean isDownloadsPath(String relativePath) {
         if(relativePath==null)return false;
-        String normalized=relativePath.replace('\\\\','/').toLowerCase(Locale.US);
+        String normalized=relativePath.replace('\\','/').toLowerCase(Locale.US);
         return normalized.equals("download/")||normalized.startsWith("download/");
     }
 
