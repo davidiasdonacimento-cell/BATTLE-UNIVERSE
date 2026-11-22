@@ -5,8 +5,6 @@ import android.app.ActivityManager;
 import android.app.ApplicationExitInfo;
 import android.os.Bundle;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.content.SharedPreferences;
 import android.view.View;
 import android.view.WindowManager;
@@ -17,15 +15,11 @@ import java.io.InputStream;
 public final class MainActivity extends Activity {
     private GameSurfaceView gameSurface;
     private HudOverlay hud;
-    private ContentPackInstaller installer;
-    private ContentLoadingView loadingView;
     private AccountSyncManager accountSync;
     private SharedPreferences profilePrefs;
     private SharedPreferences diagnosticPrefs;
     private EntryGateView entryGate;
-    private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private boolean gameLaunched;
-    private boolean contentInstalling;
     private String previousExitNotice="";
 
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -64,10 +58,9 @@ public final class MainActivity extends Activity {
             }
             @Override public void play() {
                 if(accountSync.isSignedIn()) {
-                    // Installed content is opened immediately; full file hashing is not repeated
-                    // every time the player presses PLAY.
-                    if(ContentPackInstaller.isInstalled(MainActivity.this))launchGame(true);
-                    else startContentSetup();
+                    // JOGAR abre o lobby diretamente. A engine atual gera o mundo 3D
+                    // proceduralmente e usa valores padrão quando o pacote opcional não existe.
+                    launchGame();
                 } else if(entryGate!=null) {
                     entryGate.setAccountState(accountSync.isConfigured(),false,"","Entre na sua conta antes de jogar.");
                 }
@@ -163,86 +156,10 @@ public final class MainActivity extends Activity {
                 "Entre na sua conta para continuar.");
     }
 
-    private void startContentVerification() {
-        if(contentInstalling||isFinishing())return;
-        if(accountSync==null||!accountSync.isSignedIn()) {
-            showEntryGate();
-            return;
-        }
-        contentInstalling=true;
-        recordStartupStage("INICIANDO_VERIFICACAO_DA_PASTA","");
-        loadingView=new ContentLoadingView(this);
-        setContentView(loadingView);
-        loadingView.setProgress(0,1,"VERIFICANDO OS ARQUIVOS DA PASTA DO JOGO...");
-        if(installer!=null)installer.shutdown();
-        installer=new ContentPackInstaller(this,new ContentPackInstaller.Listener() {
-            @Override public void onProgress(long done,long total,String status) {
-                recordStartupStage(status,"");
-                if(loadingView!=null)loadingView.setProgress(done,total,status);
-            }
-            @Override public void onFileProgress(String name,int index,int count,long done,long size) {
-                recordStartupStage("VERIFICANDO_ARQUIVO",name);
-                if(loadingView!=null)loadingView.setFileProgress(name,index,count,done,size);
-            }
-            @Override public void onSuccess() {
-                recordStartupStage("VERIFICACAO_CONCLUIDA","");
-                contentInstalling=false;
-                if(!isFinishing()&&accountSync!=null&&accountSync.isSignedIn())launchGame(true);
-                else if(!isFinishing())showEntryGate();
-            }
-            @Override public void onFailure(String message) {
-                recordStartupStage("FALHA_NA_VERIFICACAO",message);
-                contentInstalling=false;
-                if(loadingView!=null)loadingView.setFailure(
-                    "A verificação encontrou um problema: "+message,
-                    ()->startContentSetup(),()->showEntryGate());
-            }
-        });
-        installer.verifyInstalled();
-    }
-    private void startContentSetup() {
-        if(contentInstalling||isFinishing())return;
-        if(accountSync==null||!accountSync.isSignedIn()) {
-            showEntryGate();
-            return;
-        }
-        contentInstalling=true;
-        loadingView=new ContentLoadingView(this);
-        setContentView(loadingView);
-        loadingView.setProgress(0,0,"PREPARANDO SUA PRIMEIRA ENTRADA...");
-        if(installer!=null)installer.shutdown();
-        installer=new ContentPackInstaller(this,new ContentPackInstaller.Listener() {
-            @Override public void onProgress(long downloaded,long total,String status) {
-                if(loadingView!=null)loadingView.setProgress(downloaded,total,status);
-            }
-            @Override public void onFileProgress(String fileName,int index,int count,long done,long size) {
-                if(loadingView!=null)loadingView.setFileProgress(fileName,index,count,done,size);
-            }
-            @Override public void onSuccess() {
-                contentInstalling=false;
-                if(loadingView!=null)loadingView.setStatus("UNIVERSO PRONTO • INICIANDO...");
-                mainHandler.postDelayed(()->{
-                    if(!isFinishing()&&accountSync!=null&&accountSync.isSignedIn())launchGame(true);
-                    else if(!isFinishing())showEntryGate();
-                },900);
-            }
-            @Override public void onFailure(String message) {
-                contentInstalling=false;
-                if(loadingView!=null)loadingView.setFailure(message,
-                    ()->startContentSetup(),()->showEntryGate());
-            }
-        });
-        installer.start();
-    }
-
-    private void launchGame(boolean contentPackReady) {
+    private void launchGame() {
         if(isFinishing())return;
         if(accountSync==null||!accountSync.isSignedIn()) {
             showEntryGate();
-            return;
-        }
-        if(!contentPackReady||!ContentPackInstaller.isInstalled(this)) {
-            startContentSetup();
             return;
         }
         recordStartupCheckpoint("ANTES_DE_CRIAR_GAME_SURFACE");
@@ -307,7 +224,6 @@ public final class MainActivity extends Activity {
         if(hud!=null)hud.invalidate();
     }
     @Override protected void onDestroy() {
-        if(installer!=null)installer.shutdown();
         if(accountSync!=null)accountSync.close();
         super.onDestroy();
     }
