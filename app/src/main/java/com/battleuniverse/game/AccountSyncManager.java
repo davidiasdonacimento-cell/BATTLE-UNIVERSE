@@ -4,6 +4,7 @@ import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Build;
+import android.util.Log;
 import android.provider.Settings;
 import android.content.Context;
 import org.json.JSONObject;
@@ -79,6 +80,24 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private final AccountSessionStore session;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final ExecutorService network=Executors.newSingleThreadExecutor();
+    // Health checks run separately so a slow API can never block account actions or game startup.
+    private final ExecutorService healthNetwork=Executors.newSingleThreadExecutor();
+    private final Runnable healthMonitor=()->{
+        if(closed)return;
+        try {
+            healthNetwork.execute(()->{
+                try {
+                    request("GET","/health",null,null);
+                    Log.i("BattleUniverseAPI","API_HEALTH=ONLINE");
+                } catch(Exception error) {
+                    String detail=error.getMessage()==null?error.getClass().getSimpleName():error.getMessage();
+                    if(detail.length()>160)detail=detail.substring(0,160);
+                    Log.w("BattleUniverseAPI","API_HEALTH=UNAVAILABLE; game session remains independent: "+detail);
+                }
+            });
+        } catch(java.util.concurrent.RejectedExecutionException ignored) { }
+        if(!closed)main.postDelayed(healthMonitor,60000L);
+    };
     // The debounce callback runs on the UI thread; network I/O must be queued on the executor.
     private final Runnable saveRunnable=this::enqueueSaveProfile;
     private final String baseUrl;
@@ -91,6 +110,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         String url=BuildConfig.ACCOUNT_API_BASE_URL==null?"":BuildConfig.ACCOUNT_API_BASE_URL.trim();
         while(url.endsWith("/"))url=url.substring(0,url.length()-1);baseUrl=url;
         publish(isConfigured(),isSignedIn(),getUsername(),isConfigured()?"Servidor de contas configurado.":"Servidor ainda não configurado neste APK.");
+        if(isConfigured())main.postDelayed(healthMonitor,5000L);
     }
     public boolean isConfigured(){return baseUrl.startsWith("https://")||(BuildConfig.DEBUG&&baseUrl.startsWith("http://"));}
     public boolean isSignedIn(){return isConfigured()&&!session.getToken().isEmpty()&&session.getExpiresAt()>System.currentTimeMillis()/1000L;}
@@ -103,8 +123,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             if(p==null)throw new ApiException(502,"Resposta inválida do servidor.");
             String name=p.optString("username",getUsername());session.save(session.getToken(),name,session.getExpiresAt());
             applyProfile(p.optJSONObject("profile"));syncGameSettings(session.getToken());registerListener();registerDevice(session.getToken());saveProfile();publish(true,true,name,"Login restaurado automaticamente.");
-        }catch(ApiException e){if(e.code==401)session.clear();publish(true,false,"",e.code==401?"Sessão expirada. Entre novamente.":e.getMessage());
-        }catch(Exception e){publish(true,true,getUsername(),"Servidor indisponível. Sessão mantida neste aparelho; tente novamente com internet.");}});
+        }catch(ApiException e){
+            if(e.code==401){session.clear();publish(true,false,"","Sessão expirada. Entre novamente.");}
+            else publish(true,isSignedIn(),getUsername(),"API temporariamente indisponível (HTTP "+e.code+"). Sessão preservada; o lobby continua disponível.");
+        }catch(Exception e){publish(true,isSignedIn(),getUsername(),"Servidor indisponível. Sessão preservada neste aparelho; o lobby continua disponível.");}});
     }
     public void authenticateUsername(String raw,String password,boolean create){
         if(!isConfigured()){publish(false,false,"","Servidor ainda não configurado neste APK.");return;}
@@ -434,6 +456,6 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         final String safeUsername=username==null?"":username;
         main.post(()->{if(!closed)listener.onAccountState(configured,signed,safeUsername,safeMessage);});
     }
-    public void close(){closed=true;main.removeCallbacks(saveRunnable);if(listening){prefs.unregisterOnSharedPreferenceChangeListener(this);listening=false;}network.shutdownNow();}
+    public void close(){closed=true;main.removeCallbacks(saveRunnable);main.removeCallbacks(healthMonitor);if(listening){prefs.unregisterOnSharedPreferenceChangeListener(this);listening=false;}network.shutdownNow();healthNetwork.shutdownNow();}
     private static final class ApiException extends Exception{final int code;ApiException(int c,String m){super(m);code=c;}}
 }
