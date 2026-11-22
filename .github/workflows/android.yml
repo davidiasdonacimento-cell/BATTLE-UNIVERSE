@@ -1,7 +1,7 @@
 name: BATTLE UNIVERSE Android
 on:
   push:
-    branches: [ main, integrated-season02-online-royale ]
+    branches: [ main, integrated-season02-online-royale, feature/season02-download-file-analyzer ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
