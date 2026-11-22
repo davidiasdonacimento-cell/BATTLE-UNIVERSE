@@ -727,7 +727,7 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyalePage(Canvas c) {
-        eyebrow(c,270,175,"ROYALE • RECOMPENSAS E RELÍQUIAS");
+        eyebrow(c,270,175,"ROYALE ONLINE • SORTEIO E CARTEIRA CONFIRMADOS PELO SERVIDOR");
         title(c,"MENU ROYALE",270,224);
         subtitle(c,"Gire a roleta com diamantes, confira as chances e teste os cosméticos antes.",270,252);
         panel(c,270,266,570,48,0xAE193040,0x557AA9BC,14);
@@ -758,7 +758,7 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyaleSpinPage(Canvas c) {
-        eyebrow(c,270,175,"ROYALE • GIRO DE PRÊMIOS");
+        eyebrow(c,270,175,"ROYALE ONLINE • PROBABILIDADES E RESULTADO DO SERVIDOR");
         title(c,"ROLETA ROYALE",270,224);
         pill(c,674,184,166,32,"VOLTAR AO ROYALE",0x553B6172,0xFFD7E6ED);
         panel(c,270,264,570,48,0xA91A3040,0x557AA9BC,14);
@@ -833,7 +833,7 @@ public final class HudOverlay extends View {
             .setPositiveButton("RESGATAR",(dialog,which)->{
                 String code=input.getText().toString().trim();
                 promoRedeemAction.redeem(code,(success,balance,message)->{
-                    if(success)onlineDiamonds=balance;
+                    if(success){onlineDiamonds=balance;profile.setAuthoritativeDiamonds(balance);}
                     toast(message==null?"Resposta do servidor recebida.":message);invalidate();
                 });
             }).show();
@@ -851,6 +851,7 @@ public final class HudOverlay extends View {
         if(pendingRoyaleRequestId.isEmpty())pendingRoyaleRequestId=UUID.randomUUID().toString();
         royaleSpinAction.spin(pendingRoyaleRequestId,(success,prizeId,prizeName,duplicate,balance,message)->{
             royaleRequesting=false;
+            if(success){onlineDiamonds=balance;profile.setAuthoritativeDiamonds(balance);}
             if(!success){
                 royaleResultMessage=message==null?"GIRO NÃO CONFIRMADO":message;
                 toast(royaleResultMessage);
@@ -1746,7 +1747,7 @@ public final class HudOverlay extends View {
         }else if(page==ROYALE){
             if(hit(x,y,642,276,186,29)){
                 if(dailyRewardAction!=null)dailyRewardAction.claim((claimed,coins,diamonds,message)->{
-                    onlineCoins=coins;onlineDiamonds=diamonds;toast(message);invalidate();
+                    onlineCoins=0L;onlineDiamonds=diamonds;profile.setAuthoritativeDiamonds(diamonds);toast(message);invalidate();
                 });
                 else toast("Presente diário indisponível.");
                 return;
@@ -1829,7 +1830,8 @@ public final class HudOverlay extends View {
     }
 
     public void setOnlineWallet(long coins,long diamonds) {
-        onlineCoins=Math.max(0L,coins);onlineDiamonds=Math.max(0L,diamonds);invalidate();
+        onlineCoins=0L;onlineDiamonds=Math.max(0L,diamonds);
+        profile.setAuthoritativeDiamonds(onlineDiamonds);invalidate();
     }
     public void setRoyaleSpinAction(RoyaleSpinAction action) { royaleSpinAction=action; }
     public void setPromoRedeemAction(PromoRedeemAction action) { promoRedeemAction=action; }
