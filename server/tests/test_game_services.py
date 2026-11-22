@@ -32,6 +32,22 @@ class AccountIdentityTests(unittest.TestCase):
         self.assertNotIn("coins", main.PROFILE_FIELDS)
         self.assertNotIn("diamonds", main.PROFILE_FIELDS)
 
+    def test_wallet_schema_is_diamonds_only(self):
+        self.assertIn("diamonds", main.PlayerWallet.__table__.columns)
+        self.assertNotIn("coins", main.PlayerWallet.__table__.columns)
+        self.assertNotIn("coins", main.DailyRewardClaim.__table__.columns)
+        self.assertIn("wallet_transactions", main.Base.metadata.tables)
+
+    def test_owner_wallet_and_promo_management_routes_exist(self):
+        paths = {route.path for route in main.app.routes}
+        self.assertIn("/v1/owner/accounts/{player_id}/wallet", paths)
+        self.assertIn("/v1/owner/promos", paths)
+        self.assertIn("/v1/owner/promos/{promo_id}", paths)
+
+    def test_promo_code_configuration_is_server_managed(self):
+        self.assertIn("promo_codes", main.Base.metadata.tables)
+        self.assertIn("promo_code_redemptions", main.Base.metadata.tables)
+
     def test_royale_probabilities_are_exactly_one_hundred_percent(self):
         self.assertEqual(sum(item["weight"] for item in main.ROYALE_PRIZES), 100)
         self.assertEqual(len({item["id"] for item in main.ROYALE_PRIZES}), 5)
