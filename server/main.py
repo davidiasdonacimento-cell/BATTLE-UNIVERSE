@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 from pwdlib import PasswordHash
-from sqlalchemy import DateTime, Integer, String, Text, BigInteger, ForeignKey, UniqueConstraint, create_engine, select, func
+from sqlalchemy import DateTime, Integer, String, Text, BigInteger, ForeignKey, UniqueConstraint, create_engine, select, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -246,9 +246,25 @@ def db_session() -> Generator[Session, None, None]:
 def audit(db: Session, admin: str, action: str, target: str = "", details: dict[str, Any] | None = None) -> None:
     db.add(AdminAudit(admin_username=admin, action=action, target=target, details=details or {}))
 
+def migrate_promo_code_schema() -> None:
+    """Add fields missing from the legacy promo_codes table without deleting existing rows."""
+    statements = (
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS max_uses INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS uses INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL",
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS created_by VARCHAR(64) NOT NULL DEFAULT 'legacy'",
+        "ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    )
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    migrate_promo_code_schema()
     # One-currency migration: transfer legacy coin balances into diamonds once.
     with SessionLocal() as db:
         wallets = db.scalars(select(PlayerWallet).where(PlayerWallet.coins > 0)).all()
