@@ -73,6 +73,9 @@ class PromoCodeContractTests(unittest.TestCase):
     def test_promo_codes_are_persisted_in_server_database(self):
         self.assertEqual(main.PromoCode.__tablename__, "promo_codes")
         self.assertEqual(main.PromoRedemption.__tablename__, "promo_redemptions")
+        self.assertEqual(main.PromoCode.__table__.c.id.type.python_type, str)
+        self.assertEqual(main.PromoRedemption.__table__.c.promo_id.type.python_type, str)
+        self.assertEqual(main.PromoCode.__table__.c.id.type.length, main.PromoRedemption.__table__.c.promo_id.type.length)
 
 
 if __name__ == "__main__":
