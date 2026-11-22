@@ -46,7 +46,7 @@ jobs:
         env:
           ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
           ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :admin:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :admin:assembleDebug
       - name: Verify DEBUG game APK under 100 MiB
         run: |
           python - <<'PY'
@@ -87,14 +87,14 @@ jobs:
               assert "manifest.json" in archive.namelist(), "Manifesto interno ausente"
           print(f"Season 02 mobile validado: {size/1024/1024:.1f} MiB / SHA-256 {digest.hexdigest()}")
           PY
-      - name: Verify DEBUG game APK
+      - name: Verify DEBUG game APK under 100 MiB
         run: |
           python - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
           import subprocess
           apk = Path("app/build/outputs/apk/debug/app-debug.apk")
-          assert apk.is_file() and apk.stat().st_size > 0, "APK DEBUG não foi gerado"
+          assert apk.is_file() and 0 < apk.stat().st_size <= 100*1024*1024, f"APK DEBUG ausente ou acima de 100 MiB: {apk.stat().st_size if apk.exists() else 0}"
           with ZipFile(apk) as z:
               names = set(z.namelist())
               assert "classes.dex" in names, "DEX ausente no APK DEBUG"
@@ -107,9 +107,9 @@ jobs:
           assert debuggable == "true", f"APK não está marcado como DEBUG: {debuggable}"
           print(f"APK DEBUG verificado: {apk.stat().st_size} bytes; applicationId={app_id}")
           PY
-      - name: Build expanded Season 02 4K content package
+      - name: Build optimized Season 02 mobile content package
         run: python scripts/build_content_pack.py
-      - name: Verify external Season 02 package (1–5 GiB)
+      - name: Verify external Season 02 package (maximum 400 MiB)
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -120,8 +120,8 @@ jobs:
           assert pack.is_file() and manifest_path.is_file(), "Pacote externo ou manifesto ausente"
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           size = pack.stat().st_size
-          assert manifest["version"] == 3, "Versão da Season 02 inesperada"
-          assert 1024**3 <= size <= 5*1024**3, f"Pacote fora de 1–5 GiB: {size}"
+          assert manifest["version"] == 4, "Versão da Season 02 inesperada"
+          assert 1024**2 <= size <= 400*1024**2, f"Pacote fora do limite de 1 MiB–400 MiB: {size}"
           assert manifest["size_bytes"] == size, "Tamanho não confere com manifesto"
           digest = hashlib.sha256()
           with pack.open("rb") as stream:
@@ -130,7 +130,7 @@ jobs:
           with ZipFile(pack) as archive:
               assert archive.testzip() is None, "ZIP externo corrompido"
               assert "manifest.json" in archive.namelist(), "Manifesto interno ausente"
-          print(f"Season 02 externo validado: {size} bytes / SHA-256 {digest.hexdigest()}")
+          print(f"Season 02 mobile validado: {size/1024/1024:.1f} MiB / SHA-256 {digest.hexdigest()}")
           PY
       - name: Prepare downloadable DEBUG build
         run: |
