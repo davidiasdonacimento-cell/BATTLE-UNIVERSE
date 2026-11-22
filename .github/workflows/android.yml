@@ -47,6 +47,35 @@ jobs:
           ACCOUNT_API_BASE_URL: ${{ secrets.ACCOUNT_API_BASE_URL || 'https://battle-universe-accounts.onrender.com' }}
           ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :admin:assembleDebug
+      - name: Verify ADMIN DEBUG APK
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import subprocess
+          apk = Path("admin/build/outputs/apk/debug/admin-debug.apk")
+          assert apk.is_file() and apk.stat().st_size > 0, "APK ADMIN DEBUG não foi gerado"
+          with ZipFile(apk) as z:
+              assert "classes.dex" in z.namelist(), "DEX ausente no APK ADMIN"
+              assert z.testzip() is None, "APK ADMIN corrompido"
+          app_id = subprocess.check_output(["apkanalyzer", "manifest", "application-id", str(apk)], text=True).strip()
+          assert app_id == "com.battleuniverse.admin", f"Application ID inesperado: {app_id}"
+          print(f"APK ADMIN DEBUG verificado: {apk.stat().st_size} bytes; applicationId={app_id}")
+          PY
+      - name: Prepare downloadable ADMIN APK
+        run: |
+          mkdir -p build/distribution
+          cp admin/build/outputs/apk/debug/admin-debug.apk build/distribution/Battle-Universe-ADMIN-debug.apk
+          ls -lh build/distribution/Battle-Universe-ADMIN-debug.apk
+      - name: Upload ADMIN APK separately
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: battle-universe-admin-debug-apk
+          path: build/distribution/Battle-Universe-ADMIN-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
       - name: Verify DEBUG game APK
         run: |
           python - <<'PY'
