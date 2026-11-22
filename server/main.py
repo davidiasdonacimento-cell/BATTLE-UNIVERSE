@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
 
@@ -119,7 +120,8 @@ class DailyRewardClaim(Base):
 
 class PromoCode(Base):
     __tablename__ = "promo_codes"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Preserve the VARCHAR primary-key type already present in the production database.
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False)
     max_uses: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -134,7 +136,7 @@ class PromoRedemption(Base):
     __table_args__ = (UniqueConstraint("player_id", "promo_id", name="uq_promo_player_redemption"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
-    promo_id: Mapped[int] = mapped_column(ForeignKey("promo_codes.id", ondelete="CASCADE"), index=True, nullable=False)
+    promo_id: Mapped[str] = mapped_column(String(64), ForeignKey("promo_codes.id", ondelete="CASCADE"), index=True, nullable=False)
     diamonds_awarded: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
