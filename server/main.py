@@ -47,7 +47,7 @@ PROFILE_FIELDS = {
     "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
     "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
     "wear_set_cerrado", "wear_beard_old", "wear_pants_angelical", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
-    "nickname", "xp", "profile_schema_version", "coins_wallet_initialized",
+    "nickname", "xp", "profile_schema_version",
     "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
     "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result", "match_history",
     "economy_ledger", "royale_history", "royale_spin_count",
@@ -55,7 +55,7 @@ PROFILE_FIELDS = {
     "mission_claimed_0", "mission_claimed_1", "mission_claimed_2", "wardrobe_starter_v2_granted",
     "shop_frame_neon", "shop_emblem_bloob", "shop_title_champion",
     "match_reward_session_id", "match_reward_recorded",
-    "last_match_reward_diamonds", "last_match_reward_xp", "last_match_reward_coins",
+    "last_match_reward_diamonds", "last_match_reward_xp",
 }
 
 class Base(DeclarativeBase):
@@ -92,8 +92,19 @@ class RecoveryCredential(Base):
 class PlayerWallet(Base):
     __tablename__ = "player_wallets"
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), primary_key=True)
-    coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+class WalletTransaction(Base):
+    __tablename__ = "wallet_transactions"
+    __table_args__ = (UniqueConstraint("operation_id", name="uq_wallet_operation_id"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    operation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    delta: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    reason: Mapped[str] = mapped_column(String(240), nullable=False)
+    admin_username: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
 class RoyaleSpin(Base):
     __tablename__ = "royale_spins"
@@ -114,8 +125,17 @@ class DailyRewardClaim(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
     reward_day: Mapped[str] = mapped_column(String(10), nullable=False)
-    coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=250)
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=100)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class PromoCodeConfig(Base):
+    __tablename__ = "promo_codes"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
+    diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    max_redemptions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_by: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
 class PromoCodeRedemption(Base):
@@ -194,6 +214,20 @@ class RoyaleSpinBody(BaseModel):
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
 
+class AdminPromoCreateBody(BaseModel):
+    code: str = Field(min_length=4, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    diamonds: int = Field(gt=0, le=1000000000)
+    max_redemptions: int = Field(default=0, ge=0, le=10000000)
+
+class AdminPromoToggleBody(BaseModel):
+    active: bool
+
+class AdminWalletAdjustmentBody(BaseModel):
+    operation_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    action: str = Field(pattern=r"^(add|remove)$")
+    diamonds: int = Field(gt=0, le=1000000000)
+    reason: str = Field(min_length=3, max_length=240)
+
 class AccountEditBody(BaseModel):
     username: str | None = Field(default=None, min_length=3, max_length=18, pattern=r"^[A-Za-z0-9_]+$")
     character_name: str | None = Field(default=None, min_length=1, max_length=32)
@@ -231,6 +265,15 @@ def audit(db: Session, admin: str, action: str, target: str = "", details: dict[
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    # Remove retired gold columns from existing installations as part of the diamonds-only migration.
+    with engine.begin() as connection:
+        connection.exec_driver_sql("ALTER TABLE IF EXISTS player_wallets DROP COLUMN IF EXISTS coins")
+        connection.exec_driver_sql("ALTER TABLE IF EXISTS daily_reward_claims DROP COLUMN IF EXISTS coins")
+    with SessionLocal() as db:
+        if db.get(PromoCodeConfig, "WELCOME_100K") is None:
+            db.add(PromoCodeConfig(id="WELCOME_100K", code="100K", diamonds=100000,
+                active=True, max_redemptions=0, created_by="system"))
+            db.commit()
     # Owner pairing code stays in the hosting environment and is never embedded in the APK.
     if OWNER_PAIRING_CODE and len(OWNER_PAIRING_CODE) < 32:
         raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
@@ -292,7 +335,7 @@ def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str,
     player = Player(username=username, password_hash=password_hash.hash(body.password), profile={})
     db.add(player)
     db.flush()
-    db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+    db.add(PlayerWallet(player_id=player.id, diamonds=0))
     db.add(RecoveryCredential(player_id=player.id, code_hash=recovery_digest(recovery_code)))
     db.add(player)
     try:
@@ -317,7 +360,7 @@ def login(body: LoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
     if control and control.state != "active":
         raise HTTPException(403, "Esta conta está suspensa ou encerrada.")
     if db.get(PlayerWallet, player.id) is None:
-        db.add(PlayerWallet(player_id=player.id, coins=1000, diamonds=0))
+        db.add(PlayerWallet(player_id=player.id, diamonds=0))
         db.commit()
     return {"access_token": issue_token(str(player.id), username, "player", ACCESS_TOKEN_MINUTES),
             "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60, "player": player_payload(player)}
@@ -456,12 +499,10 @@ def recover_account(body: RecoverAccountBody, db: Session = Depends(db_session))
 
 def migrate_legacy_wallet_once(db: Session, player: Player, wallet: PlayerWallet) -> None:
     profile = dict(player.profile or {})
-    if profile.get("server_wallet_migrated_v1"):
+    if profile.get("server_wallet_migrated_v2"):
         return
-    # One-time transfer of balances previously saved in the authenticated profile.
-    legacy_coins = max(0, int(profile.get("coins", 0) or 0))
+    # Keep the legacy diamond balance; the retired gold balance is intentionally discarded.
     legacy_diamonds = max(0, int(profile.get("diamonds", 0) or 0))
-    wallet.coins += legacy_coins
     wallet.diamonds += legacy_diamonds
     # Preserve the old one-time 100K redemption so it cannot be claimed twice
     # after moving the old local balance into the server wallet.
@@ -475,7 +516,7 @@ def migrate_legacy_wallet_once(db: Session, player: Player, wallet: PlayerWallet
                                    diamonds=0, created_at=datetime.now(timezone.utc)))
     profile.pop("coins", None)
     profile.pop("diamonds", None)
-    profile["server_wallet_migrated_v1"] = True
+    profile["server_wallet_migrated_v2"] = True
     player.profile = profile
     db.add(wallet)
     db.add(player)
@@ -487,22 +528,26 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
     wallet = db.scalar(select(PlayerWallet).where(
         PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        wallet = PlayerWallet(player_id=player.id, diamonds=0)
         db.add(wallet)
         db.flush()
     migrate_legacy_wallet_once(db, player, wallet)
-    return {"coins": wallet.coins, "diamonds": wallet.diamonds,
-            "currency": "virtual", "authority": "server"}
+    return {"diamonds": wallet.diamonds, "currency": "diamonds", "authority": "server"}
 
 @app.post("/v1/game/rewards/redeem")
 def redeem_promo_code(body: PromoCodeBody, db: Session = Depends(db_session),
                       player: Player = Depends(current_player)):
     code = body.code.strip().upper()
-    promo = PROMO_CODES.get(code)
-    if promo is None:
-        raise HTTPException(400, "Código promocional inválido.")
-    code_id = promo["id"]
-    reward_diamonds = promo["diamonds"]
+    promo = db.scalar(select(PromoCodeConfig).where(PromoCodeConfig.code == code).with_for_update())
+    if promo is None or not promo.active:
+        raise HTTPException(400, "Código promocional inválido ou desativado.")
+    if promo.max_redemptions > 0:
+        used = db.scalar(select(func.count(PromoCodeRedemption.id)).where(
+            PromoCodeRedemption.code_id == promo.id)) or 0
+        if used >= promo.max_redemptions:
+            raise HTTPException(409, "Este código atingiu o limite de resgates.")
+    code_id = promo.id
+    reward_diamonds = promo.diamonds
     existing = db.scalar(select(PromoCodeRedemption).where(
         PromoCodeRedemption.player_id == player.id,
         PromoCodeRedemption.code_id == code_id))
@@ -512,7 +557,7 @@ def redeem_promo_code(body: PromoCodeBody, db: Session = Depends(db_session),
     wallet = db.scalar(select(PlayerWallet).where(
         PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        wallet = PlayerWallet(player_id=player.id, diamonds=0)
         db.add(wallet)
         db.flush()
     migrate_legacy_wallet_once(db, player, wallet)
@@ -533,8 +578,7 @@ def redeem_promo_code(body: PromoCodeBody, db: Session = Depends(db_session),
             raise HTTPException(409, f"Código já resgatado. Saldo online: {wallet.diamonds if wallet else 0} diamantes.")
         raise HTTPException(503, "Não foi possível confirmar o resgate. Tente sincronizar a carteira.")
     return {"claimed": True, "code": code_id, "diamonds_added": reward_diamonds,
-            "wallet": {"coins": wallet.coins, "diamonds": wallet.diamonds},
-            "authority": "server"}
+            "wallet": {"diamonds": wallet.diamonds}, "authority": "server"}
 
 @app.post("/v1/game/rewards/daily")
 def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depends(current_player)):
@@ -543,17 +587,15 @@ def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depen
         DailyRewardClaim.player_id == player.id, DailyRewardClaim.reward_day == day))
     if existing is not None:
         wallet = db.get(PlayerWallet, player.id)
-        return {"claimed": False, "reward_day": day, "coins": existing.coins,
-                "diamonds": existing.diamonds,
-                "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
+        return {"claimed": False, "reward_day": day, "diamonds": existing.diamonds,
+                "wallet": {"diamonds": wallet.diamonds if wallet else 0}}
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        wallet = PlayerWallet(player_id=player.id, diamonds=0)
         db.add(wallet)
         db.flush()
-    wallet.coins += 250
     wallet.diamonds += 100
-    claim = DailyRewardClaim(player_id=player.id, reward_day=day, coins=250, diamonds=100)
+    claim = DailyRewardClaim(player_id=player.id, reward_day=day, diamonds=100)
     db.add(claim)
     try:
         db.commit()
@@ -564,11 +606,10 @@ def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depen
         wallet = db.get(PlayerWallet, player.id)
         if existing is None:
             raise HTTPException(503, "Não foi possível confirmar a recompensa diária.")
-        return {"claimed": False, "reward_day": day, "coins": existing.coins,
-                "diamonds": existing.diamonds,
-                "wallet": {"coins": wallet.coins if wallet else 0, "diamonds": wallet.diamonds if wallet else 0}}
-    return {"claimed": True, "reward_day": day, "coins": 250, "diamonds": 100,
-            "wallet": {"coins": wallet.coins, "diamonds": wallet.diamonds}}
+        return {"claimed": False, "reward_day": day, "diamonds": existing.diamonds,
+                "wallet": {"diamonds": wallet.diamonds if wallet else 0}}
+    return {"claimed": True, "reward_day": day, "diamonds": 100,
+            "wallet": {"diamonds": wallet.diamonds}}
 
 @app.get("/v1/royale/config")
 def royale_config(player: Player = Depends(current_player)):
@@ -589,7 +630,7 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
                 "replayed": True}
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=1000, diamonds=0)
+        wallet = PlayerWallet(player_id=player.id, diamonds=0)
         db.add(wallet)
         db.flush()
     if wallet.diamonds < ROYALE_COST:
@@ -656,8 +697,9 @@ def admin_overview(db: Session = Depends(db_session), owner: str = Depends(curre
     total = db.scalar(select(func.count(Player.id))) or 0
     suspended = db.scalar(select(func.count(AccountControl.player_id)).where(AccountControl.state == "suspended")) or 0
     deleted = db.scalar(select(func.count(AccountControl.player_id)).where(AccountControl.state == "deleted")) or 0
+    diamonds_total = db.scalar(select(func.coalesce(func.sum(PlayerWallet.diamonds), 0))) or 0
     return {"accounts_total": total, "accounts_suspended": suspended, "accounts_deleted": deleted,
-            "admin": owner}
+            "diamonds_total": int(diamonds_total), "admin": owner}
 
 @app.get("/v1/owner/accounts")
 def admin_accounts(search: str = Query(default="", max_length=40), limit: int = Query(default=50, ge=1, le=100),
@@ -670,9 +712,106 @@ def admin_accounts(search: str = Query(default="", max_length=40), limit: int = 
     rows = []
     for p in players:
         ctl = db.get(AccountControl, p.id)
+        wallet = db.get(PlayerWallet, p.id)
         rows.append({"id": p.id, "username": p.username, "character_name": (p.profile or {}).get("character_display_name", ""),
+                     "diamonds": wallet.diamonds if wallet else 0,
                      "state": ctl.state if ctl else "active", "created_at": p.created_at.isoformat()})
     return {"accounts": rows, "limit": limit, "offset": offset}
+
+@app.get("/v1/owner/promos")
+def owner_list_promos(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    rows = db.scalars(select(PromoCodeConfig).order_by(PromoCodeConfig.created_at.desc())).all()
+    result = []
+    for promo in rows:
+        used = db.scalar(select(func.count(PromoCodeRedemption.id)).where(
+            PromoCodeRedemption.code_id == promo.id)) or 0
+        result.append({"id": promo.id, "code": promo.code, "diamonds": promo.diamonds,
+            "active": promo.active, "max_redemptions": promo.max_redemptions,
+            "redemptions": used, "created_at": promo.created_at.isoformat()})
+    return {"promos": result}
+
+@app.post("/v1/owner/promos")
+def owner_create_promo(body: AdminPromoCreateBody, db: Session = Depends(db_session),
+                       owner: str = Depends(current_owner)):
+    code = body.code.strip().upper()
+    existing = db.scalar(select(PromoCodeConfig).where(PromoCodeConfig.code == code))
+    if existing is not None:
+        raise HTTPException(409, "Esse código já existe.")
+    promo_id = "PROMO_" + secrets.token_hex(8).upper()
+    promo = PromoCodeConfig(id=promo_id, code=code, diamonds=body.diamonds,
+        active=True, max_redemptions=body.max_redemptions, created_by=owner)
+    db.add(promo)
+    audit(db, owner, "promo_created", promo_id,
+        {"code": code, "diamonds": body.diamonds, "max_redemptions": body.max_redemptions})
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(409, "Não foi possível criar o código; verifique se já existe.")
+    return {"created": True, "id": promo_id, "code": code, "diamonds": body.diamonds,
+            "max_redemptions": body.max_redemptions, "active": True}
+
+@app.patch("/v1/owner/promos/{promo_id}")
+def owner_toggle_promo(promo_id: str, body: AdminPromoToggleBody,
+                       db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    promo = db.get(PromoCodeConfig, promo_id)
+    if promo is None:
+        raise HTTPException(404, "Código promocional não encontrado.")
+    promo.active = body.active
+    audit(db, owner, "promo_status", promo_id, {"code": promo.code, "active": body.active})
+    db.add(promo); db.commit()
+    return {"updated": True, "id": promo.id, "code": promo.code, "active": promo.active}
+
+@app.get("/v1/owner/accounts/{player_id}/wallet")
+def owner_get_wallet(player_id: int, db: Session = Depends(db_session),
+                     owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    wallet = db.get(PlayerWallet, player_id)
+    rows = db.scalars(select(WalletTransaction).where(
+        WalletTransaction.player_id == player_id).order_by(WalletTransaction.id.desc()).limit(30)).all()
+    return {"player_id": player_id, "username": player.username,
+            "diamonds": wallet.diamonds if wallet else 0,
+            "transactions": [{"id": row.id, "operation_id": row.operation_id,
+                "delta": row.delta, "balance_after": row.balance_after,
+                "reason": row.reason, "admin": row.admin_username,
+                "created_at": row.created_at.isoformat()} for row in rows]}
+
+@app.post("/v1/owner/accounts/{player_id}/wallet")
+def owner_adjust_wallet(player_id: int, body: AdminWalletAdjustmentBody,
+                        db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    existing = db.scalar(select(WalletTransaction).where(WalletTransaction.operation_id == body.operation_id))
+    if existing is not None:
+        if existing.player_id != player_id:
+            raise HTTPException(409, "ID de operação já utilizado em outra conta.")
+        wallet = db.get(PlayerWallet, player_id)
+        return {"updated": False, "duplicate": True, "diamonds": wallet.diamonds if wallet else existing.balance_after}
+    wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player_id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player_id, diamonds=0)
+        db.add(wallet); db.flush()
+    delta = body.diamonds if body.action == "add" else -body.diamonds
+    if wallet.diamonds + delta < 0:
+        raise HTTPException(409, "A conta não possui diamantes suficientes para essa retirada.")
+    wallet.diamonds += delta
+    db.add(WalletTransaction(player_id=player_id, operation_id=body.operation_id,
+        delta=delta, balance_after=wallet.diamonds, reason=body.reason.strip(),
+        admin_username=owner, created_at=datetime.now(timezone.utc)))
+    audit(db, owner, "wallet_adjustment", str(player_id),
+        {"action": body.action, "delta": delta, "balance_after": wallet.diamonds,
+         "reason": body.reason.strip(), "operation_id": body.operation_id})
+    try:
+        db.commit(); db.refresh(wallet)
+    except Exception:
+        db.rollback()
+        raise HTTPException(409, "Operação já processada ou não foi possível atualizar a carteira.")
+    return {"updated": True, "duplicate": False, "player_id": player_id,
+        "diamonds_changed": delta, "diamonds": wallet.diamonds,
+        "operation_id": body.operation_id, "authority": "server"}
 
 @app.patch("/v1/owner/accounts/{player_id}")
 def admin_edit_account(player_id: int, body: AccountEditBody, db: Session = Depends(db_session),
