@@ -289,33 +289,39 @@ public final class GameSurfaceView extends GLSurfaceView {
         private long previous;
         private boolean firstFrameLogged;
         private boolean firstFrameCompletedLogged;
+        private boolean renderFailed;
         @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,
                 javax.microedition.khronos.egl.EGLConfig config) {
-            Log.i("BattleUniverse","Startup stage: GLSurfaceView surface created; initializing native engine");
+            Log.i("BattleUniverse","Startup stage: EGL surface created; rebuilding native graphics resources");
+            firstFrameLogged=false;
+            firstFrameCompletedLogged=false;
+            renderFailed=false;
             try {
                 nativeInit();
+                // nativeInit resets simulation defaults. Reapply every Java-owned selection
+                // after a context recreation, including the active map and current screen.
+                nativeSetCharacter(characterId);
+                nativeSetMode(matchMode);
+                nativeSetQuality(quality);
+                nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
+                nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
+                nativeSetPantsStyle(pantsStyle);
+                nativeSetEquipment(beardStyle,helmetStyle,backpackStyle,vestStyle);
+                nativeSetGodMode(trainingGodMode);
+                if(contentPackReady) {
+                    nativeSetContentData(contentBuildLimit,contentResourceCount);
+                    Log.i("BattleUniverse","Startup stage: verified Season 02 settings restored");
+                } else {
+                    Log.w("BattleUniverse","Startup stage: no verified Season 02 settings supplied");
+                }
+                nativeSetMap(mapId);
+                nativeSetScreen(screenMode);
+                previous=System.nanoTime();
+                Log.i("BattleUniverse","Startup stage: renderer initialization sequence completed");
             } catch(Throwable error) {
-                Log.e("BattleUniverse","Java/JNI startup failure in nativeInit",error);
-                return;
+                renderFailed=true;
+                Log.e("BattleUniverse","Java/JNI failure while restoring renderer context",error);
             }
-            nativeSetCharacter(characterId);nativeSetMap(mapId);nativeSetMode(matchMode);
-            nativeSetGodMode(trainingGodMode);
-            nativeSetQuality(quality);nativeSetLookSensitivity(lookSensitivity,aimSensitivity);
-            nativeSetWardrobe(shirtStyle,bootStyle,setStyle);
-            nativeSetPantsStyle(pantsStyle);
-            nativeSetEquipment(beardStyle,helmetStyle,backpackStyle,vestStyle);
-            // Apply verified package configuration on the GL thread after nativeInit
-            // (nativeInit resets engine state) and before the first rendered frame.
-            if(contentPackReady) {
-                nativeSetContentData(contentBuildLimit,contentResourceCount);
-                Log.i("BattleUniverse","Startup stage: Season 02 settings applied to engine"
-                        +" (buildLimit="+contentBuildLimit+", resourceCount="+contentResourceCount+")");
-            } else {
-                Log.w("BattleUniverse","Startup stage: no verified Season 02 settings supplied");
-            }
-            nativeSetScreen(screenMode);
-            previous=System.nanoTime();
-            Log.i("BattleUniverse","Startup stage: renderer initialization sequence completed");
         }
         @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,
                 int width,int height) {
@@ -330,7 +336,14 @@ public final class GameSurfaceView extends GLSurfaceView {
             float dt=Math.min(0.05f,Math.max(0.001f,(now-previous)/1_000_000_000f));
             previous=now;
             float dx=lookDX,dy=lookDY;lookDX=lookDY=0;
-            nativeRender(dt,moveX,moveY,dx,invertCameraY?-dy:dy,buttons);
+            if(renderFailed)return;
+            try {
+                nativeRender(dt,moveX,moveY,dx,invertCameraY?-dy:dy,buttons);
+            } catch(Throwable error) {
+                renderFailed=true;
+                Log.e("BattleUniverse","Java/JNI failure during native frame",error);
+                return;
+            }
             if(!firstFrameCompletedLogged) {
                 firstFrameCompletedLogged=true;
                 Log.i("BattleUniverse","Startup stage: first native frame completed");

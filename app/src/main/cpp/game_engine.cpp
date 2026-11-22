@@ -414,6 +414,27 @@ MeshBuffer buildCone() {
 MeshBuffer gSphereMesh, gCylinderMesh, gConeMesh;
 std::array<MeshBuffer,8> gMapTerrainMeshes{};
 
+// A GLSurfaceView pode recriar o EGLContext após pausa, retomada ou pressão de memória.
+// Nomes GLuint do contexto anterior deixam de ser válidos; nunca reutilizá-los.
+void resetGraphicsHandlesForNewContext() {
+    gProgram=0;
+    gCubeVbo=0;
+    gSphereVbo=0;
+    gCylinderVbo=0;
+    gConeVbo=0;
+    gSphereCount=0;
+    gCylinderCount=0;
+    gConeCount=0;
+    gMvpLocation=-1;
+    gModelLocation=-1;
+    gColorLocation=-1;
+    gSphereMesh=MeshBuffer{};
+    gCylinderMesh=MeshBuffer{};
+    gConeMesh=MeshBuffer{};
+    for(auto& terrain:gMapTerrainMeshes) terrain=MeshBuffer{};
+}
+
+
 void createCube() {
     std::vector<float> v; v.reserve(36*6);
     constexpr float n=-0.5f,p=0.5f;
@@ -2026,6 +2047,8 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     try {
     __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: nativeInit begin");
+    resetGraphicsHandlesForNewContext();
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: graphics handles reset for current EGL context");
     gPlayer={0,0.55f,0};gPlayerXSnapshot.store(0.0f);gPlayerZSnapshot.store(0.0f);gPlayerYaw=0;gCameraYaw=0;gCameraPitch=0.36f;
     gScreenMode=0;gSelectedCharacter=0;gSelectedMap=0;gSelectedMode=0;gQuality=1;
     gJumpHeight=0;gJumpVelocity=0;gMatchTime=0;gZoneRadius=112;
@@ -2044,6 +2067,22 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: simulation state ready; initializing OpenGL");
     glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); glDisable(GL_CULL_FACE);
     glClearColor(0.39f,0.69f,0.85f,1.0f);
+    const GLubyte* glVendor=glGetString(GL_VENDOR);
+    const GLubyte* glRenderer=glGetString(GL_RENDERER);
+    const GLubyte* glVersion=glGetString(GL_VERSION);
+    GLint maxTextureSize=0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE,&maxTextureSize);
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse",
+        "OpenGL context: vendor=%s renderer=%s version=%s maxTexture=%d",
+        glVendor?reinterpret_cast<const char*>(glVendor):"unknown",
+        glRenderer?reinterpret_cast<const char*>(glRenderer):"unknown",
+        glVersion?reinterpret_cast<const char*>(glVersion):"unknown",
+        maxTextureSize);
+    const GLenum setupError=glGetError();
+    if(setupError!=GL_NO_ERROR) {
+        __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse",
+            "OpenGL state setup error: 0x%x",setupError);
+    }
     if (!initializeGraphics()) {
         __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Startup failed: required OpenGL resources unavailable");
         setStatus("ERRO AO INICIAR OPENGL ES 3.0");
