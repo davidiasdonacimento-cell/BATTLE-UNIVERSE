@@ -252,3 +252,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - A checagem de espaço considera um ZIP privado temporário mais até 3 GiB de extração; não reserva espaço para uma segunda cópia externa.
 - Implementação na branch `fix/always-fresh-season02-download`; compilação CI e teste no Redmi 12 ainda pendentes.
 
+
+
+## Verificação integral dos arquivos e diagnóstico de inicialização — 2026-11-22
+- `ContentPackInstaller.verifyInstalled()` confere todos os arquivos listados em `battle-content/manifest.json`, validando caminho, existência, tamanho e SHA-256 antes de abrir a engine 3D.
+- A verificação acontece na inicialização do jogo e exibe progresso por arquivo. Se houver falha, o jogador pode iniciar reparo, que baixa novamente o pacote oficial; ZIPs antigos em Downloads continuam ignorados e intocados.
+- `GameSurfaceView` usa configuração EGL com depth16 sem stencil não utilizado; a engine registra marcos de inicialização e trata falhas de alocação de malhas opcionais/terreno e erros de buffers OpenGL.
+- `MainActivity` exibe a categoria do encerramento anterior registrada pelo Android, quando disponível, para orientar o diagnóstico do travamento.
+- Estado: implementado na branch `fix/startup-graphics-memory-guard`; CI da revisão atual ainda pendente e sem teste físico no Redmi 12. Não declarar correção definitiva até validar no aparelho.
