@@ -12,7 +12,7 @@ public final class PlayerProfileStore {
     public enum PurchaseResult { PURCHASED, ALREADY_OWNED, INSUFFICIENT_FUNDS, SAVE_FAILED }
 
     private static final Object LOCK = new Object();
-    private static final int SCHEMA_VERSION = 2;
+    private static final int SCHEMA_VERSION = 3;
     private static final int MAX_LEDGER_ENTRIES = 60;
     private final SharedPreferences prefs;
 
@@ -27,24 +27,29 @@ public final class PlayerProfileStore {
             int version = prefs.getInt("profile_schema_version", 0);
             if (version >= SCHEMA_VERSION) return;
             long xp = Math.max(0L, prefs.getLong("xp", 0L));
-            long diamonds = Math.max(0L, prefs.getLong("diamonds", 0L));
+            long diamonds = safeAdd(Math.max(0L, prefs.getLong("diamonds", 0L)),
+                    Math.max(0L, prefs.getLong("coins", 0L)));
             SharedPreferences.Editor edit = prefs.edit()
                     .putLong("xp", xp)
                     .putLong("diamonds", diamonds)
+                    .putLong("coins", 0L)
+                    .putBoolean("coins_wallet_initialized", true)
                     .putInt("profile_schema_version", SCHEMA_VERSION);
-            if (!prefs.getBoolean("coins_wallet_initialized", false)) {
-                edit.putLong("coins", Math.max(0L, prefs.getLong("coins", 1000L)))
-                    .putBoolean("coins_wallet_initialized", true);
-            } else {
-                edit.putLong("coins", Math.max(0L, prefs.getLong("coins", 0L)));
-            }
             edit.commit();
+        }
+    }
+
+    /** Replaces the cached balance with the server-authoritative wallet value. */
+    public boolean setAuthoritativeDiamonds(long balance) {
+        if (balance < 0L) return false;
+        synchronized (LOCK) {
+            return prefs.edit().putLong("diamonds", balance).putLong("coins", 0L).commit();
         }
     }
 
     public long getXp() { return Math.max(0L, prefs.getLong("xp", 0L)); }
     public long getDiamonds() { return Math.max(0L, prefs.getLong("diamonds", 0L)); }
-    public long getCoins() { return Math.max(0L, prefs.getLong("coins", 0L)); }
+    public long getCoins() { return 0L; }
     public String getNickname() { return prefs.getString("nickname", "JOGADOR"); }
     public int getLevel() { return (int) Math.min(30L, 1L + getXp() / 500L); }
     public long getLevelProgress() { return getXp() % 500L; }
@@ -114,16 +119,15 @@ public final class PlayerProfileStore {
             String txKey = "economy_tx_" + safeKey(transactionId);
             if (prefs.getBoolean(txKey, false) || containsLedgerTransaction(transactionId)) return false;
             if (legacyMarker != null && prefs.getBoolean(legacyMarker, false)) return false;
-            long nextCoins = safeAdd(getCoins(), coins);
-            long nextDiamonds = safeAdd(getDiamonds(), diamonds);
+            long nextDiamonds = safeAdd(getDiamonds(), safeAdd(coins, diamonds));
             long nextXp = safeAdd(getXp(), xp);
             SharedPreferences.Editor edit = prefs.edit()
-                    .putLong("coins", nextCoins)
+                    .putLong("coins", 0L)
                     .putLong("diamonds", nextDiamonds)
                     .putLong("xp", nextXp)
                     .putBoolean(txKey, true);
             if (legacyMarker != null) edit.putBoolean(legacyMarker, true);
-            appendLedger(edit, transactionId, "REWARD", coins, diamonds, xp);
+            appendLedger(edit, transactionId, "REWARD", 0L, safeAdd(coins, diamonds), xp);
             return edit.commit();
         }
     }
@@ -143,19 +147,9 @@ public final class PlayerProfileStore {
         }
     }
 
-    /** Atomically purchases a profile cosmetic with the soft-currency wallet. */
+    /** Backward-compatible method: all purchases now debit the single diamond wallet. */
     public PurchaseResult purchaseWithCoins(String itemKey, long price) {
-        if (itemKey == null || itemKey.trim().isEmpty() || price < 0L) return PurchaseResult.SAVE_FAILED;
-        synchronized (LOCK) {
-            if (prefs.getBoolean(itemKey, false)) return PurchaseResult.ALREADY_OWNED;
-            long balance = getCoins();
-            if (balance < price) return PurchaseResult.INSUFFICIENT_FUNDS;
-            SharedPreferences.Editor edit = prefs.edit()
-                    .putLong("coins", balance - price)
-                    .putBoolean(itemKey, true);
-            appendLedger(edit, "purchase_" + itemKey, "PURCHASE_COINS", -price, 0L, 0L);
-            return edit.commit() ? PurchaseResult.PURCHASED : PurchaseResult.SAVE_FAILED;
-        }
+        return purchase(itemKey, price);
     }
 
     /** Resolves the Royale debit, prize, duplicate compensation and history in one commit. */
@@ -208,8 +202,8 @@ public final class PlayerProfileStore {
                 result[i] = rows[rows.length - 1 - i];
                 continue;
             }
-            result[i] = fields[1] + "  •  " + signed(fields[2]) + " moedas  •  "
-                    + signed(fields[3]) + " diamantes  •  " + signed(fields[4]) + " XP";
+            long currency = Long.parseLong(fields[2]) + Long.parseLong(fields[3]);
+            result[i] = fields[1] + "  •  " + signed(String.valueOf(currency)) + " diamantes  •  " + signed(fields[4]) + " XP";
         }
         return result;
     }

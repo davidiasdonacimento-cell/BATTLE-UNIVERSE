@@ -33,7 +33,7 @@ public final class AdminActivity extends Activity {
     private String token = "";
     private LinearLayout root, content;
     private TextView status;
-    private EditText search, gameName, characterJson;
+    private EditText search, gameName, characterJson, promoCode, promoDiamonds, promoMaxUses, promoExpiryDays;
     private String api;
 
     @Override public void onCreate(Bundle state) {
@@ -122,14 +122,57 @@ public final class AdminActivity extends Activity {
         characterJson = field("Nomes por ID em JSON (ex.: {\"caio\":\"Caio\"})", false);
         button("CARREGAR CONFIGURAÇÕES", this::loadSettings);
         button("SALVAR NOME DO JOGO E PERSONAGENS", this::saveSettings);
+        label("CÓDIGOS PROMOCIONAIS • DIAMANTES");
+        promoCode = field("Código (ex.: BATTLE2026)", false);
+        promoDiamonds = field("Quantidade de diamantes", false); promoDiamonds.setInputType(2);
+        promoMaxUses = field("Limite total de resgates", false); promoMaxUses.setInputType(2);
+        promoExpiryDays = field("Validade em dias (vazio = sem expiração)", false); promoExpiryDays.setInputType(2);
+        button("CRIAR CÓDIGO E PUBLICAR NO JOGO", this::createPromoCode);
+        button("ATUALIZAR CÓDIGOS PROMOCIONAIS", this::loadPromoCodes);
         button("VER AUDITORIA", this::loadAudit);
         button("BLOQUEAR ESTE APARELHO", () -> { clearToken(); token = ""; showSecurityGate(); });
-        loadOverview(); loadSettings();
+        loadOverview(); loadSettings(); loadPromoCodes();
     }
 
     private TextView label(String text) {
         TextView t = new TextView(this); t.setText(text); t.setTextColor(Color.rgb(80,190,255));
         t.setTextSize(17); t.setPadding(0,18,0,8); root.addView(t); return t;
+    }
+
+    private void createPromoCode() {
+        final String code=promoCode.getText().toString().trim().toUpperCase(java.util.Locale.ROOT);
+        final String diamondsText=promoDiamonds.getText().toString().trim();
+        final String usesText=promoMaxUses.getText().toString().trim();
+        final String expiryText=promoExpiryDays.getText().toString().trim();
+        if(code.length()<3||code.length()>32||!code.matches("[A-Z0-9_-]+")){message("Use 3 a 32 letras, números, _ ou -.");return;}
+        if(diamondsText.isEmpty()||usesText.isEmpty()){message("Informe diamantes e limite de resgates.");return;}
+        work("Publicando código no servidor do jogo...",()->{
+            JSONObject body=new JSONObject();body.put("code",code);
+            body.put("diamonds",Integer.parseInt(diamondsText));
+            body.put("max_uses",Integer.parseInt(usesText));
+            if(!expiryText.isEmpty())body.put("expires_in_days",Integer.parseInt(expiryText));
+            JSONObject result=request("POST","/v1/owner/promo-codes",body);
+            message("CÓDIGO ATIVO: "+result.optString("code")+" • "+result.optInt("diamonds")+" diamantes. Já disponível no jogo.");
+            loadPromoCodes();
+        });
+    }
+
+    private void loadPromoCodes() {
+        work("Consultando códigos promocionais...",()->{
+            JSONObject result=request("GET","/v1/owner/promo-codes",null);
+            JSONArray rows=result.optJSONArray("promo_codes");
+            StringBuilder out=new StringBuilder("CÓDIGOS PROMOCIONAIS\n\n");
+            if(rows!=null)for(int i=0;i<rows.length();i++){
+                JSONObject row=rows.optJSONObject(i);if(row==null)continue;
+                out.append(row.optString("code")).append(" • +").append(row.optLong("diamonds"))
+                   .append(" diamantes • ").append(row.optInt("uses")).append("/")
+                   .append(row.optInt("max_uses")).append(row.optBoolean("active")?" • ATIVO":" • INATIVO").append("\n");
+            }
+            String text=out.toString();
+            runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Códigos do jogo").setMessage(text)
+                    .setPositiveButton("Fechar",null).show());
+            message("Lista de códigos atualizada.");
+        });
     }
 
     private void loadOverview() {

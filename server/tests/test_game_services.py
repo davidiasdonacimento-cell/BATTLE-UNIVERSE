@@ -44,12 +44,35 @@ class AccountIdentityTests(unittest.TestCase):
 
     def test_cloud_profile_includes_progression_and_recovery_data(self):
         expected = {
-            "xp", "coins", "diamonds", "matches_played", "match_wins",
-            "match_kills", "match_history", "economy_ledger", "royale_history",
-            "mission_matches", "mission_claimed_0", "shop_frame_neon",
+            "xp", "matches_played", "match_wins", "match_kills",
+            "match_history", "royale_history", "mission_matches",
+            "mission_claimed_0", "shop_frame_neon",
         }
         self.assertTrue(expected.issubset(main.PROFILE_FIELDS))
+        self.assertTrue({"coins", "diamonds", "economy_ledger"}.isdisjoint(main.PROFILE_FIELDS))
 
+
+
+
+class PromoCodeContractTests(unittest.TestCase):
+    def test_promo_code_creation_requires_positive_diamonds_and_use_limit(self):
+        body = main.PromoCreateBody(code="BATTLE2026", diamonds=500, max_uses=100)
+        self.assertEqual(body.code, "BATTLE2026")
+        self.assertEqual(body.diamonds, 500)
+        self.assertEqual(body.max_uses, 100)
+
+    def test_promo_code_rejects_invalid_characters(self):
+        with self.assertRaises(Exception):
+            main.PromoCreateBody(code="BAD CODE!", diamonds=100, max_uses=1)
+
+    def test_promo_redemption_is_unique_per_player_and_code(self):
+        constraints = [c for c in main.PromoRedemption.__table__.constraints
+                       if getattr(c, "name", None) == "uq_promo_player_redemption"]
+        self.assertEqual(len(constraints), 1)
+
+    def test_promo_codes_are_persisted_in_server_database(self):
+        self.assertEqual(main.PromoCode.__tablename__, "promo_codes")
+        self.assertEqual(main.PromoRedemption.__tablename__, "promo_redemptions")
 
 
 if __name__ == "__main__":
