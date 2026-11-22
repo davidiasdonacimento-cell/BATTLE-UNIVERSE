@@ -265,10 +265,8 @@ def audit(db: Session, admin: str, action: str, target: str = "", details: dict[
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
-    # Remove retired gold columns from existing installations as part of the diamonds-only migration.
-    with engine.begin() as connection:
-        connection.exec_driver_sql("ALTER TABLE IF EXISTS player_wallets DROP COLUMN IF EXISTS coins")
-        connection.exec_driver_sql("ALTER TABLE IF EXISTS daily_reward_claims DROP COLUMN IF EXISTS coins")
+    # The application uses diamonds only. Keep any legacy columns untouched so deployment
+    # never destroys historical data; legacy fields are ignored by the current ORM/API.
     with SessionLocal() as db:
         if db.get(PromoCodeConfig, "WELCOME_100K") is None:
             db.add(PromoCodeConfig(id="WELCOME_100K", code="100K", diamonds=100000,
