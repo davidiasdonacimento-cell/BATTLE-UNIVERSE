@@ -27,7 +27,7 @@ import java.util.UUID;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18, DEV_MENU=19;
+        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, ACCESSORIES=18, DEV_MENU=19, PROMO_CODES=20;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "COFRE","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
@@ -107,6 +107,8 @@ public final class HudOverlay extends View {
     private DailyRewardAction dailyRewardAction;
     private PromoCodeAction promoCodeAction;
     private boolean royaleRequesting,royaleServerDuplicate;
+    private boolean promoRedeeming;
+    private String promoStatus="Resgate códigos da equipe para receber diamantes na sua conta.";
     private String royaleServerPrizeName="";
     private String pendingRoyaleRequestId="";
     private long toastUntil, lastTap;
@@ -293,6 +295,7 @@ public final class HudOverlay extends View {
         else if(page==ACHIEVEMENTS)drawAchievementsPage(c);
         else if(page==PREMATCH)drawPreMatch(c);
         else if(page==DEV_MENU)drawDevMenu(c);
+        else if(page==PROMO_CODES)drawPromoCodesPage(c);
     }
     private void drawHome(Canvas c){
         // Lobby de partida em tela cheia: operador em destaque, ações rápidas e início claro.
@@ -632,9 +635,7 @@ public final class HudOverlay extends View {
         text(c,"● "+formatDiamonds(profile.getCoins())+" MOEDAS",382,420,11,0xFF82E5DC,Typeface.DEFAULT_BOLD);
         text(c,"PARTIDAS "+profile.getMatchesPlayed()+"  •  VITÓRIAS "+profile.getWins()
             +"  •  ELIMS "+profile.getEliminations(),292,440,9,0xFF82E5DC,Typeface.DEFAULT_BOLD);
-        text(c,prefs.getBoolean("code_100k_redeemed",false)
-            ?"CÓDIGO 100K JÁ RESGATADO NESTE PERFIL"
-            :"CÓDIGO SECRETO 100K DISPONÍVEL",292,458,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
+        text(c,"RESGATE DE CÓDIGOS PROMOCIONAIS NA LOJA",292,458,9,0xFF83DCD5,Typeface.DEFAULT_BOLD);
         String deviceLine=deviceIdentity.isEmpty()?"ID DO DISPOSITIVO • REGISTRANDO...":"ID DO DISPOSITIVO • "+deviceIdentity;
         if(deviceLine.length()>68)deviceLine=deviceLine.substring(0,65)+"...";
         text(c,deviceLine,292,476,8,0xFF9BC4D0,Typeface.DEFAULT_BOLD);
@@ -659,8 +660,10 @@ public final class HudOverlay extends View {
         eyebrow(c,270,175,"LOJA • PREÇOS FIXOS EM DIAMANTES VIRTUAIS");
         title(c,"ROUPAS E COSMÉTICOS",270,224);
         subtitle(c,"Camisas, botas e conjuntos completos. Cada item mostra seu preço antes da compra.",270,252);
-        panel(c,270,266,570,48,0xA91A3040,0x335D8495,14);
-        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds())+"   ● "+formatDiamonds(profile.getCoins()),292,297,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        panel(c,270,266,390,48,0xA91A3040,0x335D8495,14);
+        text(c,"SALDO  ◆ "+formatDiamonds(profile.getDiamonds())+"   ● "+formatDiamonds(profile.getCoins()),292,297,12,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        panel(c,674,266,166,48,0xFF176A75,0xFF58DDE6,14);
+        text(c,"CÓDIGO PROMO",692,296,11,Color.WHITE,Typeface.DEFAULT_BOLD);
         for(int i=0;i<SHOP_NAMES.length;i++) {
             int col=i%3,row=i/3;float x=270+col*192f,y=320+row*47f;
             boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
@@ -673,6 +676,29 @@ public final class HudOverlay extends View {
         }
         text(c,"Itens cosméticos diretos • sem roleta paga ou prêmio aleatório.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
+    private void drawPromoCodesPage(Canvas c) {
+        eyebrow(c,270,175,"RECOMPENSAS DA CONTA • VALIDAÇÃO ONLINE");
+        title(c,"CÓDIGO PROMOCIONAL",270,224);
+        subtitle(c,"Resgate códigos distribuídos pela equipe e receba diamantes na sua conta.",270,252);
+        panel(c,270,286,570,70,0xAE193040,0x557AA9BC,16);
+        eyebrow(c,292,312,"CARTEIRA OFICIAL");
+        text(c,onlineDiamonds>=0?"◆ "+formatDiamonds(onlineDiamonds)+" DIAMANTES":"SALDO ONLINE AGUARDANDO ATUALIZAÇÃO",
+            292,340,17,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        panel(c,270,382,570,66,promoRedeeming?0xFF34515D:0xFF176A75,
+            promoRedeeming?0xFF7896A1:0xFF58DDE6,15);
+        text(c,promoRedeeming?"VALIDANDO CÓDIGO...":"DIGITAR E RESGATAR CÓDIGO",
+            292,421,16,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        panel(c,270,470,570,104,0xA91A3040,0x335D8495,15);
+        eyebrow(c,292,499,"STATUS DO RESGATE");
+        String status=promoStatus==null?"":promoStatus;
+        if(status.length()>86)status=status.substring(0,83)+"...";
+        text(c,status,292,531,11,0xFFD2E6EC,Typeface.DEFAULT_BOLD);
+        text(c,"Cada código pode ser usado uma vez por conta. Limites e validade são verificados pelo servidor.",
+            270,610,9,0xFF9EB6C4,Typeface.DEFAULT);
+        text(c,"Os diamantes são creditados diretamente na carteira online; o saldo local não é alterado.",
+            270,632,9,0xFF9EB6C4,Typeface.DEFAULT);
+    }
+
     private void drawWardrobePage(Canvas c) {
         eyebrow(c,270,175,"PERSONALIZAÇÃO EQUIPÁVEL");title(c,"CAMISAS, BOTAS E CONJUNTOS",270,224);
         subtitle(c,"Toque em um item desbloqueado para vestir o operador 3D.",270,252);
@@ -1113,25 +1139,31 @@ public final class HudOverlay extends View {
 
     private void showRedeemDialog() {
         EditText input=new EditText(getContext());
-        input.setSingleLine(true); input.setHint("Digite 100K");
+        input.setSingleLine(true); input.setHint("Digite seu código promocional");
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         new AlertDialog.Builder(getContext())
-            .setTitle("Resgatar código secreto")
-            .setMessage("O código 100K concede 100.000 diamantes virtuais uma única vez por conta no servidor online.")
+            .setTitle("Resgatar código promocional")
+            .setMessage("Digite um código válido criado pela equipe. A recompensa em diamantes será creditada uma única vez na sua conta online.")
             .setView(input).setNegativeButton("CANCELAR",null)
             .setPositiveButton("RESGATAR",(dialog,which)->redeemCode(input.getText().toString()))
             .show();
     }
     private void redeemCode(String rawCode) {
         String code=rawCode==null?"":rawCode.trim().toUpperCase(Locale.ROOT);
-        if(!"100K".equals(code)) { toast("Código inválido."); return; }
+        if(!code.matches("[A-Z0-9_-]{4,32}")) { toast("Use de 4 a 32 caracteres: letras, números, _ ou -."); return; }
+        if(promoRedeeming) { toast("Já existe um resgate em andamento."); return; }
         if(promoCodeAction==null) {
             toast("Resgate online indisponível. Entre na conta e tente novamente.");
             return;
         }
+        promoRedeeming=true;
+        promoStatus="Enviando código ao servidor para validação...";
+        invalidate();
         promoCodeAction.redeem(code,(success,balance,message)->{
+            promoRedeeming=false;
             if(success)onlineDiamonds=Math.max(0L,balance);
-            toast(message);
+            promoStatus=message==null?(success?"Código resgatado.":"Não foi possível resgatar o código."):message;
+            toast(promoStatus);
             invalidate();
         });
     }
@@ -1706,10 +1738,13 @@ public final class HudOverlay extends View {
                 }
             }
         }else if(page==SHOP){
+            if(hit(x,y,674,266,166,48)){page=PROMO_CODES;return;}
             for(int i=0;i<SHOP_NAMES.length;i++){
                 float sx=270+(i%3)*192f,sy=320+(i/3)*47f;
                 if(hit(x,y,sx,sy,174,42)){purchaseShopItem(i);return;}
             }
+        }else if(page==PROMO_CODES){
+            if(hit(x,y,270,382,570,66)){if(promoRedeeming){toast("Aguarde a validação atual.");return;}showRedeemDialog();return;}
         }else if(page==WARDROBE){
             if(hit(x,y,690,260,150,25)){page=ACCESSORIES;return;}
             if(hit(x,y,270,260,150,25)) {
