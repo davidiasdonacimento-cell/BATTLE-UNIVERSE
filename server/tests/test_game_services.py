@@ -44,11 +44,12 @@ class AccountIdentityTests(unittest.TestCase):
 
     def test_cloud_profile_includes_progression_and_recovery_data(self):
         expected = {
-            "xp", "coins", "diamonds", "matches_played", "match_wins",
-            "match_kills", "match_history", "economy_ledger", "royale_history",
-            "mission_matches", "mission_claimed_0", "shop_frame_neon",
+            "xp", "matches_played", "match_wins", "match_kills",
+            "match_history", "royale_history", "mission_matches",
+            "mission_claimed_0", "shop_frame_neon",
         }
         self.assertTrue(expected.issubset(main.PROFILE_FIELDS))
+        self.assertTrue({"coins", "diamonds", "economy_ledger"}.isdisjoint(main.PROFILE_FIELDS))
 
 
 
