@@ -9,6 +9,10 @@ import android.content.SharedPreferences;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.TextView;
+import android.view.Gravity;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
@@ -19,6 +23,7 @@ public final class MainActivity extends Activity {
     private SharedPreferences profilePrefs;
     private SharedPreferences diagnosticPrefs;
     private EntryGateView entryGate;
+    private TextView apiStatusView;
     private boolean gameLaunched;
     private String previousExitNotice="";
 
@@ -44,6 +49,12 @@ public final class MainActivity extends Activity {
             }
             @Override public void onRecoveryCode(String code) {
                 if(hud!=null)hud.showRecoveryCode(code); else if(entryGate!=null)entryGate.showRecoveryCode(code);
+            }
+            @Override public void onApiHealth(boolean online,String message) {
+                if(apiStatusView!=null) {
+                    apiStatusView.setText(message);
+                    apiStatusView.setTextColor(online?Color.rgb(135,255,190):Color.rgb(255,205,130));
+                }
             }
         });
         entryGate.setActions(new EntryGateView.Actions() {
@@ -193,9 +204,28 @@ public final class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
         root.addView(hud,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
+        // Small live API indicator; the lobby is already open and never waits for this check.
+        apiStatusView=new TextView(this);
+        apiStatusView.setText(accountSync.isConfigured()?"API EXECUTANDO...":"API NÃO CONFIGURADA");
+        apiStatusView.setTextColor(Color.WHITE);
+        apiStatusView.setTextSize(12f);
+        apiStatusView.setGravity(Gravity.CENTER);
+        int pad=(int)(getResources().getDisplayMetrics().density*12f);
+        apiStatusView.setPadding(pad,pad/2,pad,pad/2);
+        GradientDrawable apiBackground=new GradientDrawable();
+        apiBackground.setColor(0xDD101827);
+        apiBackground.setCornerRadius(getResources().getDisplayMetrics().density*18f);
+        apiBackground.setStroke((int)(getResources().getDisplayMetrics().density),0xFF28B8FF);
+        apiStatusView.setBackground(apiBackground);
+        apiStatusView.setElevation(getResources().getDisplayMetrics().density*12f);
+        FrameLayout.LayoutParams apiParams=new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,FrameLayout.LayoutParams.WRAP_CONTENT,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
+        apiParams.topMargin=(int)(getResources().getDisplayMetrics().density*18f);
+        root.addView(apiStatusView,apiParams);
         recordStartupCheckpoint("ANTES_DE_SET_CONTENT_VIEW");
         setContentView(root);
         recordStartupCheckpoint("LAYOUT_DO_LOBBY_INSTALADO");
+        accountSync.checkApiHealthNow();
         gameLaunched=true;
         recordStartupCheckpoint("ANTES_DE_INICIAR_RENDERER");
         gameSurface.onResume();
