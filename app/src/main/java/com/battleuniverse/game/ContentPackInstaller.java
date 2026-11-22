@@ -83,6 +83,79 @@ public final class ContentPackInstaller {
         return new int[]{12,5};
     }
 
+    /** Verifies every installed file against the package manifest before opening the 3D engine. */
+    public void verifyInstalled() {
+        if(running) return;
+        running=true;
+        worker.execute(()->{
+            try {
+                File root=new File(appContext.getFilesDir(),"battle-content");
+                String rootPath=root.getCanonicalPath()+File.separator;
+                File marker=new File(root,"installed.json");
+                File manifestFile=new File(root,"manifest.json");
+                if(!marker.isFile()||!manifestFile.isFile())
+                    throw new Exception("Pasta de conteúdo ausente. É necessário instalar a Season 02 novamente.");
+                JSONObject installed=readJson(marker);
+                if(installed.optInt("version",-1)!=PACK_VERSION)
+                    throw new Exception("A versão instalada não corresponde ao APK. Reinstale a Season 02.");
+                String archiveHash=installed.optString("archive_sha256","");
+                if(!archiveHash.matches("[a-fA-F0-9]{64}"))
+                    throw new Exception("Registro de integridade da instalação inválido.");
+                JSONObject manifest=readJson(manifestFile);
+                if(manifest.optInt("version",-1)!=PACK_VERSION)
+                    throw new Exception("Manifesto da pasta do jogo está em versão incompatível.");
+                JSONArray files=manifest.optJSONArray("files");
+                if(files==null||files.length()<10||files.length()>1500)
+                    throw new Exception("Lista de arquivos da Season 02 inválida.");
+                long total=0L;
+                for(int i=0;i<files.length();i++) {
+                    JSONObject item=files.getJSONObject(i);
+                    long size=item.getLong("size");
+                    if(size<0L) throw new Exception("Tamanho inválido no manifesto.");
+                    total+=size;
+                    if(total>MAX_EXTRACTED_BYTES)
+                        throw new Exception("Tamanho total do conteúdo excede o limite.");
+                }
+                long verified=0L;
+                postProgress(0,total,"VERIFICANDO OS ARQUIVOS INSTALADOS...");
+                for(int i=0;i<files.length();i++) {
+                    JSONObject item=files.getJSONObject(i);
+                    String path=item.getString("path").replace('\\\\','/');
+                    if(path.isEmpty()||path.startsWith("/")||path.equals("..")||path.contains("../"))
+                        throw new Exception("Caminho inseguro no manifesto: "+path);
+                    File file=new File(root,path);
+                    if(!file.getCanonicalPath().startsWith(rootPath))
+                        throw new Exception("Arquivo fora da pasta do jogo: "+path);
+                    long expectedSize=item.getLong("size");
+                    if(!file.isFile()||file.length()!=expectedSize)
+                        throw new Exception("Arquivo ausente ou com tamanho incorreto: "+path);
+                    String expectedHash=item.getString("sha256").toLowerCase(Locale.US);
+                    if(!expectedHash.matches("[a-f0-9]{64}"))
+                        throw new Exception("Hash inválido no manifesto: "+path);
+                    if(!sha256(file).equals(expectedHash))
+                        throw new Exception("Arquivo corrompido: "+path);
+                    verified+=file.length();
+                    postProgress(verified,total,"VERIFICANDO ARQUIVO "+(i+1)+"/"+files.length()+"...");
+                    postFileProgress(path,i+1,files.length(),file.length(),file.length());
+                }
+                JSONArray required=manifest.optJSONArray("required");
+                if(required==null) throw new Exception("Lista de recursos obrigatórios ausente.");
+                for(int i=0;i<required.length();i++) {
+                    String path=required.getString(i).replace('\\\\','/');
+                    File file=new File(root,path);
+                    if(path.isEmpty()||path.startsWith("/")||path.contains("../")
+                            ||!file.getCanonicalPath().startsWith(rootPath)||!file.isFile())
+                        throw new Exception("Recurso obrigatório ausente: "+path);
+                }
+                postProgress(total,total,"ARQUIVOS VERIFICADOS • ABRINDO O JOGO...");
+                main.post(()->{running=false;listener.onSuccess();});
+            } catch(Exception error) {
+                String message=error.getMessage()==null?"Falha ao verificar a pasta do jogo.":error.getMessage();
+                main.post(()->{running=false;listener.onFailure(message);});
+            }
+        });
+    }
+
     public void start() {
         if(running) return;
         running=true;
