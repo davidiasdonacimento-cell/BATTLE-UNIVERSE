@@ -288,6 +288,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private final class GameRenderer implements GLSurfaceView.Renderer {
         private long previous;
         private boolean firstFrameLogged;
+        private boolean firstFrameCompletedLogged;
         @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,
                 javax.microedition.khronos.egl.EGLConfig config) {
             Log.i("BattleUniverse","Startup stage: GLSurfaceView surface created; initializing native engine");
@@ -330,7 +331,10 @@ public final class GameSurfaceView extends GLSurfaceView {
             previous=now;
             float dx=lookDX,dy=lookDY;lookDX=lookDY=0;
             nativeRender(dt,moveX,moveY,dx,invertCameraY?-dy:dy,buttons);
-            if(firstFrameLogged && previous==0L) Log.i("BattleUniverse","Startup stage: first native frame completed");
+            if(!firstFrameCompletedLogged) {
+                firstFrameCompletedLogged=true;
+                Log.i("BattleUniverse","Startup stage: first native frame completed");
+            }
         }
     }
     static { System.loadLibrary("battleuniverse"); }
