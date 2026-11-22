@@ -23,7 +23,6 @@ public final class MainActivity extends Activity {
     private boolean gameLaunched;
     private boolean contentInstalling;
     private static final int REQUEST_SEASON02_ZIP=2301;
-    private Uri pendingSeasonZip;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -91,11 +90,28 @@ public final class MainActivity extends Activity {
             showEntryGate();
             return;
         }
-        contentInstalling=true;
         loadingView=new ContentLoadingView(this);
         loadingView.setSelectZipAction(()->openSeasonZipPicker());
+        loadingView.setDownloadAction(()->startContentInstall(null));
         setContentView(loadingView);
-        loadingView.setProgress(0,0,"PREPARANDO SUA PRIMEIRA ENTRADA...");
+        loadingView.setStatus("ESCOLHA COMO PREPARAR A TEMPORADA 02...");
+    }
+
+    private void startContentInstall(Uri selectedArchive) {
+        if(contentInstalling||isFinishing())return;
+        if(accountSync==null||!accountSync.isSignedIn()) {
+            showEntryGate();
+            return;
+        }
+        contentInstalling=true;
+        if(loadingView==null) {
+            loadingView=new ContentLoadingView(this);
+            loadingView.setSelectZipAction(()->openSeasonZipPicker());
+            loadingView.setDownloadAction(()->startContentInstall(null));
+            setContentView(loadingView);
+        }
+        loadingView.setProgress(0,0,selectedArchive==null
+                ?"PREPARANDO SUA PRIMEIRA ENTRADA...":"VALIDANDO O ZIP ORIGINAL SELECIONADO...");
         if(installer!=null)installer.shutdown();
         installer=new ContentPackInstaller(this,new ContentPackInstaller.Listener() {
             @Override public void onProgress(long downloaded,long total,String status) {
@@ -115,14 +131,11 @@ public final class MainActivity extends Activity {
             @Override public void onFailure(String message) {
                 contentInstalling=false;
                 if(loadingView!=null)loadingView.setFailure(message,
-                    ()->startContentSetup(),()->showEntryGate());
+                    ()->startContentInstall(null),()->showEntryGate());
             }
         });
-        if(pendingSeasonZip!=null) {
-            Uri selected=pendingSeasonZip;
-            pendingSeasonZip=null;
-            installer.startFromUri(selected);
-        } else installer.start();
+        if(selectedArchive!=null)installer.startFromUri(selectedArchive);
+        else installer.start();
     }
 
     private void openSeasonZipPicker() {
@@ -140,8 +153,7 @@ public final class MainActivity extends Activity {
         Uri selected=data.getData();
         final int flags=data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         try { getContentResolver().takePersistableUriPermission(selected,flags); } catch(Exception ignored) { }
-        pendingSeasonZip=selected;
-        startContentSetup();
+        startContentInstall(selected);
     }
 
     private void launchGame(boolean contentPackReady) {
