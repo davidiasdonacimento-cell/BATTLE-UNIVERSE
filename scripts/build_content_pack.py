@@ -301,7 +301,7 @@ required=[
  "textures/island_ground_albedo_4k.png","textures/island_ground_normal_4k.png",
  "textures/desert_sand_albedo_4k.png","audio/transport_engine.wav",
  "effects/weapons.json","materials/biome_materials.json"]
-pack_manifest={"pack_id":"battle_universe_season_02","version":3,
+pack_manifest={"pack_id":"battle_universe_season_02","version":4,
  "title":"Battle Universe — Conteúdo Expandido 4K",
  "engine":"Android OpenGL ES 3.0","texture_resolution":"4096x4096",
  "world_count":8,"files":files,"required":required}
@@ -319,15 +319,15 @@ with zipfile.ZipFile(archive,"w",zipfile.ZIP_DEFLATED,compresslevel=1) as z:
     for item in sorted(ROOT.rglob("*")):
         if item.is_file():z.write(item,item.relative_to(ROOT).as_posix())
 size=archive.stat().st_size
-if size<1024*1024*1024:
-    raise SystemExit(f"Content pack below the 1 GiB real-content target ({size} bytes); refusing to publish incomplete assets.")
-if size>5*1024*1024*1024:
-    raise SystemExit(f"Content pack exceeds the 5 GiB distribution limit ({size} bytes).")
+if size<50*1024*1024:
+    raise SystemExit(f"Content pack below the 50 MiB minimum ({size} bytes); refusing to publish incomplete assets.")
+if size>400*1024*1024:
+    raise SystemExit(f"Content pack exceeds the 400 MiB distribution limit ({size} bytes).")
 h=hashlib.sha256()
 with archive.open("rb") as inp:
     for chunk in iter(lambda:inp.read(4*1024*1024),b""):h.update(chunk)
-manifest={"version":3,"title":"Battle Universe Season 02 — Pacote 4K",
- "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v3/battle-universe-season-02-pack.zip",
+manifest={"version":4,"title":"Battle Universe Season 02 — Pacote 4K",
+ "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v4/battle-universe-season-02-pack.zip",
  "size_bytes":size,"sha256":h.hexdigest()}
 (OUT/"content-pack-manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
 print(f"Season 02 pack: {size/1024/1024:.1f} MiB; {len(files)} real hashed resources; SHA-256 {manifest['sha256']}",flush=True)
