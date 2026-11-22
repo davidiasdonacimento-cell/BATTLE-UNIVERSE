@@ -104,7 +104,7 @@ sphere(v,f,(0,.92,0),(.14,.13,.14),18,10)
 cylinder(v,f,(0,.82,0),(0,1.1,0),.035,16)
 write_obj("energy_emitter",v,f)
 
-# Five 4K PBR material sets. The pixel data is authored texture content, not padding.
+# Mobile PBR material sets: 2K albedo/roughness and 1K normal/AO. The pixel data is authored texture content, not padding.
 N=2048
 def make_texture_set(name,base,seed,kind):
     rng=np.random.default_rng(seed)
@@ -174,7 +174,7 @@ def make_texture_set(name,base,seed,kind):
     Image.fromarray(ao_small,"L").save(
         ROOT/f"textures/{name}_ao_1k.png",compress_level=1)
     del ao_small
-    print("Generated 4K material:",name,flush=True)
+    print("Generated mobile material:",name,flush=True)
 
 make_texture_set("island_ground",(.30,.39,.23),1001,"ground")
 make_texture_set("tropical_rock",(.34,.33,.29),2002,"rock")
@@ -299,11 +299,11 @@ required=[
  "characters/roster.json","models/operator_field.obj","models/transport_plane.obj",
  "models/energy_emitter.obj","models/build_wall.obj",
  "textures/island_ground_albedo_2k.png","textures/island_ground_normal_1k.png",
- "textures/desert_sand_albedo_4k.png","audio/transport_engine.wav",
+ "textures/desert_sand_albedo_2k.png","audio/transport_engine.wav",
  "effects/weapons.json","materials/biome_materials.json"]
 pack_manifest={"pack_id":"battle_universe_season_02","version":4,
  "title":"Battle Universe — Season 02 Mobile 2K",
- "engine":"Android OpenGL ES 3.0","texture_resolution":"4096x4096",
+ "engine":"Android OpenGL ES 3.0","texture_resolution":"2048x2048 albedo/roughness; 1024x1024 normal/AO",
  "world_count":8,"files":files,"required":required}
 (ROOT/"manifest.json").write_text(json.dumps(pack_manifest,ensure_ascii=False,indent=2),encoding="utf-8")
 (ROOT/"PACK_README.txt").write_text(
@@ -326,7 +326,7 @@ if size>400*1024*1024:
 h=hashlib.sha256()
 with archive.open("rb") as inp:
     for chunk in iter(lambda:inp.read(4*1024*1024),b""):h.update(chunk)
-manifest={"version":3,"title":"Battle Universe Season 02 — Pacote Mobile 2K",
+manifest={"version":4,"title":"Battle Universe Season 02 — Pacote Mobile 2K",
  "url":"https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v4/battle-universe-season-02-pack.zip",
  "size_bytes":size,"sha256":h.hexdigest()}
 (OUT/"content-pack-manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
