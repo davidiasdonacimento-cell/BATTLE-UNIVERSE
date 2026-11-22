@@ -1,7 +1,10 @@
 package com.battleuniverse.game;
 
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.ApplicationExitInfo;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.content.SharedPreferences;
@@ -20,13 +23,16 @@ public final class MainActivity extends Activity {
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private boolean gameLaunched;
     private boolean contentInstalling;
+    private String previousExitNotice="";
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         enterImmersiveMode();
+        previousExitNotice=readPreviousExitNotice();
         profilePrefs=getSharedPreferences("battle_universe_profile",MODE_PRIVATE);
         entryGate=new EntryGateView(this);
+        entryGate.setDiagnosticsNotice(previousExitNotice);
         accountSync=new AccountSyncManager(this,profilePrefs,new AccountSyncManager.Listener() {
             @Override public void onAccountState(boolean configured,boolean signedIn,String username,String message) {
                 if(entryGate!=null)entryGate.setAccountState(configured,signedIn,username,message);
@@ -72,6 +78,28 @@ public final class MainActivity extends Activity {
         accountSync.restoreExistingSession();
     }
 
+    private String readPreviousExitNotice() {
+        if(Build.VERSION.SDK_INT<30)return "";
+        try {
+            ActivityManager manager=(ActivityManager)getSystemService(ACTIVITY_SERVICE);
+            if(manager==null)return "";
+            java.util.List<ApplicationExitInfo> exits=manager.getHistoricalProcessExitReasons(getPackageName(),0,1);
+            if(exits==null||exits.isEmpty())return "";
+            ApplicationExitInfo exit=exits.get(0);
+            String reason;
+            switch(exit.getReason()) {
+                case ApplicationExitInfo.REASON_CRASH_NATIVE: reason="FALHA NA ENGINE NATIVA (C++/OPENGL)"; break;
+                case ApplicationExitInfo.REASON_CRASH: reason="FALHA DO PROCESSO ANDROID"; break;
+                case ApplicationExitInfo.REASON_ANR: reason="TRAVAMENTO/ANR DO ANDROID"; break;
+                case ApplicationExitInfo.REASON_LOW_MEMORY: reason="ENCERRADO POR PRESSÃO DE MEMÓRIA"; break;
+                default: return "";
+            }
+            String description=exit.getDescription();
+            if(description==null)description="";
+            if(description.length()>180)description=description.substring(0,180);
+            return "DIAGNÓSTICO DA ÚLTIMA ABERTURA: "+reason+(description.isEmpty()?"":" • "+description);
+        } catch(Exception ignored) { return ""; }
+    }
     private void showEntryGate() {
         if(isFinishing()||entryGate==null)return;
         if(gameSurface!=null)gameSurface.onPause();
