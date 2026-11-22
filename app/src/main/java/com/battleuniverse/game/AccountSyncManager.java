@@ -40,8 +40,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         void onResult(boolean claimed,long coins,long diamonds,String message);
     }
     private static final Set<String> LONG_PROFILE_KEYS=new HashSet<>(Arrays.asList(
-        "xp","missions_day","match_reward_session_id",
-        "last_match_reward_xp"
+        "xp","missions_day","last_match_reward_xp"
     ));
     private static final String[] PROFILE_KEYS={
         "mode","map","character","quality","music","effects","look_sensitivity","sensitivity_general","sensitivity_aim",
@@ -58,8 +57,6 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "mission_matches","mission_eliminations","mission_crystals","missions_day",
         "mission_claimed_0","mission_claimed_1","mission_claimed_2","wardrobe_starter_v2_granted",
         "shop_frame_neon","shop_emblem_bloob","shop_title_champion",
-        "match_reward_session_id","match_reward_recorded",
-        "last_match_reward_diamonds","last_match_reward_xp","last_match_reward_coins"
     };
     private final SharedPreferences prefs;
     private final Context appContext;
