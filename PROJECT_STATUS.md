@@ -244,3 +244,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - O cliente envia o código à rota autenticada `POST /v1/game/rewards/redeem`; a API/PostgreSQL valida validade, ativação, limite global e resgate único por conta.
 - A resposta do servidor informa a quantidade efetivamente creditada e o saldo da carteira online; o cliente não cria nem altera diamantes localmente.
 - O estado desta alteração é **implementado no código da branch**. Compilação CI, artefato APK e teste no Redmi 12 ainda pendentes; não declarar a tela compilada ou testada até obter essas evidências.
+
+
+## Analisador do pacote Season 02 pelo nome — implementação em andamento
+- Na entrada do jogo, o instalador procura o arquivo `battle-universe-season-02-pack.zip` e cópias com sufixo numérico, inclusive nomes como `battle-universe-season-02-pack-1.zip` e `battle-universe-season-02-pack (1).zip`.
+- No Android 10+, a busca percorre a coleção Downloads e aceita a pasta Downloads raiz ou subpastas; Android 7–9 mantém o diretório externo privado do aplicativo.
+- O candidato só é reutilizado se nome, tamanho esperado e SHA-256 do manifesto remoto coincidirem. Arquivos com mesmo nome mas conteúdo inválido são ignorados; se nenhum candidato válido existir, o jogo baixa uma nova cópia via Wi-Fi.
+- O carregamento mostra estados de análise, busca pelo nome e validação. Quando o conteúdo extraído já está instalado e válido, `isInstalled()` continua permitindo abrir o jogo sem reinstalar o pacote.
+- Estado: implementado na branch `feature/season02-download-file-analyzer`; CI Android e teste no aparelho pendentes.
