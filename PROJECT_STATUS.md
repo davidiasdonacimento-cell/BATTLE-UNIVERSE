@@ -236,3 +236,11 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - O ZIP é mantido após a instalação. Se estiver ausente, incompleto ou com hash incorreto, o instalador baixa uma nova cópia e substitui a salva.
 - Android 7–9 usa armazenamento externo específico do app como fallback.
 - Código publicado nos commits `1903fef`, `7c7ce21`, `af92026` e `6e51c0c`. A cópia privada temporária é removida após instalação bem-sucedida, mantendo o ZIP em Downloads; a checagem de espaço considera ZIP duplicado temporário e até 3 GiB de extração. Build Android e teste físico ainda não confirmados; o comportamento no aparelho permanece pendente de validação.
+
+
+## Resgate de códigos promocionais no jogo — implementação em andamento
+- A HUD nativa recebeu uma página dedicada **CÓDIGO PROMOCIONAL**, acessível pelo botão da Loja, preservando as demais páginas e funcionalidades.
+- A tela aceita códigos configurados pelo ADMIN (4–32 caracteres: letras, números, sublinhado e hífen), em vez de limitar o cliente ao código fixo 100K.
+- O cliente envia o código à rota autenticada `POST /v1/game/rewards/redeem`; a API/PostgreSQL valida validade, ativação, limite global e resgate único por conta.
+- A resposta do servidor informa a quantidade efetivamente creditada e o saldo da carteira online; o cliente não cria nem altera diamantes localmente.
+- O estado desta alteração é **implementado no código da branch**. Compilação CI, artefato APK e teste no Redmi 12 ainda pendentes; não declarar a tela compilada ou testada até obter essas evidências.
