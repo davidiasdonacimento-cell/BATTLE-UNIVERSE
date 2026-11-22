@@ -140,7 +140,7 @@ jobs:
           cp build/content-pack-manifest.json build/distribution/
           ls -lh build/distribution/
       - name: Upload DEBUG APK separately
-        if: github.event_name != 'pull_request'
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: battle-universe-debug-apk
