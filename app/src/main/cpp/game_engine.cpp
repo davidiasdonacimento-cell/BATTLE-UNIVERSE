@@ -224,7 +224,12 @@ void publishFlightInfo() {
     gWaypointActiveSnapshot.store(gWaypointActive,std::memory_order_relaxed);
 }
 GLuint compileShader(GLenum type,const char* source) {
-    GLuint shader=glCreateShader(type); glShaderSource(shader,1,&source,nullptr);
+    GLuint shader=glCreateShader(type);
+    if(!shader) {
+        __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","glCreateShader failed (type=0x%x)",type);
+        return 0;
+    }
+    glShaderSource(shader,1,&source,nullptr);
     glCompileShader(shader); GLint ok=GL_FALSE; glGetShaderiv(shader,GL_COMPILE_STATUS,&ok);
     if (ok!=GL_TRUE) {
         char log[1024]{}; glGetShaderInfoLog(shader,sizeof(log),nullptr,log);
@@ -471,12 +476,18 @@ bool initializeGraphics() {
     __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: creating cube buffer");
     createCube();
     __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: creating primitive meshes");
-    gSphereMesh=buildSphere();
-    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: sphere ready");
-    gCylinderMesh=buildCylinder();
-    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: cylinder ready");
-    gConeMesh=buildCone();
-    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: cone ready");
+    try { gSphereMesh=buildSphere(); }
+    catch(const std::bad_alloc&) { __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Sphere mesh skipped: native memory unavailable"); }
+    catch(const std::exception& error) { __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Sphere mesh skipped: %s",error.what()); }
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: sphere step complete");
+    try { gCylinderMesh=buildCylinder(); }
+    catch(const std::bad_alloc&) { __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Cylinder mesh skipped: native memory unavailable"); }
+    catch(const std::exception& error) { __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Cylinder mesh skipped: %s",error.what()); }
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: cylinder step complete");
+    try { gConeMesh=buildCone(); }
+    catch(const std::bad_alloc&) { __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Cone mesh skipped: native memory unavailable"); }
+    catch(const std::exception& error) { __android_log_print(ANDROID_LOG_ERROR,"BattleUniverse","Cone mesh skipped: %s",error.what()); }
+    __android_log_print(ANDROID_LOG_INFO,"BattleUniverse","Startup stage: cone step complete");
     // Build only the active map at startup. Allocating all eight 3D terrain
     // meshes at once wastes GPU memory and can terminate the app on phones.
     const size_t activeMap=static_cast<size_t>(std::clamp(gSelectedMap,0,7));
@@ -494,7 +505,8 @@ bool initializeGraphics() {
     gSphereVbo=gSphereMesh.vbo; gSphereCount=gSphereMesh.count;
     gCylinderVbo=gCylinderMesh.vbo; gCylinderCount=gCylinderMesh.count;
     gConeVbo=gConeMesh.vbo; gConeCount=gConeMesh.count;
-    return gCubeVbo!=0 && gSphereVbo!=0 && gCylinderVbo!=0 && gConeVbo!=0;
+    // The cube is the minimum viable renderer; missing optional primitives are skipped safely.
+    return gCubeVbo!=0;
 }
 void drawMesh(GLuint vbo,GLsizei count,Vec3 p,Vec3 size,Vec3 color,float yaw=0,float tilt=0,float tiltX=0,float alpha=1.0f) {
     if(!gProgram||!vbo||count<=0)return;
