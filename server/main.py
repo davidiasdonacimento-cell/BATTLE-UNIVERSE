@@ -673,9 +673,22 @@ def owner_create_promo_code(body: PromoCreateBody, db: Session = Depends(db_sess
         # never roll back a valid code or make creation appear to fail.
         db.commit()
         db.refresh(row)
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(409, "Já existe um código com esse nome ou os dados violam uma regra do banco.")
+        # Only PostgreSQL unique_violation (23505) means the code name is taken.
+        # NOT NULL, CHECK, FK and other constraint failures must not be mislabeled
+        # as duplicates; log their exact database diagnostic for a safe repair.
+        original = getattr(exc, "orig", None)
+        sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+        diag = getattr(original, "diag", None)
+        constraint = getattr(diag, "constraint_name", None) if diag else None
+        if sqlstate == "23505":
+            raise HTTPException(409, "Já existe um código com esse nome.")
+        logging.getLogger("battle_universe").error(
+            "PROMO_CODE_INTEGRITY_FAILURE sqlstate=%s constraint=%s error=%r",
+            sqlstate, constraint, original, exc_info=True
+        )
+        raise HTTPException(500, "O banco recusou os dados do código. A falha foi registrada para correção.")
     except Exception as exc:
         db.rollback()
         logging.getLogger("battle_universe").exception("PROMO_CODE_INSERT_FAILED")
