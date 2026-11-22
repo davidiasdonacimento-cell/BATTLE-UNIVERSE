@@ -56,14 +56,11 @@ public final class ContentLoadingView extends View {
     private String brandStatus(String raw) {
         if(raw==null||raw.trim().isEmpty())return status;
         String value=raw.toUpperCase();
-        if(value.contains("ANALISANDO"))return "ANALISANDO ARQUIVOS DO UNIVERSO...";
-        if(value.contains("PROCURANDO"))return "PROCURANDO PACOTE JÁ BAIXADO PELO NOME...";
-        if(value.contains("VALIDADO"))return "PACOTE EXISTENTE VALIDADO • SEM NOVO DOWNLOAD";
-        if(value.contains("ENCONTRADO"))return "PACOTE EXISTENTE ENCONTRADO • VALIDANDO...";
-        if(value.contains("SALVO"))return "PACOTE SALVO NO CELULAR • PRONTO PARA REUTILIZAR";
-        if(value.contains("CONFERINDO")||value.contains("SHA-256"))return "VALIDANDO A INTEGRIDADE DO UNIVERSO...";
+        if(value.contains("ANALISANDO"))return "CONSULTANDO A TEMPORADA 02...";
+        if(value.contains("DOWNLOAD")||value.contains("BAIXANDO"))return "BAIXANDO O PACOTE DA TEMPORADA 02...";
+        if(value.contains("VALIDADO")||value.contains("CONFERINDO")||value.contains("SHA-256"))return "VALIDANDO A INTEGRIDADE DO UNIVERSO...";
         if(value.contains("INSTALANDO")||value.contains("EXTRAINDO"))return "MONTANDO OS RECURSOS DO MUNDO...";
-        if(value.contains("CONFIGURANDO")||value.contains("PREPARANDO")||value.contains("PACOTE"))return "SINCRONIZANDO A TEMPORADA 02...";
+        if(value.contains("CONFIGURANDO")||value.contains("PREPARANDO")||value.contains("PACOTE")||value.contains("SALVO"))return "SINCRONIZANDO A TEMPORADA 02...";
         if(value.contains("UNIVERSO CONFIGURADO")||value.contains("ABRINDO"))return "ABRINDO OS PORTÕES DO UNIVERSO...";
         return "ALINHANDO OS RECURSOS DO UNIVERSO...";
     }
