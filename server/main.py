@@ -1046,7 +1046,27 @@ small{color:#8baab9}@media(max-width:560px){.row{grid-template-columns:1fr}main{
 <div class="field"><label for="body">Mensagem para os jogadores</label><textarea id="body" maxlength="1200" placeholder="Escreva o comunicado..."></textarea></div>
 <div class="row"><div class="field"><label for="diamonds">Diamantes por jogador</label><input id="diamonds" type="number" min="0" max="100000" value="0"></div><div class="field"><label>Destinatários</label><input value="Todas as contas existentes" disabled></div></div>
 <button id="send">ENVIAR PARA TODOS</button>
-</div><div id="status" class="status" role="status">Aguardando autorização.</div>
+</div><section id="accountTools" hidden style="margin-top:24px;border-top:1px solid #28536a;padding-top:20px">
+<h2 style="color:#59d9ed">🛡️ CONTAS E PERMISSÕES</h2>
+<p>Pesquise uma conta. A seleção fica guardada neste navegador para a próxima visita.</p>
+<div class="field"><label for="accountSearch">Pesquisar nickname</label><input id="accountSearch" maxlength="40" placeholder="Digite o nickname"></div>
+<button id="searchAccounts" class="secondary">PESQUISAR CONTAS</button>
+<div class="field"><label for="accountSelect">Conta selecionada</label><select id="accountSelect" style="width:100%;padding:13px;border-radius:10px;background:#071724;color:white;border:1px solid #28536a"></select></div>
+<div class="field"><button id="toggleMailPermission" class="secondary">ATIVAR/DESATIVAR ENVIO PELO APP</button></div>
+<h3 style="color:#bceaf2">Editar conta selecionada</h3>
+<div class="row"><div class="field"><label for="editDiamonds">Diamantes (novo saldo)</label><input id="editDiamonds" type="number" min="0" max="1000000000"></div>
+<div class="field"><label for="editXp">XP (novo total)</label><input id="editXp" type="number" min="0" max="1000000000"></div></div>
+<div class="field"><label for="editRank">Patente manual (opcional)</label><input id="editRank" maxlength="24" placeholder="Ex.: Mestre"></div>
+<button id="saveEconomy">SALVAR ALTERAÇÕES DA CONTA</button>
+<h3 style="color:#bceaf2">Enviar correio</h3>
+<div class="field"><label for="mailTarget">Destinatário</label><select id="mailTarget" style="width:100%;padding:13px;border-radius:10px;background:#071724;color:white;border:1px solid #28536a"><option value="">TODAS AS CONTAS</option></select></div>
+<div class="field"><label for="targetTitle">Título</label><input id="targetTitle" maxlength="80"></div>
+<div class="field"><label for="targetBody">Mensagem</label><textarea id="targetBody" maxlength="1200"></textarea></div>
+<div class="field"><label for="targetDiamonds">Diamantes para resgate</label><input id="targetDiamonds" type="number" min="0" max="100000" value="0"></div>
+<button id="sendTargetMail">ENVIAR CORREIO ESCOLHIDO</button>
+<small>Escolha TODAS AS CONTAS ou uma conta individual. As mensagens e alterações ficam registradas no servidor.</small>
+</section>
+<div id="status" class="status" role="status">Aguardando autorização.</div>
 </main><script>
 const API=location.origin, $=id=>document.getElementById(id);
 let token="";
@@ -1056,7 +1076,7 @@ $("connect").onclick=async()=>{
  $("connect").disabled=true;
  try{const r=await fetch(API+"/v1/owner/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pairing_code:code})});
  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha na autorização.");
- token=d.access_token;$("pair").value="";$("pair").disabled=true;$("connect").hidden=true;$("composer").hidden=false;show("ADM autorizado. Prepare a mensagem global.");
+ token=d.access_token;$("pair").value="";$("pair").disabled=true;$("connect").hidden=true;$("composer").hidden=false;$("accountTools").hidden=false;show("ADM autorizado. Correio e ferramentas de conta disponíveis.");
  }catch(e){show("Erro: "+e.message)}finally{$("connect").disabled=false}
 };
 $("send").onclick=async()=>{
@@ -1070,6 +1090,67 @@ $("send").onclick=async()=>{
  $("title").value="";$("body").value="";$("diamonds").value="0";
  show("🟢 VERDE — mensagem enviada. Contas alcançadas: "+d.recipients+"; presente: "+d.diamonds_per_player+" diamantes por jogador.");
  }catch(e){show("❌ DEU RED! "+e.message)}finally{$("send").disabled=false}
+};
+
+const accountSelect=$("accountSelect"),mailTarget=$("mailTarget");
+function ownerHeaders(){return {"Content-Type":"application/json","Authorization":"Bearer "+token}}
+function selectedAccount(){return Number(accountSelect.value)||0}
+function restoreAccountSelection(){
+ const saved=localStorage.getItem("bu_admin_selected_account")||"";
+ if(saved&&[...accountSelect.options].some(o=>o.value===saved))accountSelect.value=saved;
+ if(accountSelect.value)mailTarget.value=accountSelect.value;
+}
+accountSelect.onchange=()=>{localStorage.setItem("bu_admin_selected_account",accountSelect.value);mailTarget.value=accountSelect.value};
+mailTarget.onchange=()=>{if(mailTarget.value){accountSelect.value=mailTarget.value;localStorage.setItem("bu_admin_selected_account",mailTarget.value)}};
+$("searchAccounts").onclick=async()=>{
+ try{
+  const q=$("accountSearch").value.trim();
+  const r=await fetch(API+"/v1/owner/accounts?search="+encodeURIComponent(q)+"&limit=100",{headers:ownerHeaders()});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha na pesquisa.");
+  accountSelect.innerHTML="";mailTarget.innerHTML='<option value="">TODAS AS CONTAS</option>';
+  for(const a of d.accounts||[]){
+   const label=a.username+" (ID "+a.id+")";
+   const o=document.createElement("option");o.value=String(a.id);o.textContent=label;accountSelect.appendChild(o);
+   const m=document.createElement("option");m.value=String(a.id);m.textContent=label;mailTarget.appendChild(m);
+  }
+  restoreAccountSelection();show("Contas encontradas: "+(d.accounts||[]).length);
+ }catch(e){show("❌ DEU RED! "+e.message)}
+};
+$("toggleMailPermission").onclick=async()=>{
+ const id=selectedAccount();if(!id){show("Selecione uma conta primeiro.");return}
+ const enabled=confirm("Ativar a permissão secreta de envio de correio para esta conta?\nOK = ativar; Cancelar = desativar.");
+ try{
+  const r=await fetch(API+"/v1/owner/accounts/"+id+"/mail-permission?enabled="+enabled,{method:"POST",headers:ownerHeaders()});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha.");
+  show((d.mail_sender_enabled?"🟢 VERDE — permissão ativada.":"Permissão de envio desativada.")+" Conta ID "+id);
+ }catch(e){show("❌ DEU RED! "+e.message)}
+};
+$("saveEconomy").onclick=async()=>{
+ const id=selectedAccount();if(!id){show("Selecione uma conta primeiro.");return}
+ const body={};
+ if($("editDiamonds").value!=="")body.diamonds=Number($("editDiamonds").value);
+ if($("editXp").value!=="")body.xp=Number($("editXp").value);
+ if($("editRank").value.trim())body.rank=$("editRank").value.trim();
+ if(!Object.keys(body).length){show("Preencha ao menos um campo.");return}
+ if(!confirm("Confirmar alteração da carteira, XP ou patente desta conta?"))return;
+ try{
+  const r=await fetch(API+"/v1/owner/accounts/"+id+"/economy",{method:"PATCH",headers:ownerHeaders(),body:JSON.stringify(body)});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha.");
+  show("🟢 VERDE — alterações salvas na conta "+id+".");
+ }catch(e){show("❌ DEU RED! "+e.message)}
+};
+$("sendTargetMail").onclick=async()=>{
+ const title=$("targetTitle").value.trim(),body=$("targetBody").value.trim(),diamonds=Number($("targetDiamonds").value);
+ const recipient=mailTarget.value?Number(mailTarget.value):null;
+ if(title.length<2||body.length<2||!Number.isInteger(diamonds)||diamonds<0||diamonds>100000){show("Confira título, mensagem e diamantes.");return}
+ if(!confirm("Enviar para "+(recipient?"a conta selecionada":"TODAS AS CONTAS")+"?"))return;
+ try{
+  const request_id=crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random().toString(36).slice(2);
+  const r=await fetch(API+"/v1/owner/mail/send",{method:"POST",headers:ownerHeaders(),body:JSON.stringify({title,body,diamonds,recipient_player_id:recipient,request_id})});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha ao enviar.");
+  show("🟢 VERDE — correio enviado. Contas alcançadas: "+d.recipients);
+  $("targetTitle").value="";$("targetBody").value="";$("targetDiamonds").value="0";
+ }catch(e){show("❌ DEU RED! "+e.message)}
 };
 </script></body></html>""")
 
