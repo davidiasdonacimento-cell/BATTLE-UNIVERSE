@@ -5,18 +5,30 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.Toast;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 
 public final class MainActivity extends Activity {
     private GameSurfaceView gameSurface;
     private HudOverlay hud;
     private ContentPackInstaller installer;
+    private ContentPackAnalyzer packAnalyzer;
     private ContentLoadingView loadingView;
     private AccountSyncManager accountSync;
     private SharedPreferences profilePrefs;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
+    private final ActivityResultLauncher<String[]> packPicker=registerForActivityResult(
+        new ActivityResultContracts.OpenDocument(),uri->{if(uri!=null)analyzeSelectedPack(uri);});
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -39,15 +51,14 @@ public final class MainActivity extends Activity {
                 if(loadingView!=null)loadingView.setFileProgress(fileName,index,count,done,size);
             }
             @Override public void onSuccess() {
-                if(loadingView!=null)loadingView.setStatus("CONTEÚDO VALIDADO • REINICIANDO E ABRINDO A PARTIDA...");
+                if(loadingView!=null)loadingView.setStatus("CONTEÚDO VALIDADO • REINICIANDO O JOGO...");
                 mainHandler.postDelayed(()->{
                     if(!isFinishing()&&ContentPackInstaller.isInstalled(MainActivity.this)) recreate();
                     else if(!isFinishing()) startContentSetup();
                 },1100);
             }
             @Override public void onFailure(String message) {
-                if(loadingView!=null)loadingView.setFailure(message,
-                    ()->startContentSetup(),()->launchGame(false));
+                if(loadingView!=null)loadingView.setFailure(message,()->startContentSetup(),()->launchGame(false));
             }
         });
         installer.start();
@@ -64,23 +75,54 @@ public final class MainActivity extends Activity {
         hud=new HudOverlay(this,gameSurface,profilePrefs);
         hud.setUsernameAccountActions((username,password,createAccount)->{
             if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
-        },()->{
-            if(accountSync!=null)accountSync.syncNow();
-        },()->{
-            if(accountSync!=null)accountSync.signOut();
-        });
+        },()->{if(accountSync!=null)accountSync.syncNow();},()->{if(accountSync!=null)accountSync.signOut();});
         accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
             if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
         });
-        hud.setGoogleAccountStatus(accountSync.isConfigured(),accountSync.isSignedIn(),accountSync.getUsername(),
-            accountSync.isConfigured()?"Crie uma conta ou entre com nome e senha.":"Servidor de contas não configurado neste APK.");
+        hud.setGoogleAccountStatus(true,accountSync.isSignedIn(),accountSync.getUsername(),
+            "Crie uma conta ou entre com nickname e senha.");
         accountSync.restoreExistingSession();
 
         root.addView(gameSurface,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
         root.addView(hud,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
+
+        Button packButton=new Button(this);
+        packButton.setText("ANALISAR ZIP");
+        packButton.setTextSize(11);
+        packButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        packButton.setTextColor(Color.WHITE);
+        GradientDrawable bg=new GradientDrawable();
+        bg.setColor(0xE51B5364);bg.setCornerRadius(dp(12));bg.setStroke(dp(1),0xFF58DDE6);
+        packButton.setBackground(bg);
+        packButton.setAllCaps(false);
+        packButton.setOnClickListener(v->packPicker.launch(new String[]{"application/zip","application/octet-stream","application/x-zip-compressed","*/*"}));
+        FrameLayout.LayoutParams buttonParams=new FrameLayout.LayoutParams(dp(142),dp(44),Gravity.BOTTOM|Gravity.END);
+        buttonParams.setMargins(0,0,dp(18),dp(16));
+        root.addView(packButton,buttonParams);
         setContentView(root);
+    }
+
+    private int dp(int value){return (int)(value*getResources().getDisplayMetrics().density+.5f);}
+
+    private void analyzeSelectedPack(Uri uri) {
+        if(packAnalyzer!=null)packAnalyzer.close();
+        Toast.makeText(this,"Analisando nome, manifesto e SHA-256 do pacote...",Toast.LENGTH_LONG).show();
+        packAnalyzer=new ContentPackAnalyzer(this,new ContentPackAnalyzer.Listener(){
+            @Override public void onStatus(String message){Toast.makeText(MainActivity.this,message,Toast.LENGTH_SHORT).show();}
+            @Override public void onConflict(String message,Runnable replaceAction){
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                    .setTitle("CONFLITO DE PACOTE")
+                    .setMessage(message)
+                    .setNegativeButton("CANCELAR",null)
+                    .setPositiveButton("SUBSTITUIR", (d,w)->replaceAction.run()).show();
+            }
+            @Override public void onSuccess(String message){Toast.makeText(MainActivity.this,message,Toast.LENGTH_LONG).show();}
+            @Override public void onFailure(String message){new android.app.AlertDialog.Builder(MainActivity.this)
+                .setTitle("ANÁLISE RECUSADA").setMessage(message).setPositiveButton("OK",null).show();}
+        });
+        packAnalyzer.analyze(uri);
     }
 
     private void enterImmersiveMode() {
@@ -89,23 +131,14 @@ public final class MainActivity extends Activity {
             |View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
             |View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
     }
-
     @Override public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if(hasFocus)enterImmersiveMode();
+        super.onWindowFocusChanged(hasFocus);if(hasFocus)enterImmersiveMode();
     }
-    @Override protected void onPause() {
-        if(gameSurface!=null)gameSurface.onPause();
-        super.onPause();
-    }
-    @Override protected void onResume() {
-        super.onResume();
-        if(gameSurface!=null)gameSurface.onResume();
-        enterImmersiveMode();
-        if(hud!=null)hud.invalidate();
-    }
-    @Override protected void onDestroy() {
+    @Override protected void onPause(){if(gameSurface!=null)gameSurface.onPause();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(gameSurface!=null)gameSurface.onResume();enterImmersiveMode();if(hud!=null)hud.invalidate();}
+    @Override protected void onDestroy(){
         if(installer!=null)installer.shutdown();
+        if(packAnalyzer!=null)packAnalyzer.close();
         if(accountSync!=null)accountSync.close();
         super.onDestroy();
     }
