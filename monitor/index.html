@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BATTLE UNIVERSE • Server Monitor</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,Arial,sans-serif}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#17364b,#07111d 55%);color:#e9f7ff;padding:22px}
+main{max-width:980px;margin:24px auto}h1{font-size:clamp(25px,5vw,38px);margin:0;color:#65deea}
+.sub{color:#9bb9c8;margin:8px 0 26px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:15px}
+.card{padding:21px;border-radius:17px;background:#102638;border:1px solid #31586b;box-shadow:0 14px 38px #0004}
+.label{color:#a9c7d5;font-size:13px;font-weight:700;letter-spacing:.08em}.value{font-size:25px;font-weight:850;margin:13px 0;color:#f3fbff}
+.detail{font-size:13px;color:#9bb9c8;overflow-wrap:anywhere}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}
+a,button{border:1px solid #39788a;background:#15394a;color:#dffaff;border-radius:11px;padding:12px 15px;text-decoration:none;font-weight:700}
+button{cursor:pointer}.log{white-space:pre-wrap;line-height:1.6}.foot{color:#7798a9;font-size:12px;margin-top:18px}
+</style></head>
+<body><main>
+<h1>BATTLE UNIVERSE</h1><p class="sub">CENTRAL DE MONITORAMENTO • API, banco de dados e disponibilidade</p>
+<div class="grid">
+<section class="card"><div class="label">API DE CONTAS</div><div id="api" class="value">VERIFICANDO</div><div id="apiDetail" class="detail">Aguardando resposta do Render...</div></section>
+<section class="card"><div class="label">BANCO DE DADOS</div><div id="db" class="value">VERIFICANDO</div><div id="dbDetail" class="detail">Teste de conexão</div></section>
+<section class="card"><div class="label">LATÊNCIA</div><div id="latency" class="value">--</div><div class="detail">Tempo de resposta da verificação</div></section>
+<section class="card"><div class="label">ÚLTIMA VERIFICAÇÃO</div><div id="updated" class="value">--:--:--</div><div class="detail">Atualização automática a cada 15 segundos</div></section>
+</div>
+<div class="actions"><button id="refresh">ATUALIZAR AGORA</button>
+<a href="https://dashboard.render.com/web/srv-dc0ic8ec6qcc73ef6srg" target="_blank" rel="noopener">ABRIR PAINEL DO RENDER</a>
+<a href="https://battle-universe-accounts.onrender.com/health" target="_blank" rel="noopener">ABRIR HEALTH CHECK</a></div>
+<section class="card"><div class="label">EVENTOS DO MONITOR</div><p id="log" class="log">Iniciando monitoramento...</p></section>
+<p class="foot">Este painel mostra somente disponibilidade e latência. Não expõe senhas, tokens, saldos ou dados privados de jogadores.</p>
+</main>
+<script>
+const API="https://battle-universe-accounts.onrender.com/health";
+const $=id=>document.getElementById(id);
+async function check(){
+ const started=performance.now();
+ try{
+  const response=await fetch(API,{cache:"no-store"});
+  const data=await response.json();
+  const ms=Math.round(performance.now()-started);
+  $("api").textContent=response.ok&&data.status==="ok"?"🟢 ONLINE":"🔴 ERRO";
+  $("apiDetail").textContent="HTTP "+response.status+" • "+(data.service||"API BATTLE UNIVERSE");
+  $("db").textContent=data.database==="ok"?"🟢 CONECTADO":"🔴 INDISPONÍVEL";
+  $("dbDetail").textContent=data.database==="ok"?"Consulta SELECT 1 concluída":"Banco não confirmou conexão";
+  $("latency").textContent=ms+" ms";
+  $("log").textContent=new Date().toLocaleString("pt-BR")+"\nAPI: "+(data.status||"sem status")+"\nBanco: "+(data.database||"não informado")+"\nResposta: "+ms+" ms";
+ }catch(error){
+  $("api").textContent="🔴 OFFLINE";$("db").textContent="⚠️ SEM RESPOSTA";
+  $("apiDetail").textContent="Não foi possível alcançar o endpoint";
+  $("dbDetail").textContent="Estado do banco não confirmado";
+  $("latency").textContent="--";
+  $("log").textContent=new Date().toLocaleString("pt-BR")+"\nFalha: "+String(error);
+ }
+ $("updated").textContent=new Date().toLocaleTimeString("pt-BR");
+}
+$("refresh").addEventListener("click",check);check();setInterval(check,15000);
+</script></body></html>
