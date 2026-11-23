@@ -20,7 +20,6 @@ import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.HapticFeedbackConstants;
-import java.security.SecureRandom;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -63,7 +62,6 @@ public final class HudOverlay extends View {
     private final SharedPreferences prefs;
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r=new RectF();
-    private final SecureRandom royaleRandom=new SecureRandom();
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private int selectedShirt,selectedBoots,selectedSet;
     private boolean music=true, effects=true, forwarding, resultSpectating;
@@ -80,14 +78,16 @@ public final class HudOverlay extends View {
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
     private AiCoachAction aiCoachAction;
-    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction;
+    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction, matchResultAction, rewardClaimAction;
     private JSONArray mailMessages=new JSONArray();
     private boolean mailFetchStarted, activeMailClaimed;
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
     private long toastUntil, lastTap, lastRoyaleSpinAt;
-    private boolean shopPurchasePending;
+    private boolean shopPurchasePending, matchRewardPending;
+    private long matchRewardRetryAfter;
+    private String activeMatchRequestId="";
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
         super(context);
@@ -308,8 +308,11 @@ public final class HudOverlay extends View {
     }
     private void beginOfflineMatch(){
         ensureDailyMissionWindow();
-        prefs.edit().putBoolean("match_recorded_for_missions",false)
-            .putBoolean("match_reward_recorded",false).apply();
+        activeMatchRequestId=java.util.UUID.randomUUID().toString();
+        matchRewardPending=false;matchRewardRetryAfter=0L;
+        prefs.edit().putString("active_match_request_id",activeMatchRequestId)
+            .putBoolean("match_reward_recorded",false)
+            .putBoolean("match_reward_attempted",false).apply();
         resultSpectating=false;game.setSpectatorMode(false);
         game.setCharacter(character);game.setMap(map);game.setMatchMode(mode);
         game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
@@ -475,7 +478,7 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyalePage(Canvas c) {
-        eyebrow(c,270,175,"TEMPORADA 02 • PROGRESSÃO OFFLINE");
+        eyebrow(c,270,175,"TEMPORADA 02 • PROGRESSÃO DA CONTA");
         title(c,"MENU ROYALE",270,224);
         pill(c,674,184,166,32,"GIRO ROYALE",0xFF5A4321,0xFFFFD27A);
         subtitle(c,"Passe de temporada e giro de recompensas com probabilidades visíveis.",270,252);
@@ -503,7 +506,7 @@ public final class HudOverlay extends View {
             pill(c,x+12,y+48,148,23,claimed?"RESGATADO":unlocked?"RESGATAR":"BLOQUEADO",
                 claimed?0xFF176A75:unlocked?0xFF345D79:0x553B6172,Color.WHITE);
         }
-        text(c,"Recompensas locais • sem compras reais ou conexão online.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
+        text(c,"XP, missões e recompensas validados pela conta online.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
     private void drawRoyaleSpinPage(Canvas c) {
@@ -589,37 +592,61 @@ public final class HudOverlay extends View {
         postInvalidateOnAnimation();
     }
     private void applyMatchRewards(boolean victory) {
-        if(prefs.getBoolean("match_reward_recorded",false))return;
+        if(prefs.getBoolean("match_reward_recorded",false)||matchRewardPending)return;
+        long now=System.currentTimeMillis();
+        if(now<matchRewardRetryAfter)return;
+        if(!googleSignedIn||matchResultAction==null) {
+            if(!prefs.getBoolean("match_reward_attempted",false)) {
+                prefs.edit().putBoolean("match_reward_attempted",true).apply();
+                toast("Partida concluída. Entre na conta para receber recompensas sincronizadas.");
+            }
+            return;
+        }
+        if(activeMatchRequestId.isEmpty())activeMatchRequestId=prefs.getString("active_match_request_id","");
+        if(activeMatchRequestId.isEmpty()) {
+            activeMatchRequestId=java.util.UUID.randomUUID().toString();
+            prefs.edit().putString("active_match_request_id",activeMatchRequestId).apply();
+        }
         int[] stats=game.getMatchStats();
-        int kills=Math.max(0,game.getEliminations());
-        int damage=Math.max(0,stats.length>0?stats[0]:0);
-        int resources=Math.max(0,game.getCollectedResources());
+        int kills=Math.max(0,Math.min(29,game.getEliminations()));
+        int damage=Math.max(0,Math.min(50000,stats.length>0?stats[0]:0));
+        int resources=Math.max(0,Math.min(100,game.getCollectedResources()));
         int remaining=Math.max(0,stats.length>3?stats[3]:29);
         int placement=victory?1:Math.min(30,Math.max(2,remaining+1));
-        long placementScore=Math.max(0L,31L-placement);
-        // Recompensa determinística: resultado, colocação, eliminações, dano e coleta.
-        long diamonds=20L+kills*8L+Math.min(200L,(damage/100L)*3L)
-            +resources*5L+placementScore*2L+(victory?120L:0L);
-        long xp=60L+kills*30L+Math.min(600L,damage/20L)
-            +resources*10L+placementScore*18L+(victory?250L:0L);
-        SharedPreferences.Editor edit=prefs.edit()
-            .putLong("diamonds",prefs.getLong("diamonds",0L)+diamonds)
-            .putLong("xp",prefs.getLong("xp",0L)+xp)
-            .putLong("last_match_reward_diamonds",diamonds)
-            .putLong("last_match_reward_xp",xp)
-            .putInt("last_match_placement",placement)
-            .putInt("matches_played",prefs.getInt("matches_played",0)+1)
-            .putInt("match_kills",prefs.getInt("match_kills",0)+kills)
-            .putInt("match_damage",prefs.getInt("match_damage",0)+damage)
-            .putInt("match_resources",prefs.getInt("match_resources",0)+resources)
-            .putInt("last_match_kills",kills)
-            .putInt("last_match_damage",damage)
-            .putInt("last_match_resources",resources)
-            .putString("last_match_result",victory?"VITORIA":"ELIMINADO")
-            .putBoolean("match_reward_recorded",true);
-        if(victory)edit.putInt("match_wins",prefs.getInt("match_wins",0)+1);
-        edit.apply();
-        recordMissionProgressFromMatch();
+        try {
+            JSONObject payload=new JSONObject().put("request_id",activeMatchRequestId)
+                .put("victory",victory).put("placement",placement).put("kills",kills)
+                .put("damage",damage).put("resources",resources);
+            matchRewardPending=true;
+            prefs.edit().putBoolean("match_reward_attempted",true).apply();
+            matchResultAction.run(payload.toString(),(result,error)->{
+                matchRewardPending=false;
+                if(error!=null||result==null||!result.optBoolean("recorded",false)) {
+                    matchRewardRetryAfter=System.currentTimeMillis()+15000L;
+                    toast("Recompensa pendente: "+(error==null?"servidor não confirmou":error));
+                    postInvalidate();return;
+                }
+                JSONObjectWalletUpdate(result);
+                prefs.edit().putLong("last_match_reward_diamonds",result.optLong("diamonds_awarded",0L))
+                    .putLong("last_match_reward_xp",result.optLong("xp_awarded",0L))
+                    .putInt("last_match_placement",placement)
+                    .putBoolean("match_reward_recorded",true).apply();
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null) {
+                    prefs.edit().putLong("xp",profile.optLong("xp",prefs.getLong("xp",0L)))
+                        .putInt("matches_played",profile.optInt("matches_played",prefs.getInt("matches_played",0)))
+                        .putInt("match_wins",profile.optInt("match_wins",prefs.getInt("match_wins",0)))
+                        .putInt("match_kills",profile.optInt("match_kills",prefs.getInt("match_kills",0)))
+                        .putInt("match_damage",profile.optInt("match_damage",prefs.getInt("match_damage",0)))
+                        .putInt("match_resources",profile.optInt("match_resources",prefs.getInt("match_resources",0))).apply();
+                }
+                toast("🟢 Recompensas confirmadas pela conta online!");
+                postInvalidate();
+            });
+        } catch(Exception e) {
+            matchRewardPending=false;matchRewardRetryAfter=System.currentTimeMillis()+15000L;
+            toast("Não foi possível preparar o resultado da partida.");
+        }
     }
     private void drawMatchResult(Canvas c,boolean victory) {
         int[] stats=game.getMatchStats();
@@ -674,12 +701,7 @@ public final class HudOverlay extends View {
         ensureDailyMissionWindow();
         if(missionClaimed(index)){toast("Esta missão já foi resgatada hoje.");return;}
         if(missionProgress(index)<MISSION_GOALS[index]){toast("Continue jogando para concluir a missão.");return;}
-        long xp=prefs.getLong("xp",0L)+MISSION_XP[index];
-        long diamonds=prefs.getLong("diamonds",0L)+MISSION_DIAMONDS[index];
-        prefs.edit().putLong("xp",xp).putLong("diamonds",diamonds)
-            .putBoolean("mission_claimed_"+index,true).apply();
-        toast(MISSION_XP[index]>0?"+ "+MISSION_XP[index]+" XP recebidos!":
-            "+ "+MISSION_DIAMONDS[index]+" diamantes virtuais!");
+        claimServerReward("mission",String.valueOf(index),"Missão resgatada!");
     }
     private void drawMissionsPage(Canvas c) {
         ensureDailyMissionWindow();
@@ -711,12 +733,9 @@ public final class HudOverlay extends View {
     private void claimRoyaleTier(int index) {
         if(index<0||index>=ROYALE_LEVELS.length)return;
         int level=(int)Math.min(30L,1L+prefs.getLong("xp",0L)/500L);
-        String key="royale_tier_claimed_"+index;
-        if(prefs.getBoolean(key,false)){toast("Esta recompensa já foi resgatada.");return;}
+        if(prefs.getBoolean("royale_tier_claimed_"+index,false)){toast("Esta recompensa já foi resgatada.");return;}
         if(level<ROYALE_LEVELS[index]){toast("Alcance o nível "+ROYALE_LEVELS[index]+" do passe.");return;}
-        prefs.edit().putLong("diamonds",prefs.getLong("diamonds",0L)+ROYALE_REWARDS[index])
-            .putBoolean(key,true).apply();
-        toast("Recompensa Royale resgatada!");
+        claimServerReward("royale_tier",String.valueOf(index),"Recompensa Royale confirmada!");
     }
     private void claimDailyReward() {
         if(!googleSignedIn){toast("Entre na sua conta para coletar a recompensa online.");page=PROFILE;return;}
@@ -725,6 +744,7 @@ public final class HudOverlay extends View {
         dailyRewardAction.run("",(result,error)->{
             if(error!=null){toast("Falha: "+error);return;}
             JSONObjectWalletUpdate(result);
+            prefs.edit().putLong("daily_reward_day",System.currentTimeMillis()/86400000L).apply();
             boolean claimed=result.optBoolean("claimed",false);
             long amount=result.optLong("diamonds_awarded",0L);
             toast(claimed?"+"+amount+" DIAMANTES ONLINE!":"Recompensa diária já coletada.");
@@ -922,9 +942,7 @@ public final class HudOverlay extends View {
 
     private void claimEventReward() {
         if(prefs.getBoolean("event_season_claimed",false)){toast("Recompensa do evento já coletada.");return;}
-        prefs.edit().putLong("xp",prefs.getLong("xp",0L)+150L).putLong("diamonds",prefs.getLong("diamonds",0L)+75L)
-            .putBoolean("event_season_claimed",true).apply();
-        toast("Evento concluído: +150 XP e +75 diamantes virtuais.");
+        claimServerReward("event","season03_welcome","Evento concluído: recompensa recebida!");
     }
     private void claimMailReward() {
         if(activeMailClaimed){toast("Presente desta mensagem já coletado.");return;}
@@ -944,14 +962,26 @@ public final class HudOverlay extends View {
             postInvalidate();
         });
     }
+    private void claimServerReward(String type,String key,String successMessage) {
+        if(!googleSignedIn){toast("Entre na conta para resgatar recompensas online.");page=PROFILE;return;}
+        if(rewardClaimAction==null){toast("Sistema de recompensas online indisponível.");return;}
+        rewardClaimAction.run(type+"|"+key,(result,error)->{
+            if(error!=null){toast("Resgate não concluído: "+error);postInvalidate();return;}
+            if(result==null){toast("O servidor não confirmou a recompensa.");return;}
+            JSONObjectWalletUpdate(result);
+            long xp=result.optLong("xp_awarded",0L);
+            toast(result.optBoolean("claimed",false)?successMessage+(xp>0?" +"+xp+" XP":"")
+                :"Esta recompensa já consta como resgatada.");
+            postInvalidate();
+        });
+    }
     private void claimAchievement(int index) {
         int[] goals={500,1500,3000};long[] rewards={50,100,200};
         String[] keys={"achievement_500","achievement_1500","achievement_3000"};
         if(index<0||index>=goals.length)return;
         if(prefs.getBoolean(keys[index],false)){toast("Conquista já resgatada.");return;}
         if(prefs.getLong("xp",0L)<goals[index]){toast("Ainda faltam pontos de experiência.");return;}
-        prefs.edit().putLong("diamonds",prefs.getLong("diamonds",0L)+rewards[index]).putBoolean(keys[index],true).apply();
-        toast("Conquista resgatada: +"+rewards[index]+" diamantes.");
+        claimServerReward("achievement",String.valueOf(goals[index]),"Conquista resgatada!");
     }
 
     private void drawTeam(Canvas c){
@@ -1430,6 +1460,8 @@ public final class HudOverlay extends View {
         mailFetchAction=mailFetch;mailClaimAction=mailClaim;
     }
     public void setShopPurchaseAction(GameApiAction action){shopPurchaseAction=action;}
+    public void setMatchResultAction(GameApiAction action){matchResultAction=action;}
+    public void setRewardClaimAction(GameApiAction action){rewardClaimAction=action;}
     private void showAiCoachDialog(){
         if(aiCoachAction==null){
             new AlertDialog.Builder(getContext()).setTitle("IA PROFESSORA")
