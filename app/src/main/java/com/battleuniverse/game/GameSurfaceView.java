@@ -29,6 +29,18 @@ public final class GameSurfaceView extends GLSurfaceView {
         Arrays.fill(buttonPointers,-1);
     }
 
+    public void returnToLobby() {
+        moveX=moveY=lookDX=lookDY=0;
+        aimToggled=false;
+        Arrays.fill(buttonPointers,-1);
+        buttons=0;
+        movePointer=lookPointer=-1;
+        queueEvent(()->{
+            nativeSetSpectator(false);
+            nativeSetScreen(0);
+        });
+    }
+
     public void setGameScreen(boolean playing) {
         screenMode=playing?1:0;
         if(!playing) {
