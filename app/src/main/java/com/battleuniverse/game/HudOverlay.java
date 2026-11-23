@@ -1396,8 +1396,12 @@ public final class HudOverlay extends View {
         mailFetchAction=mailFetch;mailClaimAction=mailClaim;
     }
     private void showAiCoachDialog(){
-        if(aiCoachAction==null){toast("IA ainda não conectada.");return;}
-        if(!googleSignedIn){toast("Entre na sua conta para conversar com a IA.");page=PROFILE;return;}
+        if(aiCoachAction==null){
+            new AlertDialog.Builder(getContext()).setTitle("IA PROFESSORA")
+                .setMessage("O serviço de ajuda ainda está inicializando. Feche esta janela e tente novamente.")
+                .setPositiveButton("OK",null).show();
+            return;
+        }
         LinearLayout box=new LinearLayout(getContext());
         box.setOrientation(LinearLayout.VERTICAL);
         int pad=(int)(18*getResources().getDisplayMetrics().density);
@@ -1415,6 +1419,13 @@ public final class HudOverlay extends View {
             .setPositiveButton("PERGUNTAR",(dialog,which)->{
                 String question=input.getText().toString().trim();
                 if(question.length()<2){toast("Escreva uma pergunta.");return;}
+                if(!googleSignedIn){
+                    new AlertDialog.Builder(getContext()).setTitle("ENTRE NA SUA CONTA")
+                        .setMessage("A conversa abre normalmente, mas para enviar a pergunta à IA você precisa entrar ou criar uma conta BATTLE UNIVERSE.")
+                        .setNegativeButton("CANCELAR",null)
+                        .setPositiveButton("IR PARA CONTA",(d,w)->{page=PROFILE;invalidate();showUsernameAccountDialog();}).show();
+                    return;
+                }
                 toast("IA analisando sua dúvida...");
                 aiCoachAction.ask(question,(answer,error)->{
                     if(error!=null){new AlertDialog.Builder(getContext()).setTitle("IA BATTLE UNIVERSE")
