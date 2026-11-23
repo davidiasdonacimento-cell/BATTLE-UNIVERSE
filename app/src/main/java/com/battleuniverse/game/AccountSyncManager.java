@@ -151,6 +151,37 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         });
     }
 
+    public void fetchGameMail(ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na sua conta para abrir o correio."));return;}
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/game/mail","GET",token,null);
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) {
+                String message=cleanError(e);
+                main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
+
+    public void claimGameMail(String messageId, ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na sua conta para resgatar o presente."));return;}
+        String id=messageId==null?"":messageId.trim();
+        if(!id.matches("[A-Za-z0-9._:-]{1,64}")){main.post(()->callback.onResult(null,"Mensagem inválida."));return;}
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/game/mail/"+id+"/claim","POST",token,new JSONObject());
+                main.post(()->callback.onResult(result,null));
+                syncNow();
+            } catch(Exception e) {
+                String message=cleanError(e);
+                main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
+
     public void askCoach(String question, CoachListener callback) {
         String token=getToken();
         if(token.isEmpty()) { main.post(()->callback.onResult(null,"Entre na sua conta para usar a IA.")); return; }
