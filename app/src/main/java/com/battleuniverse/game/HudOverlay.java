@@ -80,14 +80,14 @@ public final class HudOverlay extends View {
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
     private AiCoachAction aiCoachAction;
-    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction;
+    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction, royaleSpinAction;
     private JSONArray mailMessages=new JSONArray();
     private boolean mailFetchStarted, activeMailClaimed;
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
     private long toastUntil, lastTap, lastRoyaleSpinAt;
-    private boolean shopPurchasePending;
+    private boolean shopPurchasePending, royaleSpinPending;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
         super(context);
@@ -531,39 +531,49 @@ public final class HudOverlay extends View {
         text(c,"ÚLTIMO PRÊMIO",530,559,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
         text(c,last,530,587,13,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"GIROS REGISTRADOS: "+prefs.getInt("royale_spin_count",0),530,612,9,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-        text(c,"GIRO LOCAL • sem chamadas ao servidor • aguarde 1,2s entre giros.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
+        text(c,"GIRO ONLINE • saldo e prêmio validados pelo servidor.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
     private void performRoyaleSpin() {
-        final long cost=100L;
-        long balance=prefs.getLong("diamonds",0L);
-        if(balance<cost) { toast("Diamantes insuficientes para girar.");return; }
+        if(!googleSignedIn) {
+            toast("Entre na conta para usar o Giro Royale online.");
+            page=PROFILE;invalidate();return;
+        }
+        if(royaleSpinPending)return;
+        if(royaleSpinAction==null) {
+            toast("Giro online indisponível. Tente novamente.");return;
+        }
         long now=System.currentTimeMillis();
         if(now-lastRoyaleSpinAt<1200L) {
-            toast("Aguarde um instante antes do próximo giro.");
-            return;
+            toast("Aguarde um instante antes do próximo giro.");return;
         }
         lastRoyaleSpinAt=now;
-        int roll=royaleRandom.nextInt(100);
-        int prize=roll<40?0:(roll<70?1:(roll<90?2:(roll<99?3:4)));
-        long remaining=balance-cost;
-        String result;
-        if(prize==0) { remaining+=50L;result="50 DIAMANTES"; }
-        else if(prize==1) { remaining+=100L;result="100 DIAMANTES"; }
-        else {
-            int itemIndex=prize==2?4:(prize==3?9:13);
-            String item=SHOP_NAMES[itemIndex];
-            if(prefs.getBoolean(SHOP_KEYS[itemIndex],false)) {
-                long compensation=prize==2?75L:(prize==3?90L:150L);
-                remaining+=compensation;result=item+" REPETIDO • +"+compensation+" DIAMANTES";
-            } else {
-                prefs.edit().putBoolean(SHOP_KEYS[itemIndex],true).apply();
-                result=item;
+        royaleSpinPending=true;
+        toast("Validando saldo e prêmio no servidor...");
+        String requestId=java.util.UUID.randomUUID().toString();
+        royaleSpinAction.run(requestId,(response,error)->{
+            royaleSpinPending=false;
+            if(error!=null) {
+                toast(error.toLowerCase(java.util.Locale.ROOT).contains("diamantes insuficientes")
+                    ?"Diamantes insuficientes na carteira online.":"Giro não concluído: "+error);
+                invalidate();return;
             }
-        }
-        prefs.edit().putLong("diamonds",remaining).putString("royale_last_reward",result)
-            .putInt("royale_spin_count",prefs.getInt("royale_spin_count",0)+1).apply();
-        toast("ROYALE: "+result);
+            if(response==null) {
+                toast("O servidor não confirmou o giro.");invalidate();return;
+            }
+            long balance=response.optLong("diamonds_balance",prefs.getLong("diamonds",0L));
+            String prize=response.optString("prize_name","PRÊMIO");
+            String prizeId=response.optString("prize_id","");
+            String[] ids={"shirt_tactical","boots_combat","set_aurora","beard_old","pants_angelical"};
+            String[] keys={"wear_shirt_tactical","wear_boots_combat","wear_set_aurora","wear_beard_old","wear_pants_angelical"};
+            SharedPreferences.Editor edit=prefs.edit().putLong("diamonds",balance)
+                .putString("royale_last_reward",prize)
+                .putInt("royale_spin_count",prefs.getInt("royale_spin_count",0)+1);
+            for(int i=0;i<ids.length;i++)if(ids[i].equals(prizeId))edit.putBoolean(keys[i],true);
+            edit.apply();
+            toast("ROYALE ONLINE: "+prize+(response.optBoolean("duplicate")?" • REPETIDO":""));
+            invalidate();
+        });
     }
 
     private void ensureStarterWardrobe() {
@@ -1458,6 +1468,7 @@ public final class HudOverlay extends View {
         mailFetchAction=mailFetch;mailClaimAction=mailClaim;
     }
     public void setShopPurchaseAction(GameApiAction action){shopPurchaseAction=action;}
+    public void setRoyaleSpinAction(GameApiAction action){royaleSpinAction=action;}
     private void showAiCoachDialog(){
         if(aiCoachAction==null){
             new AlertDialog.Builder(getContext()).setTitle("IA PROFESSORA")
