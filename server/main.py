@@ -757,6 +757,165 @@ def redeem_promo_code(body: PromoRedeemBody, db: Session = Depends(db_session),
     return {"redeemed": True, "code": code, "diamonds_awarded": promo.diamonds,
             "diamonds_balance": wallet.diamonds, "message": "Diamantes adicionados à carteira."}
 
+
+# Server-authoritative virtual shop, missions, events, mail and achievements.
+SHOP_CATALOG = [
+    {"id":"shop_frame_neon","name":"MOLDURA NEON","price":500},
+    {"id":"shop_emblem_bloob","name":"EMBLEMA BLOOB","price":1000},
+    {"id":"shop_title_champion","name":"TÍTULO CAMPEÃO","price":1500},
+    {"id":"wear_shirt_tactical","name":"CAMISA TÁTICA","price":650},
+    {"id":"wear_shirt_neon","name":"CAMISA NEON","price":800},
+    {"id":"wear_shirt_frost","name":"CAMISA FROST","price":750},
+    {"id":"wear_shirt_desert","name":"CAMISA DESERTO","price":700},
+    {"id":"wear_boots_combat","name":"BOTAS COMBATE","price":450},
+    {"id":"wear_boots_neon","name":"BOTAS NEON","price":600},
+    {"id":"wear_boots_frost","name":"BOTAS FROST","price":550},
+    {"id":"wear_boots_gold","name":"BOTAS DOURADAS","price":700},
+    {"id":"wear_set_aurora","name":"CONJUNTO AURORA","price":1800},
+    {"id":"wear_set_champion","name":"CONJUNTO CAMPEÃO","price":2200},
+    {"id":"wear_set_orbit","name":"CONJUNTO ORBITAL","price":2500},
+    {"id":"wear_set_desert","name":"CONJUNTO DESERTO","price":1900},
+]
+MISSION_CONFIG = [
+    {"id":"play_match","name":"JOGUE UMA PARTIDA","goal":1,"xp":120,"diamonds":0,"progress":"mission_matches"},
+    {"id":"three_eliminations","name":"ELIMINE 3 OPONENTES","goal":3,"xp":180,"diamonds":0,"progress":"mission_eliminations"},
+    {"id":"collect_crystals","name":"COLETE 3 CRISTAIS","goal":3,"xp":0,"diamonds":80,"progress":"mission_crystals"},
+]
+ACHIEVEMENT_CONFIG = [
+    {"id":"first_match","name":"PRIMEIRA PARTIDA","field":"matches_played","goal":1,"xp":100,"diamonds":25},
+    {"id":"first_victory","name":"PRIMEIRA VITÓRIA","field":"match_wins","goal":1,"xp":200,"diamonds":50},
+    {"id":"eliminator_25","name":"ELIMINADOR","field":"match_kills","goal":25,"xp":300,"diamonds":100},
+]
+
+@app.get("/v1/game/shop/catalog")
+def shop_catalog(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    profile = player.profile or {}
+    wallet = db.get(PlayerWallet, player.id)
+    return {"items":[{**item,"owned":bool(profile.get(item["id"],False))} for item in SHOP_CATALOG],
+            "diamonds":int(wallet.diamonds if wallet else 0),"currency":"virtual_diamonds"}
+
+@app.post("/v1/game/shop/purchase")
+def shop_purchase(item_id: str = Query(min_length=3, max_length=40),
+                  db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    item = next((entry for entry in SHOP_CATALOG if entry["id"] == item_id), None)
+    if item is None:
+        raise HTTPException(404,"Item não encontrado na loja.")
+    profile = dict(player.profile or {})
+    if profile.get(item_id):
+        raise HTTPException(409,"Este item já pertence à sua conta.")
+    wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    if wallet.diamonds < item["price"]:
+        raise HTTPException(409,"Diamantes insuficientes na carteira online.")
+    wallet.diamonds -= item["price"]
+    profile[item_id] = True
+    player.profile = profile
+    db.commit()
+    return {"purchased":True,"item_id":item_id,"diamonds_spent":item["price"],
+            "diamonds_balance":wallet.diamonds,"owned":True}
+
+@app.get("/v1/game/missions")
+def game_missions(player: Player = Depends(current_player)):
+    profile = player.profile or {}
+    today = datetime.now(timezone.utc).date().isoformat()
+    same_day = profile.get("missions_day") == today
+    return {"missions":[{"id":m["id"],"name":m["name"],"goal":m["goal"],
+             "progress":min(m["goal"],int(profile.get(m["progress"],0) or 0)) if same_day else 0,
+             "xp":m["xp"],"diamonds":m["diamonds"],
+             "claimed":bool(profile.get("mission_claimed_"+str(i),False)) if same_day else False}
+             for i,m in enumerate(MISSION_CONFIG)],"day":today}
+
+@app.post("/v1/game/missions/{mission_id}/claim")
+def claim_game_mission(mission_id: str, db: Session = Depends(db_session),
+                       player: Player = Depends(current_player)):
+    index = next((i for i,m in enumerate(MISSION_CONFIG) if m["id"] == mission_id),None)
+    if index is None: raise HTTPException(404,"Missão não encontrada.")
+    mission = MISSION_CONFIG[index]
+    profile = dict(player.profile or {})
+    today = datetime.now(timezone.utc).date().isoformat()
+    if profile.get("missions_day") != today: raise HTTPException(409,"As missões ainda não foram sincronizadas hoje.")
+    if int(profile.get(mission["progress"],0) or 0) < mission["goal"]:
+        raise HTTPException(409,"Missão ainda não concluída.")
+    key="mission_claimed_"+str(index)
+    if profile.get(key): raise HTTPException(409,"Esta missão já foi resgatada.")
+    wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
+    if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    wallet.diamonds += mission["diamonds"]
+    profile[key]=True
+    profile["xp"]=int(profile.get("xp",0) or 0)+mission["xp"]
+    player.profile=profile
+    db.commit()
+    return {"claimed":True,"mission_id":mission_id,"xp_awarded":mission["xp"],
+            "diamonds_awarded":mission["diamonds"],"diamonds_balance":wallet.diamonds}
+
+@app.get("/v1/game/events")
+def game_events(player: Player = Depends(current_player)):
+    profile=player.profile or {}
+    return {"events":[{"id":"season_welcome_03","name":"DESAFIO DE BOAS-VINDAS",
+        "description":"Entre no lobby e resgate o pacote de participação.",
+        "diamonds":50,"claimed":bool(profile.get("event_season_claimed",False))}],
+        "currency":"virtual_diamonds"}
+
+@app.post("/v1/game/events/{event_id}/claim")
+def claim_game_event(event_id: str, db: Session = Depends(db_session),
+                     player: Player = Depends(current_player)):
+    if event_id!="season_welcome_03": raise HTTPException(404,"Evento não encontrado.")
+    profile=dict(player.profile or {})
+    if profile.get("event_season_claimed"): raise HTTPException(409,"Recompensa deste evento já coletada.")
+    wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
+    if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    wallet.diamonds+=50;profile["event_season_claimed"]=True;player.profile=profile
+    db.commit()
+    return {"claimed":True,"diamonds_awarded":50,"diamonds_balance":wallet.diamonds}
+
+@app.get("/v1/game/mail")
+def game_mail(player: Player = Depends(current_player)):
+    profile=player.profile or {}
+    return {"messages":[{"id":"welcome_gift_01","title":"BOAS-VINDAS AO BATTLE UNIVERSE",
+        "body":"Presente de entrada: 50 diamantes virtuais.",
+        "diamonds":50,"claimed":bool(profile.get("mail_welcome_claimed",False))}]}
+
+@app.post("/v1/game/mail/{message_id}/claim")
+def claim_game_mail(message_id: str, db: Session = Depends(db_session),
+                    player: Player = Depends(current_player)):
+    if message_id!="welcome_gift_01": raise HTTPException(404,"Mensagem não encontrada.")
+    profile=dict(player.profile or {})
+    if profile.get("mail_welcome_claimed"): raise HTTPException(409,"Presente desta mensagem já coletado.")
+    wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
+    if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    wallet.diamonds+=50;profile["mail_welcome_claimed"]=True;player.profile=profile
+    db.commit()
+    return {"claimed":True,"diamonds_awarded":50,"diamonds_balance":wallet.diamonds}
+
+@app.get("/v1/game/achievements")
+def game_achievements(player: Player = Depends(current_player)):
+    profile=player.profile or {}
+    return {"achievements":[{"id":a["id"],"name":a["name"],"goal":a["goal"],
+        "progress":min(a["goal"],max(0,int(profile.get(a["field"],0) or 0))),
+        "xp":a["xp"],"diamonds":a["diamonds"],
+        "claimed":bool(profile.get("achievement_claimed_"+a["id"],False))}
+        for a in ACHIEVEMENT_CONFIG]}
+
+@app.post("/v1/game/achievements/{achievement_id}/claim")
+def claim_game_achievement(achievement_id: str, db: Session = Depends(db_session),
+                           player: Player = Depends(current_player)):
+    achievement=next((a for a in ACHIEVEMENT_CONFIG if a["id"]==achievement_id),None)
+    if achievement is None: raise HTTPException(404,"Conquista não encontrada.")
+    profile=dict(player.profile or {})
+    key="achievement_claimed_"+achievement_id
+    progress=max(0,int(profile.get(achievement["field"],0) or 0))
+    if progress<achievement["goal"]: raise HTTPException(409,"Conquista ainda não concluída.")
+    if profile.get(key): raise HTTPException(409,"Conquista já resgatada.")
+    wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
+    if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    wallet.diamonds+=achievement["diamonds"]
+    profile["xp"]=int(profile.get("xp",0) or 0)+achievement["xp"]
+    profile[key]=True;player.profile=profile
+    db.commit()
+    return {"claimed":True,"achievement_id":achievement_id,"xp_awarded":achievement["xp"],
+            "diamonds_awarded":achievement["diamonds"],"diamonds_balance":wallet.diamonds}
+
 @app.get("/v1/owner/promo-codes")
 def owner_list_promo_codes(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
     rows = db.scalars(select(PromoCode).order_by(PromoCode.id.desc()).limit(100)).all()
