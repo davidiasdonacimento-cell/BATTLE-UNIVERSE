@@ -659,7 +659,7 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
         db.refresh(wallet)
     return {"diamonds": wallet.diamonds, "currency": "diamonds", "authority": "server"}
 
-SHOP_CATALOG = {
+SHOP_PRICE_BY_KEY = {
     "shop_frame_neon": 500,
     "shop_emblem_bloob": 1000,
     "shop_title_champion": 1500,
@@ -680,7 +680,7 @@ SHOP_CATALOG = {
 @app.post("/v1/shop/purchase")
 def shop_purchase(body: ShopPurchaseBody, db: Session = Depends(db_session),
                   player: Player = Depends(current_player)):
-    price = SHOP_CATALOG.get(body.item_key)
+    price = SHOP_PRICE_BY_KEY.get(body.item_key)
     if price is None:
         raise HTTPException(422, "Item não reconhecido pela loja.")
     replay = db.scalar(select(ShopPurchase).where(
