@@ -1290,7 +1290,7 @@ void drawBuildPreview() {
     if(!gBuildPreview||gDropState!=3)return;
     const Vec3 pos=buildPreviewPosition();
     bool valid=gWood>=10&&gBuildCount<gBuildLimit&&gBuildCount<BUILD_CAPACITY&&!worldPositionBlocked(pos.x,pos.z,1.15f);
-    for(int i=0;i<gBuildCount;++i){const float dx=pos.x-gBuildPieces[static_cast<size_t>(i)].pos.x;const float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;if(dx*dx+dz*dz<2.0f)valid=false;}
+    for(int i=0;i<gBuildCount;++i){const BuildPiece& existing=gBuildPieces[static_cast<size_t>(i)];const float dx=pos.x-existing.pos.x;const float dz=pos.z-existing.pos.z;if(existing.health>0&&dx*dx+dz*dz<2.0f)valid=false;}
     glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     const Vec3 tint=valid?Vec3{0.30f,0.88f,1.0f}:Vec3{1.0f,0.22f,0.18f};
     if(gBuildType==0)drawCube({pos.x,1.85f,pos.z},{3.2f,2.25f,0.24f},tint,gPlayerYaw,0,0,0.38f);
@@ -1301,7 +1301,8 @@ void drawBuildPreview() {
 void drawBuildPieces() {
     for(int i=0;i<gBuildCount;++i) {
         const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
-        if(b.type==0&&b.health>0) {
+        if(b.type==0) {
+            if(b.health<=0)continue;
             const float strength=static_cast<float>(b.health)/static_cast<float>(ICE_WALL_MAX_HEALTH);
             const Vec3 iceColor{0.12f+0.08f*strength,0.42f+0.25f*strength,0.62f+0.30f*strength};
             drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},iceColor,b.yaw);
