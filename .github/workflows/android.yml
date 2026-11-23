@@ -113,6 +113,17 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.0.12077973 cmake;3.22.1'
 
+      - name: Add Android Build Tools and apkanalyzer to PATH
+        shell: bash
+        run: |
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          test -x "$BUILD_TOOLS/apksigner" || { echo "::error::apksigner is missing from $BUILD_TOOLS"; exit 1; }
+          echo "$BUILD_TOOLS" >> "$GITHUB_PATH"
+          ANALYZER="$(find "$ANDROID_HOME" -type f -name apkanalyzer -perm -u+x -print -quit)"
+          test -n "$ANALYZER" || { echo "::error::apkanalyzer was not found in Android SDK"; exit 1; }
+          echo "$(dirname "$ANALYZER")" >> "$GITHUB_PATH"
+          echo "Android Build Tools and apkanalyzer paths configured."
+
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -150,6 +161,8 @@ jobs:
         run: |
           APK="app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
+          command -v apksigner
+          command -v apkanalyzer
           apksigner verify --verbose --print-certs "$APK"
           test "$(apkanalyzer manifest debuggable "$APK")" = "false"
           python - <<'PY'
