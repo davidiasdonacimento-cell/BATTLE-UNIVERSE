@@ -26,8 +26,9 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         enterImmersiveMode();
-        if(ContentPackInstaller.isInstalled(this)) launchGame(true);
-        else startContentSetup();
+        // O pacote 4K é opcional. A ausência dele nunca pode bloquear a inicialização
+        // nem iniciar um download de centenas de MB automaticamente.
+        launchGame(ContentPackInstaller.isInstalled(this));
     }
 
     private void startContentSetup() {
@@ -102,14 +103,7 @@ public final class MainActivity extends Activity {
             if(parts.length!=2){callback.onResult(null,"Recompensa inválida.");return;}
             accountSync.claimConfiguredReward(parts[0],parts[1],callback);
         });
-        hud.setPackAnalyzerAction(()->{
-            android.content.Intent intent=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
-            intent.setType("*/*");
-            intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES,
-                new String[]{"application/zip","application/octet-stream","application/x-zip-compressed"});
-            startActivityForResult(intent,REQUEST_PACK_FILE);
-        });
+        hud.setPackAnalyzerAction(this::showContentPackOptions);
         accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
             if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
         });
@@ -123,6 +117,21 @@ public final class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
 
         setContentView(root);
+    }
+
+    private void showContentPackOptions() {
+        String[] options={
+            "Baixar pacote oficial Season 02 (aprox. 429 MB)",
+            "Selecionar ZIP Season 02 já baixado"
+        };
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("CONTEÚDO EXPANDIDO 4K")
+            .setItems(options,(dialog,which)->{
+                if(which==0) startContentSetup();
+                else if(which==1) openLocalPackPicker();
+            })
+            .setNegativeButton("AGORA NÃO",null)
+            .show();
     }
 
     private void openLocalPackPicker() {
@@ -183,9 +192,9 @@ public final class MainActivity extends Activity {
                         data.getFlags()&android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 } catch(Exception ignored) { }
                 analyzeSelectedPack(uri);
-            } else if(!ContentPackInstaller.isInstalled(this)) {
-                startContentSetup();
             }
+            // Cancelar o seletor mantém o jogador no lobby. Não iniciar download
+            // automaticamente só porque o pacote opcional ainda não existe.
         }
     }
     @Override protected void onDestroy(){
