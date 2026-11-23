@@ -167,7 +167,7 @@ public final class HudOverlay extends View {
         circle(c,1032,47,18,0xFF1F7584,
             prefs.getBoolean("shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
         text(c,nickname.length()>11?nickname.substring(0,11):nickname,1060,42,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"NÍVEL "+String.format(Locale.US,"%02d",level)+"  •  "+xp+" XP",1060,60,9,0xFF9BB6C6,Typeface.DEFAULT);
+        text(c,rankForXp(xp)+"  •  NÍVEL "+String.format(Locale.US,"%02d",level),1060,60,9,0xFF9BB6C6,Typeface.DEFAULT);
         text(c,"◆ "+formatDiamonds(diamonds),1176,51,11,0xFFFFC76B,Typeface.DEFAULT_BOLD);
     }
     private String formatDiamonds(long value) {
@@ -389,7 +389,7 @@ public final class HudOverlay extends View {
             prefs.getBoolean("shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
         text(c,prefs.getString("nickname","JOGADOR"),382,346,23,Color.WHITE,
             Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"NÍVEL "+level+"  •  "+xp+" XP",382,374,13,0xFF9FC0CF,Typeface.DEFAULT_BOLD);
+        text(c,"PATENTE "+rankForXp(xp)+"  •  NÍVEL "+level,382,374,13,0xFF9FC0CF,Typeface.DEFAULT_BOLD);
         text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,411,17,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         text(c,prefs.getBoolean("code_100k_redeemed",false)
             ?"CÓDIGO 100K JÁ RESGATADO NESTE PERFIL"
@@ -599,17 +599,53 @@ public final class HudOverlay extends View {
         String status=game.getGameStatus();
         return status.contains("VITÓRIA")||status.contains("ELIMINADO");
     }
+    private static final String[] RANK_NAMES={"BRONZE I","BRONZE II","BRONZE III",
+        "PRATA I","PRATA II","OURO I","OURO II","PLATINA","DIAMANTE","MESTRE"};
+    private static final long[] RANK_XP={0L,500L,1200L,2200L,3500L,5200L,7500L,10500L,14500L,20000L};
+    private String rankForXp(long xp) {
+        int rank=0;
+        for(int i=1;i<RANK_XP.length;i++)if(xp>=RANK_XP[i])rank=i;
+        return RANK_NAMES[rank];
+    }
+    private void returnToLobbyAfterMatch() {
+        forwarding=false;
+        tacticalMapVisible=false;
+        resultSpectating=false;
+        page=HOME;
+        game.returnToLobby();
+        postInvalidateOnAnimation();
+    }
     private void applyMatchRewards(boolean victory) {
         if(prefs.getBoolean("match_reward_recorded",false))return;
         int[] stats=game.getMatchStats();
         int kills=Math.max(0,game.getEliminations());
-        long diamonds=(victory?250L:60L)+kills*(victory?15L:10L);
-        long xp=(victory?500L:120L)+kills*(victory?50L:25L);
-        prefs.edit().putLong("diamonds",prefs.getLong("diamonds",0L)+diamonds)
+        int damage=Math.max(0,stats.length>0?stats[0]:0);
+        int resources=Math.max(0,game.getCollectedResources());
+        int remaining=Math.max(0,stats.length>3?stats[3]:29);
+        int placement=victory?1:Math.min(30,Math.max(2,remaining+1));
+        long placementScore=Math.max(0L,31L-placement);
+        // Recompensa determinística: resultado, colocação, eliminações, dano e coleta.
+        long diamonds=20L+kills*8L+Math.min(200L,(damage/100L)*3L)
+            +resources*5L+placementScore*2L+(victory?120L:0L);
+        long xp=60L+kills*30L+Math.min(600L,damage/20L)
+            +resources*10L+placementScore*18L+(victory?250L:0L);
+        SharedPreferences.Editor edit=prefs.edit()
+            .putLong("diamonds",prefs.getLong("diamonds",0L)+diamonds)
             .putLong("xp",prefs.getLong("xp",0L)+xp)
             .putLong("last_match_reward_diamonds",diamonds)
             .putLong("last_match_reward_xp",xp)
-            .putBoolean("match_reward_recorded",true).apply();
+            .putInt("last_match_placement",placement)
+            .putInt("matches_played",prefs.getInt("matches_played",0)+1)
+            .putInt("match_kills",prefs.getInt("match_kills",0)+kills)
+            .putInt("match_damage",prefs.getInt("match_damage",0)+damage)
+            .putInt("match_resources",prefs.getInt("match_resources",0)+resources)
+            .putInt("last_match_kills",kills)
+            .putInt("last_match_damage",damage)
+            .putInt("last_match_resources",resources)
+            .putString("last_match_result",victory?"VITORIA":"ELIMINADO")
+            .putBoolean("match_reward_recorded",true);
+        if(victory)edit.putInt("match_wins",prefs.getInt("match_wins",0)+1);
+        edit.apply();
         recordMissionProgressFromMatch();
     }
     private void drawMatchResult(Canvas c,boolean victory) {
@@ -618,11 +654,11 @@ public final class HudOverlay extends View {
         panel(c,225,76,830,570,0xF20B1C2A,0xFF4BCDD5,25);
         eyebrow(c,275,116,"BATTLE UNIVERSE  •  RELATÓRIO DA PARTIDA");
         title(c,victory?"VITÓRIA ROYALE":"VOCÊ FOI ELIMINADO",275,164);
-        subtitle(c,victory?"Você ficou entre os últimos e venceu a operação.":"A operação terminou. Confira seu desempenho.",275,190);
+        subtitle(c,(victory?"1º LUGAR • VITÓRIA. ":"POSIÇÃO "+prefs.getInt("last_match_placement",30)+"º. ")+"Recompensas calculadas pelo seu desempenho.",275,190);
         panel(c,275,220,330,104,0xCC123B39,0xFF45D6AE,16);
         text(c,"RECOMPENSAS RECEBIDAS",296,247,10,0xFFB7EBDD,Typeface.DEFAULT_BOLD);
         text(c,"+"+prefs.getLong("last_match_reward_diamonds",0L)+" DIAMANTES",296,278,19,0xFFFFD36D,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"+"+prefs.getLong("last_match_reward_xp",0L)+" XP",296,302,12,0xFF8BE6D1,Typeface.DEFAULT_BOLD);
+        text(c,"+"+prefs.getLong("last_match_reward_xp",0L)+" XP  •  PATENTE "+rankForXp(prefs.getLong("xp",0L)),296,302,10,0xFF8BE6D1,Typeface.DEFAULT_BOLD);
         panel(c,625,220,380,104,0xCC132B43,0xFF4B9BD0,16);
         text(c,"RESULTADO DA EQUIPE",648,247,10,0xFFAED8F0,Typeface.DEFAULT_BOLD);
         text(c,""+stats[3]+" OPONENTES RESTANTES",648,278,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -1202,8 +1238,10 @@ public final class HudOverlay extends View {
                 if(!resultSpectating&&isMatchOver()) {
                     boolean victory=game.getGameStatus().contains("VITÓRIA");
                     if(hit(q[0],q[1],300,548,300,68)) {
-                        recordMissionProgressFromMatch();resultSpectating=false;game.setSpectatorMode(false);
-                        page=HOME;game.setGameScreen(false);invalidate();return true;
+                        applyMatchRewards(victory);
+                        recordMissionProgressFromMatch();
+                        returnToLobbyAfterMatch();
+                        return true;
                     }
                     if(hit(q[0],q[1],680,548,300,68)) {
                         resultSpectating=true;game.setSpectatorMode(true);invalidate();return true;
@@ -1211,8 +1249,10 @@ public final class HudOverlay extends View {
                     return true;
                 }
                 if(hit(q[0],q[1],24,625,resultSpectating?190:160,49)){
-                    recordMissionProgressFromMatch();resultSpectating=false;game.setSpectatorMode(false);
-                    page=HOME;game.setGameScreen(false);invalidate();return true;
+                    if(isMatchOver())applyMatchRewards(game.getGameStatus().contains("VITÓRIA"));
+                    recordMissionProgressFromMatch();
+                    returnToLobbyAfterMatch();
+                    return true;
                 }
                 forwarding=true;
             }
