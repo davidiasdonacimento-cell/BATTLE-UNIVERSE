@@ -78,6 +78,12 @@ public final class MainActivity extends Activity {
         },(ignored,callback)->{
             if(accountSync!=null)accountSync.claimDailyReward(callback);
             else callback.onResult(null,"Sistema de contas ainda não inicializado.");
+        },(ignored,callback)->{
+            if(accountSync!=null)accountSync.fetchGameMail(callback);
+            else callback.onResult(null,"Sistema de contas ainda não inicializado.");
+        },(messageId,callback)->{
+            if(accountSync!=null)accountSync.claimGameMail(messageId,callback);
+            else callback.onResult(null,"Sistema de contas ainda não inicializado.");
         });
         hud.setPackAnalyzerAction(()->{
             android.content.Intent intent=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
