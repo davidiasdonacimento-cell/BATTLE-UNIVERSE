@@ -75,6 +75,13 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Nunca confundir planejado, implementado, compilado e testado.
 
 
+## Parede de gelo colocada pelo jogador — implementação em validação
+- A parede de gelo é posicionada pelo botão CONSTRUIR, usando a prévia existente e a confirmação por segundo toque.
+- A barreira tem 100 pontos de resistência; disparos do jogador e dos bots que a atingem reduzem sua resistência.
+- A parede bloqueia os projéteis simulados e a movimentação, mostra rachaduras progressivas e deixa de colidir/renderizar quando quebra.
+- O dano é calculado por interseção do trajeto com a área da parede, sem depender de efeitos visuais.
+- Implementação isolada na branch `feature/player-placeable-destructible-ice-wall`; compilação CI e teste no aparelho ainda pendentes. Não considerar compilado ou testado até confirmação.
+
 ## Novos modos solicitados — regras confirmadas em 2026-11-20
 
 ### Gladiadores
