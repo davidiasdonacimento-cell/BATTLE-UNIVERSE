@@ -13,6 +13,7 @@ from typing import Any, Generator
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -148,6 +149,25 @@ class PromoRedemption(Base):
     diamonds_awarded: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class GlobalMail(Base):
+    __tablename__ = "global_mail"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
+    request_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(80), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class GlobalMailClaim(Base):
+    __tablename__ = "global_mail_claims"
+    __table_args__ = (UniqueConstraint("player_id", "message_id", name="uq_global_mail_player_message"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    message_id: Mapped[str] = mapped_column(ForeignKey("global_mail.id", ondelete="CASCADE"), index=True, nullable=False)
+    diamonds_awarded: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -219,6 +239,12 @@ class PromoCreateBody(BaseModel):
     diamonds: int = Field(gt=0, le=1000000)
     max_uses: int = Field(default=1, ge=1, le=1000000)
     expires_in_days: int | None = Field(default=None, ge=1, le=3650)
+
+class GlobalMailBody(BaseModel):
+    title: str = Field(min_length=2, max_length=80)
+    body: str = Field(min_length=2, max_length=1200)
+    diamonds: int = Field(default=0, ge=0, le=100000)
+    request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
 
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
@@ -870,23 +896,87 @@ def claim_game_event(event_id: str, db: Session = Depends(db_session),
     return {"claimed":True,"diamonds_awarded":50,"diamonds_balance":wallet.diamonds}
 
 @app.get("/v1/game/mail")
-def game_mail(player: Player = Depends(current_player)):
-    profile=player.profile or {}
-    return {"messages":[{"id":"welcome_gift_01","title":"BOAS-VINDAS AO BATTLE UNIVERSE",
-        "body":"Presente de entrada: 50 diamantes virtuais.",
-        "diamonds":50,"claimed":bool(profile.get("mail_welcome_claimed",False))}]}
+def game_mail(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    profile = player.profile or {}
+    messages = [{
+        "id": "welcome_gift_01",
+        "title": "BOAS-VINDAS AO BATTLE UNIVERSE",
+        "body": "Presente de entrada: 50 diamantes virtuais.",
+        "diamonds": 50,
+        "claimed": bool(profile.get("mail_welcome_claimed", False)),
+    }]
+    broadcasts = db.scalars(
+        select(GlobalMail).where(GlobalMail.created_at >= player.created_at)
+        .order_by(GlobalMail.created_at.desc()).limit(100)
+    ).all()
+    claims = db.scalars(select(GlobalMailClaim).where(
+        GlobalMailClaim.player_id == player.id
+    )).all()
+    claimed_ids = {claim.message_id for claim in claims}
+    messages.extend([{
+        "id": row.id, "title": row.title, "body": row.body,
+        "diamonds": int(row.diamonds), "claimed": row.id in claimed_ids,
+        "created_at": row.created_at.isoformat(), "global": True,
+    } for row in broadcasts])
+    return {"messages": messages}
 
 @app.post("/v1/game/mail/{message_id}/claim")
 def claim_game_mail(message_id: str, db: Session = Depends(db_session),
                     player: Player = Depends(current_player)):
-    if message_id!="welcome_gift_01": raise HTTPException(404,"Mensagem não encontrada.")
-    profile=dict(player.profile or {})
-    if profile.get("mail_welcome_claimed"): raise HTTPException(409,"Presente desta mensagem já coletado.")
-    wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
-    if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
-    wallet.diamonds+=50;profile["mail_welcome_claimed"]=True;player.profile=profile
-    db.commit()
-    return {"claimed":True,"diamonds_awarded":50,"diamonds_balance":wallet.diamonds}
+    if message_id == "welcome_gift_01":
+        profile = dict(player.profile or {})
+        if profile.get("mail_welcome_claimed"):
+            raise HTTPException(409, "Presente desta mensagem já coletado.")
+        wallet = db.scalar(select(PlayerWallet).where(
+            PlayerWallet.player_id == player.id
+        ).with_for_update())
+        if wallet is None:
+            wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
+            db.add(wallet); db.flush()
+        wallet.diamonds += 50
+        profile["mail_welcome_claimed"] = True
+        player.profile = profile
+        db.commit()
+        return {"claimed": True, "diamonds_awarded": 50, "diamonds_balance": wallet.diamonds}
+
+    message = db.scalar(select(GlobalMail).where(
+        GlobalMail.id == message_id, GlobalMail.created_at >= player.created_at
+    ))
+    if message is None:
+        raise HTTPException(404, "Mensagem não encontrada.")
+    existing = db.scalar(select(GlobalMailClaim).where(
+        GlobalMailClaim.player_id == player.id,
+        GlobalMailClaim.message_id == message.id
+    ))
+    if existing is not None:
+        wallet = db.get(PlayerWallet, player.id)
+        return {"claimed": False, "diamonds_awarded": existing.diamonds_awarded,
+                "diamonds_balance": int(wallet.diamonds if wallet else 0)}
+    wallet = db.scalar(select(PlayerWallet).where(
+        PlayerWallet.player_id == player.id
+    ).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
+        db.add(wallet); db.flush()
+    claim = GlobalMailClaim(player_id=player.id, message_id=message.id,
+                            diamonds_awarded=int(message.diamonds))
+    db.add(claim)
+    wallet.diamonds += int(message.diamonds)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        claim = db.scalar(select(GlobalMailClaim).where(
+            GlobalMailClaim.player_id == player.id,
+            GlobalMailClaim.message_id == message.id
+        ))
+        wallet = db.get(PlayerWallet, player.id)
+        if claim is None:
+            raise HTTPException(503, "Não foi possível confirmar o presente.")
+        return {"claimed": False, "diamonds_awarded": claim.diamonds_awarded,
+                "diamonds_balance": int(wallet.diamonds if wallet else 0)}
+    return {"claimed": True, "diamonds_awarded": int(message.diamonds),
+            "diamonds_balance": int(wallet.diamonds)}
 
 @app.get("/v1/game/achievements")
 def game_achievements(player: Player = Depends(current_player)):
@@ -915,6 +1005,86 @@ def claim_game_achievement(achievement_id: str, db: Session = Depends(db_session
     db.commit()
     return {"claimed":True,"achievement_id":achievement_id,"xp_awarded":achievement["xp"],
             "diamonds_awarded":achievement["diamonds"],"diamonds_balance":wallet.diamonds}
+
+@app.get("/admin/correio", response_class=HTMLResponse)
+def owner_mail_admin_page():
+    return HTMLResponse(r"""
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BATTLE UNIVERSE • Correio Global</title><style>
+*{box-sizing:border-box}body{margin:0;background:#07111d;color:#eaf7ff;font:16px Arial,sans-serif;padding:22px}
+main{max-width:760px;margin:30px auto;background:#0d2030;border:1px solid #1b5265;border-radius:18px;padding:24px;box-shadow:0 18px 55px #0008}
+h1{margin:0 0 8px;color:#59d9ed}p{color:#a8c3d2;line-height:1.5}.field{margin:16px 0}label{display:block;margin-bottom:7px;color:#bceaf2;font-weight:bold}
+input,textarea{width:100%;padding:13px;border-radius:10px;border:1px solid #28536a;background:#071724;color:white;font:inherit}
+textarea{min-height:130px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+button{border:0;border-radius:10px;padding:14px 18px;background:#12a9c5;color:#00151d;font-weight:bold;font-size:15px;cursor:pointer}
+button:disabled{opacity:.5}.secondary{background:#25465a;color:#eaf7ff}.status{margin-top:16px;padding:12px;border-radius:10px;background:#102b3b;white-space:pre-wrap}
+small{color:#8baab9}@media(max-width:560px){.row{grid-template-columns:1fr}main{padding:18px;margin:10px auto}}
+</style></head><body><main>
+<h1>✉ Correio Global</h1><p>Envie uma mensagem para todos os jogadores que já possuem conta. Você pode anexar diamantes virtuais para cada jogador resgatar uma única vez.</p>
+<div class="field"><label for="pair">Código de autorização do proprietário</label><input id="pair" type="password" autocomplete="off" placeholder="Cole o código de pareamento"></div>
+<button id="connect" class="secondary">Autorizar ADM</button>
+<div id="composer" hidden>
+<div class="field"><label for="title">Título da mensagem</label><input id="title" maxlength="80" placeholder="Ex.: Presente especial da atualização"></div>
+<div class="field"><label for="body">Mensagem para os jogadores</label><textarea id="body" maxlength="1200" placeholder="Escreva o comunicado..."></textarea></div>
+<div class="row"><div class="field"><label for="diamonds">Diamantes por jogador</label><input id="diamonds" type="number" min="0" max="100000" value="0"></div><div class="field"><label>Destinatários</label><input value="Todas as contas existentes" disabled></div></div>
+<button id="send">ENVIAR PARA TODOS</button>
+</div><div id="status" class="status" role="status">Aguardando autorização.</div>
+</main><script>
+const API=location.origin, $=id=>document.getElementById(id);
+let token="";
+function show(s){$("status").textContent=s}
+$("connect").onclick=async()=>{
+ const code=$("pair").value.trim(); if(code.length<32){show("Código de autorização inválido.");return}
+ $("connect").disabled=true;
+ try{const r=await fetch(API+"/v1/owner/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pairing_code:code})});
+ const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha na autorização.");
+ token=d.access_token;$("pair").value="";$("pair").disabled=true;$("connect").hidden=true;$("composer").hidden=false;show("ADM autorizado. Prepare a mensagem global.");
+ }catch(e){show("Erro: "+e.message)}finally{$("connect").disabled=false}
+};
+$("send").onclick=async()=>{
+ const title=$("title").value.trim(),body=$("body").value.trim(),diamonds=Number($("diamonds").value);
+ if(title.length<2||body.length<2||!Number.isInteger(diamonds)||diamonds<0||diamonds>100000){show("Confira título, mensagem e quantidade de diamantes.");return}
+ if(!confirm("Enviar esta mensagem para todos os jogadores? O presente ficará disponível uma vez por conta."))return;
+ $("send").disabled=true;
+ try{const request_id=(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random().toString(36).slice(2));
+ const r=await fetch(API+"/v1/owner/mail/broadcast",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify({title,body,diamonds,request_id})});
+ const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha ao enviar.");
+ $("title").value="";$("body").value="";$("diamonds").value="0";
+ show("🟢 VERDE — mensagem enviada. Contas alcançadas: "+d.recipients+"; presente: "+d.diamonds_per_player+" diamantes por jogador.");
+ }catch(e){show("❌ DEU RED! "+e.message)}finally{$("send").disabled=false}
+};
+</script></body></html>""")
+
+@app.post("/v1/owner/mail/broadcast", status_code=201)
+def owner_broadcast_mail(body: GlobalMailBody, db: Session = Depends(db_session),
+                         owner: str = Depends(current_owner)):
+    existing = db.scalar(select(GlobalMail).where(GlobalMail.request_id == body.request_id))
+    if existing is not None:
+        recipients = db.scalar(select(func.count(Player.id)).where(Player.created_at <= existing.created_at)) or 0
+        return {"sent": True, "replayed": True, "message_id": existing.id,
+                "recipients": recipients, "diamonds_per_player": existing.diamonds}
+    row = GlobalMail(request_id=body.request_id, title=body.title.strip(),
+                     body=body.body.strip(), diamonds=body.diamonds, created_by=owner)
+    db.add(row)
+    try:
+        db.commit()
+        db.refresh(row)
+    except IntegrityError:
+        db.rollback()
+        existing = db.scalar(select(GlobalMail).where(GlobalMail.request_id == body.request_id))
+        if existing is None:
+            raise HTTPException(503, "Não foi possível publicar a mensagem global.")
+        row = existing
+    recipients = db.scalar(select(func.count(Player.id)).where(Player.created_at <= row.created_at)) or 0
+    try:
+        audit(db, owner, "global_mail_broadcast", row.id,
+              {"title": row.title, "recipients": recipients, "diamonds_per_player": row.diamonds})
+        db.commit()
+    except Exception:
+        db.rollback()
+        logging.getLogger("battle_universe").exception("GLOBAL_MAIL_AUDIT_FAILED")
+    return {"sent": True, "replayed": False, "message_id": row.id,
+            "recipients": recipients, "diamonds_per_player": int(row.diamonds)}
 
 @app.get("/v1/owner/promo-codes")
 def owner_list_promo_codes(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
