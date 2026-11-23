@@ -34,6 +34,7 @@ public final class MainActivity extends Activity {
         loadingView=new ContentLoadingView(this);
         setContentView(loadingView);
         loadingView.setProgress(0,0,"PREPARANDO INSTALAÇÃO...");
+        loadingView.setLocalPackAction(this::openLocalPackPicker);
         if(installer!=null)installer.shutdown();
         installer=new ContentPackInstaller(this,new ContentPackInstaller.Listener() {
             @Override public void onProgress(long downloaded,long total,String status) {
@@ -108,6 +109,18 @@ public final class MainActivity extends Activity {
         setContentView(root);
     }
 
+    private void openLocalPackPicker() {
+        if(installer!=null){installer.shutdown();installer=null;}
+        android.content.Intent intent=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES,
+            new String[]{"application/zip","application/octet-stream","application/x-zip-compressed"});
+        intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            |android.content.Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent,REQUEST_PACK_FILE);
+    }
+
     private void analyzeSelectedPack(Uri uri) {
         if(packAnalyzer!=null)packAnalyzer.close();
         Toast.makeText(this,"Analisando nome, manifesto e SHA-256 do pacote...",Toast.LENGTH_LONG).show();
@@ -120,7 +133,13 @@ public final class MainActivity extends Activity {
                     .setNegativeButton("CANCELAR",null)
                     .setPositiveButton("SUBSTITUIR", (d,w)->replaceAction.run()).show();
             }
-            @Override public void onSuccess(String message){Toast.makeText(MainActivity.this,message,Toast.LENGTH_LONG).show();}
+            @Override public void onSuccess(String message){
+                Toast.makeText(MainActivity.this,message,Toast.LENGTH_LONG).show();
+                mainHandler.postDelayed(()->{
+                    if(!isFinishing()&&ContentPackInstaller.isInstalled(MainActivity.this))recreate();
+                    else if(!isFinishing())startContentSetup();
+                },900);
+            }
             @Override public void onFailure(String message){new android.app.AlertDialog.Builder(MainActivity.this)
                 .setTitle("ANÁLISE RECUSADA").setMessage(message).setPositiveButton("OK",null).show();}
         });
@@ -140,8 +159,18 @@ public final class MainActivity extends Activity {
     @Override protected void onResume(){super.onResume();if(gameSurface!=null)gameSurface.onResume();enterImmersiveMode();if(hud!=null)hud.invalidate();}
     @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
-        if(requestCode==REQUEST_PACK_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null)
-            analyzeSelectedPack(data.getData());
+        if(requestCode==REQUEST_PACK_FILE) {
+            if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null) {
+                Uri uri=data.getData();
+                try {
+                    getContentResolver().takePersistableUriPermission(uri,
+                        data.getFlags()&android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch(Exception ignored) { }
+                analyzeSelectedPack(uri);
+            } else if(!ContentPackInstaller.isInstalled(this)) {
+                startContentSetup();
+            }
+        }
     }
     @Override protected void onDestroy(){
         if(installer!=null)installer.shutdown();
