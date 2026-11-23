@@ -50,16 +50,9 @@ PROFILE_FIELDS = {
     "selected_mode", "selected_map", "selected_character", "quality", "music", "effects",
     "look_sensitivity", "sensitivity_general", "sensitivity_aim", "invert_camera_y",
     "show_minimap", "haptics", "mode", "map", "character", "selected_shirt",
-    "selected_boots", "selected_set", "wear_shirt_tactical", "wear_shirt_neon",
-    "wear_shirt_frost", "wear_shirt_desert", "wear_boots_combat", "wear_boots_neon",
-    "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
-    "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
-    "wear_set_cerrado", "wear_beard_old", "wear_pants_angelical", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
-    "nickname", "profile_schema_version",
-    "wardrobe_starter_v2_granted",
-    "shop_frame_neon", "shop_emblem_bloob", "shop_title_champion",
-    "last_match_reward_xp",
-}
+    "selected_boots", "selected_set", "equipped_beard", "equipped_helmet",
+    "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
+    "nickname", "profile_schema_version"
 
 class Base(DeclarativeBase):
     pass
@@ -681,6 +674,15 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
+    profile = dict(player.profile or {})
+    starter_changed = False
+    if not profile.get("wardrobe_starter_v2_granted"):
+        profile.setdefault("wear_shirt_tactical", True)
+        profile.setdefault("wear_boots_combat", True)
+        profile["wardrobe_starter_v2_granted"] = True
+        player.profile = profile
+        starter_changed = True
+    if wallet in db.new or starter_changed:
         db.commit()
         db.refresh(wallet)
     return {"diamonds": wallet.diamonds, "currency": "diamonds", "authority": "server"}
@@ -714,9 +716,10 @@ def shop_purchase(body: ShopPurchaseBody, db: Session = Depends(db_session),
     if replay is not None:
         if replay.item_key != body.item_key:
             raise HTTPException(409, "Identificador de compra já utilizado em outro item.")
+        wallet_now = db.get(PlayerWallet, player.id)
         return {"purchased": True, "replayed": True, "item_key": replay.item_key,
                 "diamonds_spent": replay.diamonds_spent,
-                "wallet": {"diamonds": replay.balance_after}}
+                "wallet": {"diamonds": wallet_now.diamonds if wallet_now else replay.balance_after}}
     wallet = db.scalar(select(PlayerWallet).where(
         PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
@@ -726,7 +729,7 @@ def shop_purchase(body: ShopPurchaseBody, db: Session = Depends(db_session),
     profile = dict(player.profile or {})
     if profile.get(body.item_key) is True:
         return {"purchased": False, "already_owned": True, "item_key": body.item_key,
-                "wallet": {"diamonds": wallet.diamonds}}
+                "wallet": {"diamonds": wallet.diamonds}, "profile": profile}
     if wallet.diamonds < price:
         raise HTTPException(409, "Diamantes insuficientes na carteira online.",
                             headers={"X-BU-Error": "INSUFFICIENT_DIAMONDS"})
@@ -745,9 +748,10 @@ def shop_purchase(body: ShopPurchaseBody, db: Session = Depends(db_session),
             ShopPurchase.player_id == player.id, ShopPurchase.request_id == body.request_id))
         if replay is None:
             raise HTTPException(503, "Compra não confirmada. Sincronize a carteira antes de tentar novamente.")
+        wallet_now = db.get(PlayerWallet, player.id)
         return {"purchased": True, "replayed": True, "item_key": replay.item_key,
                 "diamonds_spent": replay.diamonds_spent,
-                "wallet": {"diamonds": replay.balance_after}}
+                "wallet": {"diamonds": wallet_now.diamonds if wallet_now else replay.balance_after}}
     return {"purchased": True, "replayed": False, "item_key": body.item_key,
             "diamonds_spent": price, "wallet": {"diamonds": wallet.diamonds},
             "profile": player.profile}
