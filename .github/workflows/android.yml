@@ -2,7 +2,7 @@ name: BATTLE UNIVERSE Android
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "feature/**" ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -11,12 +11,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: battle-universe-android-main
+  group: battle-universe-android-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Native Android build and content pack
+    name: Native Android build, validation and content pack
     runs-on: ubuntu-latest
     timeout-minutes: 50
 
@@ -36,25 +36,36 @@ jobs:
             echo "Firebase not configured: this APK remains playable offline."
           fi
 
-      - name: Configure stable APK signing (optional)
+      - name: Configure stable production signing
         env:
           BATTLE_UNIVERSE_KEYSTORE_BASE64: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_BASE64 }}
           BATTLE_UNIVERSE_KEYSTORE_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEYSTORE_PASSWORD }}
           BATTLE_UNIVERSE_KEY_ALIAS: ${{ secrets.BATTLE_UNIVERSE_KEY_ALIAS }}
           BATTLE_UNIVERSE_KEY_PASSWORD: ${{ secrets.BATTLE_UNIVERSE_KEY_PASSWORD }}
         run: |
-          KEYSTORE="$RUNNER_TEMP/battle-universe.jks"
-          if [ -n "$BATTLE_UNIVERSE_KEYSTORE_BASE64" ] && printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE" 2>/dev/null && [ -s "$KEYSTORE" ]; then
+          KEYSTORE="$RUNNER_TEMP/battle-universe-release.jks"
+          VALUES=("$BATTLE_UNIVERSE_KEYSTORE_BASE64" "$BATTLE_UNIVERSE_KEYSTORE_PASSWORD" "$BATTLE_UNIVERSE_KEY_ALIAS" "$BATTLE_UNIVERSE_KEY_PASSWORD")
+          PRESENT=0
+          for value in "${VALUES[@]}"; do
+            if [ -n "$value" ]; then PRESENT=$((PRESENT + 1)); fi
+          done
+          if [ "$PRESENT" -eq 0 ]; then
+            echo "BU_RELEASE_SIGNING_READY=false" >> "$GITHUB_ENV"
+            echo "Stable release key not configured; production APK will not be published."
+          elif [ "$PRESENT" -ne 4 ]; then
+            echo "::error::Production signing requires all four BATTLE_UNIVERSE signing secrets."
+            exit 1
+          else
+            printf '%s' "$BATTLE_UNIVERSE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+            test -s "$KEYSTORE"
             {
               echo "BU_KEYSTORE_PATH=$KEYSTORE"
               echo "BU_KEYSTORE_PASSWORD=$BATTLE_UNIVERSE_KEYSTORE_PASSWORD"
               echo "BU_KEY_ALIAS=$BATTLE_UNIVERSE_KEY_ALIAS"
               echo "BU_KEY_PASSWORD=$BATTLE_UNIVERSE_KEY_PASSWORD"
+              echo "BU_RELEASE_SIGNING_READY=true"
             } >> "$GITHUB_ENV"
-            echo "Stable APK signing data decoded."
-          else
-            rm -f "$KEYSTORE"
-            echo "::warning::Stable signing secret is empty or invalid Base64. Continuing with the temporary debug signing key."
+            echo "Stable release keystore decoded."
           fi
 
       - name: Set up Python
@@ -77,6 +88,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Verify production keystore and alias
+        if: env.BU_RELEASE_SIGNING_READY == 'true'
+        run: |
+          keytool -list -keystore "$BU_KEYSTORE_PATH" -storepass "$BU_KEYSTORE_PASSWORD" -alias "$BU_KEY_ALIAS" > /dev/null
+          echo "Production keystore and alias verified."
+
       - name: Set up Android SDK, NDK and CMake
         uses: android-actions/setup-android@v4
         with:
@@ -87,10 +104,10 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Run available Android unit tests and compile APK
+      - name: Run Android unit tests and compile debug APK
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
 
-      - name: Verify APK, DEX and native ARM libraries
+      - name: Verify debug APK, DEX and native ARM libraries
         run: |
           python - <<'PY'
           from zipfile import ZipFile
@@ -104,14 +121,38 @@ jobs:
               assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Biblioteca ARMv7 ausente"
               bad = z.testzip()
               assert bad is None, f"APK corrompido: {bad}"
-          print(f"APK válido: {apk.stat().st_size} bytes; DEX e libs ARM presentes")
+          print(f"APK debug válido: {apk.stat().st_size} bytes; DEX e libs ARM presentes")
           PY
           ls -lh app/build/outputs/apk/debug/app-debug.apk
           ls -lh build/battle-universe-season-02-pack.zip
           test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 262144000
 
+      - name: Build production RELEASE APK
+        if: env.BU_RELEASE_SIGNING_READY == 'true'
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
+
+      - name: Verify signed production RELEASE APK
+        if: env.BU_RELEASE_SIGNING_READY == 'true'
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          apksigner verify --verbose --print-certs "$APK"
+          test "$(apkanalyzer manifest debuggable "$APK")" = "false"
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          apk = Path("app/build/outputs/apk/release/app-release.apk")
+          with ZipFile(apk) as z:
+              names = set(z.namelist())
+              assert "classes.dex" in names, "classes.dex não encontrado"
+              assert "lib/arm64-v8a/libbattleuniverse.so" in names, "Biblioteca ARM64 ausente"
+              assert "lib/armeabi-v7a/libbattleuniverse.so" in names, "Biblioteca ARMv7 ausente"
+              assert z.testzip() is None, "APK RELEASE corrompido"
+          print(f"RELEASE assinado e íntegro: {apk.stat().st_size} bytes")
+          PY
+
       - name: Publish verified Season 02 4K data pack
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -129,13 +170,22 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
 
-      - name: Upload APK artifact
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: BATTLE-UNIVERSE-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload signed production RELEASE APK artifact
+        if: env.BU_RELEASE_SIGNING_READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BATTLE-UNIVERSE-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload Season 02 4K package artifact
         uses: actions/upload-artifact@v4
