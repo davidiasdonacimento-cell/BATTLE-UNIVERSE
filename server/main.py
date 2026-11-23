@@ -576,6 +576,45 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
         db.refresh(wallet)
     return {"diamonds": wallet.diamonds, "currency": "diamonds", "authority": "server"}
 
+@app.get("/v1/accounts/me/stats")
+def account_stats(db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    profile = player.profile or {}
+    wallet = db.get(PlayerWallet, player.id)
+    return {
+        "username": player.username,
+        "xp": int(profile.get("xp", 0) or 0),
+        "matches_played": int(profile.get("matches_played", 0) or 0),
+        "match_wins": int(profile.get("match_wins", 0) or 0),
+        "match_kills": int(profile.get("match_kills", 0) or 0),
+        "match_damage": int(profile.get("match_damage", 0) or 0),
+        "diamonds": int(wallet.diamonds if wallet else 0),
+        "authority": "server",
+    }
+
+
+@app.get("/v1/game/leaderboard")
+def game_leaderboard(limit: int = Query(default=20, ge=1, le=100),
+                     db: Session = Depends(db_session), player: Player = Depends(current_player)):
+    # Public game ranking contains only game nickname and aggregate gameplay statistics.
+    players = db.scalars(select(Player).limit(5000)).all()
+    entries = []
+    for item in players:
+        profile = item.profile or {}
+        control = db.get(AccountControl, item.id)
+        if control and control.state != "active":
+            continue
+        entries.append({
+            "username": item.username,
+            "nickname": str(profile.get("nickname") or profile.get("character_display_name") or item.username)[:24],
+            "xp": max(0, int(profile.get("xp", 0) or 0)),
+            "wins": max(0, int(profile.get("match_wins", 0) or 0)),
+            "kills": max(0, int(profile.get("match_kills", 0) or 0)),
+        })
+    entries.sort(key=lambda row: (row["xp"], row["wins"], row["kills"]), reverse=True)
+    return {"ranking": [{"rank": index + 1, **row} for index, row in enumerate(entries[:limit])],
+            "limit": limit, "sort": "xp_wins_kills"}
+
+
 @app.post("/v1/game/rewards/daily")
 def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depends(current_player)):
     day = datetime.now(timezone.utc).date().isoformat()
