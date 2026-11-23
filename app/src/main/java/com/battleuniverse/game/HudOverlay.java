@@ -550,7 +550,7 @@ public final class HudOverlay extends View {
             royaleSpinPending=false;
             if(error!=null){toast("Giro não concluído: "+error);postInvalidate();return;}
             if(result==null||!result.has("prize_id")){toast("O servidor não confirmou o prêmio.");postInvalidate();return;}
-            JSONObjectWalletUpdate(new JSONObject().put("wallet",new JSONObject().put("diamonds",result.optLong("diamonds_balance",prefs.getLong("diamonds",0L)))));
+            prefs.edit().putLong("diamonds",result.optLong("diamonds_balance",prefs.getLong("diamonds",0L))).apply();
             String prize=result.optString("prize_name","PRÊMIO");
             String message=result.optBoolean("duplicate")?prize+" • ITEM REPETIDO • COMPENSAÇÃO +"+result.optLong("duplicate_compensation",0L)+" ◆":prize;
             prefs.edit().putString("royale_last_reward",message)
