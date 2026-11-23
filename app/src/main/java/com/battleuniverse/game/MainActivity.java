@@ -86,10 +86,6 @@ public final class MainActivity extends Activity {
             if(accountSync!=null)accountSync.claimGameMail(messageId,callback);
             else callback.onResult(null,"Sistema de contas ainda não inicializado.");
         });
-        hud.setRoyaleSpinAction((requestId,callback)->{
-            if(accountSync!=null)accountSync.spinRoyale(requestId,callback);
-            else callback.onResult(null,"Sistema de contas ainda não inicializado.");
-        });
         hud.setShopPurchaseAction((payload,callback)->{
             if(accountSync==null){callback.onResult(null,"Sistema de contas ainda não inicializado.");return;}
             String[] parts=payload==null?new String[0]:payload.split("\\|",2);
