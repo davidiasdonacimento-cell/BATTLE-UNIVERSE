@@ -10,8 +10,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.Toast;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 
 public final class MainActivity extends Activity {
     private GameSurfaceView gameSurface;
@@ -22,8 +20,7 @@ public final class MainActivity extends Activity {
     private AccountSyncManager accountSync;
     private SharedPreferences profilePrefs;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
-    private final ActivityResultLauncher<String[]> packPicker=registerForActivityResult(
-        new ActivityResultContracts.OpenDocument(),uri->{if(uri!=null)analyzeSelectedPack(uri);});
+    private static final int REQUEST_PACK_FILE=4201;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -71,7 +68,14 @@ public final class MainActivity extends Activity {
         hud.setUsernameAccountActions((username,password,createAccount)->{
             if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
         },()->{if(accountSync!=null)accountSync.syncNow();},()->{if(accountSync!=null)accountSync.signOut();});
-        hud.setPackAnalyzerAction(()->packPicker.launch(new String[]{"application/zip","application/octet-stream","application/x-zip-compressed","*/*"}));
+        hud.setPackAnalyzerAction(()->{
+            android.content.Intent intent=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES,
+                new String[]{"application/zip","application/octet-stream","application/x-zip-compressed"});
+            startActivityForResult(intent,REQUEST_PACK_FILE);
+        });
         accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
             if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
         });
@@ -117,6 +121,11 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onPause(){if(gameSurface!=null)gameSurface.onPause();super.onPause();}
     @Override protected void onResume(){super.onResume();if(gameSurface!=null)gameSurface.onResume();enterImmersiveMode();if(hud!=null)hud.invalidate();}
+    @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data) {
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==REQUEST_PACK_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null)
+            analyzeSelectedPack(data.getData());
+    }
     @Override protected void onDestroy(){
         if(installer!=null)installer.shutdown();
         if(packAnalyzer!=null)packAnalyzer.close();
