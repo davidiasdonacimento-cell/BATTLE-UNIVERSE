@@ -53,6 +53,7 @@ PROFILE_FIELDS = {
     "selected_boots", "selected_set", "equipped_beard", "equipped_helmet",
     "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
     "nickname", "profile_schema_version"
+}
 
 class Base(DeclarativeBase):
     pass
