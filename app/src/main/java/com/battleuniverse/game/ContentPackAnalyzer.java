@@ -22,6 +22,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
@@ -35,6 +36,7 @@ public final class ContentPackAnalyzer {
         void onSuccess(String message);
         void onFailure(String message);
     }
+    private static final Object INSTALL_LOCK=new Object();
     private static final String MANIFEST_URL="https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v2/content-pack-manifest.json";
     private static final String ZIP_NAME="battle-universe-season-02-pack.zip";
     private static final String BUPACK_NAME="battle-universe-season-02-pack.bupack";
@@ -54,8 +56,9 @@ public final class ContentPackAnalyzer {
     public void analyze(Uri uri) {
         if(uri==null){fail("Nenhum arquivo foi selecionado.");return;}
         worker.execute(()->{
-            File archive=new File(context.getCacheDir(),"bu-pack-import.part");
-            File staging=new File(context.getFilesDir(),"battle-content-import-staging");
+            String operationId=UUID.randomUUID().toString();
+            File archive=new File(context.getCacheDir(),"bu-pack-import-"+operationId+".part");
+            File staging=new File(context.getFilesDir(),"battle-content-import-staging-"+operationId);
             try {
                 status("IDENTIFICANDO O NOME DO ARQUIVO...");
                 String name=displayName(uri);
@@ -86,7 +89,13 @@ public final class ContentPackAnalyzer {
                     final String hash=archiveHash;
                     status("PACOTE VÁLIDO. AGUARDANDO CONFIRMAÇÃO PARA SUBSTITUIR A VERSÃO INSTALADA...");
                     main.post(()->{
-                        if(!closed)listener.onConflict("Já existe um pacote instalado com outro SHA-256. Deseja substituir pela versão oficial selecionada?",()->worker.execute(()->activate(staging,installed,archive,hash)));
+                        if(!closed)listener.onConflict("Já existe um pacote instalado com outro SHA-256. Deseja substituir pela versão oficial selecionada?",()->{
+                            if(!closed) {
+                                try { worker.execute(()->activate(staging,installed,archive,hash)); }
+                                catch(java.util.concurrent.RejectedExecutionException ignored) { deleteTree(staging);archive.delete(); }
+                            }
+                        });
+                        else { deleteTree(staging);archive.delete(); }
                     });
                 } else activate(staging,installed,archive,archiveHash);
             } catch(Exception e) {
@@ -97,6 +106,8 @@ public final class ContentPackAnalyzer {
     }
 
     private void activate(File staging,File installed,File archive,String hash) {
+        synchronized(INSTALL_LOCK) {
+        if(closed){deleteTree(staging);archive.delete();return;}
         File backup=new File(context.getFilesDir(),"battle-content-import-backup");
         try {
             JSONObject marker=new JSONObject().put("version",VERSION).put("pack_id",PACK_ID)
@@ -116,6 +127,7 @@ public final class ContentPackAnalyzer {
         } catch(Exception e) {
             deleteTree(staging);
             fail(e.getMessage()==null?"Falha ao ativar o pacote.":e.getMessage());
+        }
         }
     }
 
