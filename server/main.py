@@ -102,6 +102,18 @@ class PlayerWallet(Base):
     coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
 
+class ShopPurchase(Base):
+    __tablename__ = "shop_purchases"
+    __table_args__ = (UniqueConstraint("player_id", "request_id", name="uq_shop_player_request"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    item_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    diamonds_spent: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
 class RoyaleSpin(Base):
     __tablename__ = "royale_spins"
     __table_args__ = (UniqueConstraint("player_id", "request_id", name="uq_royale_player_request"),)
@@ -230,6 +242,12 @@ class RecoverAccountBody(BaseModel):
 class RoyaleSpinBody(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+
+class ShopPurchaseBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    item_key: str = Field(min_length=3, max_length=64, pattern=r"^[a-z0-9_]+$")
+
 
 class PromoRedeemBody(BaseModel):
     code: str = Field(min_length=3, max_length=32)
@@ -601,6 +619,72 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
         db.commit()
         db.refresh(wallet)
     return {"diamonds": wallet.diamonds, "currency": "diamonds", "authority": "server"}
+
+SHOP_CATALOG = {
+    "shop_frame_neon": 500,
+    "shop_emblem_bloob": 1000,
+    "shop_title_champion": 1500,
+    "wear_shirt_tactical": 650,
+    "wear_shirt_neon": 800,
+    "wear_shirt_frost": 750,
+    "wear_shirt_desert": 700,
+    "wear_boots_combat": 450,
+    "wear_boots_neon": 600,
+    "wear_boots_frost": 550,
+    "wear_boots_gold": 700,
+    "wear_set_aurora": 1800,
+    "wear_set_champion": 2200,
+    "wear_set_orbit": 2500,
+    "wear_set_desert": 1900,
+}
+
+@app.post("/v1/shop/purchase")
+def shop_purchase(body: ShopPurchaseBody, db: Session = Depends(db_session),
+                  player: Player = Depends(current_player)):
+    price = SHOP_CATALOG.get(body.item_key)
+    if price is None:
+        raise HTTPException(422, "Item não reconhecido pela loja.")
+    replay = db.scalar(select(ShopPurchase).where(
+        ShopPurchase.player_id == player.id, ShopPurchase.request_id == body.request_id))
+    if replay is not None:
+        return {"purchased": True, "replayed": True, "item_key": replay.item_key,
+                "diamonds_spent": replay.diamonds_spent,
+                "wallet": {"diamonds": replay.balance_after}}
+    wallet = db.scalar(select(PlayerWallet).where(
+        PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
+        db.add(wallet)
+        db.flush()
+    profile = dict(player.profile or {})
+    if profile.get(body.item_key) is True:
+        return {"purchased": False, "already_owned": True, "item_key": body.item_key,
+                "wallet": {"diamonds": wallet.diamonds}}
+    if wallet.diamonds < price:
+        raise HTTPException(409, "Diamantes insuficientes na carteira online.",
+                            headers={"X-BU-Error": "INSUFFICIENT_DIAMONDS"})
+    wallet.diamonds -= price
+    profile[body.item_key] = True
+    player.profile = profile
+    row = ShopPurchase(player_id=player.id, request_id=body.request_id,
+                       item_key=body.item_key, diamonds_spent=price,
+                       balance_after=wallet.diamonds)
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        replay = db.scalar(select(ShopPurchase).where(
+            ShopPurchase.player_id == player.id, ShopPurchase.request_id == body.request_id))
+        if replay is None:
+            raise HTTPException(503, "Compra não confirmada. Sincronize a carteira antes de tentar novamente.")
+        return {"purchased": True, "replayed": True, "item_key": replay.item_key,
+                "diamonds_spent": replay.diamonds_spent,
+                "wallet": {"diamonds": replay.balance_after}}
+    return {"purchased": True, "replayed": False, "item_key": body.item_key,
+            "diamonds_spent": price, "wallet": {"diamonds": wallet.diamonds},
+            "profile": player.profile}
+
 
 @app.get("/v1/accounts/me/stats")
 def account_stats(db: Session = Depends(db_session), player: Player = Depends(current_player)):
