@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    name: Native Android build, validation and content pack
+    name: Native Android build and validation
     runs-on: ubuntu-latest
     timeout-minutes: 50
 
@@ -75,12 +75,6 @@ jobs:
 
       - name: Validate account API Python syntax
         run: python -m py_compile server/main.py
-
-      - name: Install content pack tools
-        run: python -m pip install --disable-pip-version-check numpy pillow
-
-      - name: Build expanded Season 02 4K content package
-        run: python scripts/build_content_pack.py
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -149,8 +143,6 @@ jobs:
           print(f"APK debug válido: {apk.stat().st_size} bytes; DEX e libs ARM presentes")
           PY
           ls -lh app/build/outputs/apk/debug/app-debug.apk
-          ls -lh build/battle-universe-season-02-pack.zip
-          test $(stat -c%s build/battle-universe-season-02-pack.zip) -ge 262144000
 
       - name: Build production RELEASE APK
         if: env.BU_RELEASE_SIGNING_READY == 'true'
@@ -178,25 +170,6 @@ jobs:
           print(f"RELEASE assinado e íntegro: {apk.stat().st_size} bytes")
           PY
 
-      - name: Publish verified Season 02 4K data pack
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: data-pack-v2
-          name: Battle Universe — Conteúdo Expandido 4K
-          body: |
-            Pacote expandido do Battle Universe.
-            Inclui avião de transporte, modelos OBJ, materiais PBR 4K, oito mapas,
-            missões, shaders OpenGL ES 3.0 e quatro ambientes de áudio.
-            O aplicativo valida o SHA-256 do pacote e de cada arquivo antes da instalação.
-          prerelease: true
-          files: |
-            build/battle-universe-season-02-pack.zip
-            build/content-pack-manifest.json
-          overwrite_files: true
-          fail_on_unmatched_files: true
-
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -214,12 +187,3 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload Season 02 4K package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: BATTLE-UNIVERSE-season-02-4k-content-pack
-          path: |
-            build/battle-universe-season-02-pack.zip
-            build/content-pack-manifest.json
-          if-no-files-found: error
-          retention-days: 14
