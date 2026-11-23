@@ -116,6 +116,24 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         });
     }
 
+    public interface CoachListener { void onResult(String answer, String error); }
+
+    public void askCoach(String question, CoachListener callback) {
+        String token=getToken();
+        if(token.isEmpty()) { main.post(()->callback.onResult(null,"Entre na sua conta para usar a IA.")); return; }
+        worker.execute(()->{
+            try {
+                JSONObject response=api("/v1/ai/coach","POST",token,new JSONObject().put("question",question));
+                String answer=response.optString("answer","").trim();
+                if(answer.isEmpty()) throw new Exception("A IA não retornou uma resposta.");
+                main.post(()->callback.onResult(answer,null));
+            } catch(Exception e) {
+                String message=cleanError(e);
+                main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
+
     public void syncNow() {
         if(closed||busy)return;
         String token=getToken();
