@@ -149,6 +149,23 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         });
     }
 
+    public void spinRoyale(String requestId,ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na conta para usar o Giro Royale."));return;}
+        if(requestId==null||!requestId.matches("[A-Za-z0-9._:-]{16,64}")){
+            main.post(()->callback.onResult(null,"Identificador do giro inválido."));return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/royale/spin","POST",token,new JSONObject().put("request_id",requestId));
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null)applyProfile(profile);
+                long balance=result.optLong("diamonds_balance",profilePrefs.getLong("diamonds",0L));
+                profilePrefs.edit().putLong("diamonds",balance).apply();
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) {String message=cleanError(e);main.post(()->callback.onResult(null,message));}
+        });
+    }
     public void completeMatch(String payload, ApiActionListener callback) {
         String token=getToken();
         if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na conta para sincronizar as recompensas da partida."));return;}
