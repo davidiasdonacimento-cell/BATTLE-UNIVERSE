@@ -491,7 +491,7 @@ public final class HudOverlay extends View {
         p.setColor(0xFF233F4F);r.set(292,382,818,394);c.drawRoundRect(r,7,7,p);
         p.setColor(0xFF55DDE7);r.set(292,382,292+526*(progress/500f),394);c.drawRoundRect(r,7,7,p);
         panel(c,270,414,570,48,0xA91A3040,0x335D8495,13);
-        text(c,"BÔNUS DIÁRIO  •  +100 XP  •  +50 DIAMANTES",290,444,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"BÔNUS DIÁRIO  •  +100 DIAMANTES",290,444,10,Color.WHITE,Typeface.DEFAULT_BOLD);
         boolean dailyClaimed=prefs.getLong("daily_reward_day",-1L)==(System.currentTimeMillis()/86400000L);
         pill(c,681,423,138,30,dailyClaimed?"COLETADO":"RESGATAR",
             dailyClaimed?0xFF176A75:0xFF345D79,Color.WHITE);
