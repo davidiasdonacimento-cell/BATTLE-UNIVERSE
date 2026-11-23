@@ -86,6 +86,12 @@ public final class MainActivity extends Activity {
             if(accountSync!=null)accountSync.claimGameMail(messageId,callback);
             else callback.onResult(null,"Sistema de contas ainda não inicializado.");
         });
+        hud.setShopPurchaseAction((payload,callback)->{
+            if(accountSync==null){callback.onResult(null,"Sistema de contas ainda não inicializado.");return;}
+            String[] parts=payload==null?new String[0]:payload.split("\\|",2);
+            if(parts.length!=2){callback.onResult(null,"Solicitação de compra inválida.");return;}
+            accountSync.purchaseShopItem(parts[0],parts[1],callback);
+        });
         hud.setPackAnalyzerAction(()->{
             android.content.Intent intent=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
