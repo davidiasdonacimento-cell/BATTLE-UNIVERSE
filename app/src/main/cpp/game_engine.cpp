@@ -1988,16 +1988,19 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         if(gSpectatorTarget>=0)cameraSubject=gBots[static_cast<size_t>(gSpectatorTarget)].pos;
     }
+    // Durante a queda, a câmera acompanha toda a altitude do jogador.
+    // O antigo fator 0.40 deixava a câmera muito abaixo do personagem no ar.
+    const float cameraVerticalFollow=(gDropState==2)?gJumpHeight:(gJumpHeight*0.40f);
     Vec3 eye{
         cameraSubject.x+std::sin(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)+std::cos(gCameraYaw)*shoulder,
-        cameraSubject.y+(gSpectatorMode?5.0f:cameraHeight)+gJumpHeight*0.40f,
+        cameraSubject.y+(gSpectatorMode?5.0f:cameraHeight)+cameraVerticalFollow,
         cameraSubject.z+std::cos(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)-std::sin(gCameraYaw)*shoulder
     };
     const float lookAhead=aimHeld?28.0f:0.0f;
     const float aimVertical=aimHeld?(gCameraPitch-0.36f)*6.0f:0.0f;
     Vec3 target{
         cameraSubject.x-std::sin(gCameraYaw)*(gSpectatorMode?0.0f:lookAhead),
-        cameraSubject.y+(gSpectatorMode?1.1f:(aimHeld?1.38f+aimVertical:1.0f))+gJumpHeight*0.40f,
+        cameraSubject.y+(gSpectatorMode?1.1f:(aimHeld?1.38f+aimVertical:1.0f))+cameraVerticalFollow,
         cameraSubject.z-std::cos(gCameraYaw)*(gSpectatorMode?0.0f:lookAhead)
     };
     Mat4 view=lookAt(eye,target,{0,1,0});
