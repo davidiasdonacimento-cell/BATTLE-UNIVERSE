@@ -1185,6 +1185,10 @@ def shop_purchase(item_id: str = Query(min_length=3, max_length=40),
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    db.refresh(player)
+    profile = dict(player.profile or {})
+    if profile.get(item_id):
+        raise HTTPException(409,"Este item já pertence à sua conta.")
     if wallet.diamonds < item["price"]:
         raise HTTPException(409,"Diamantes insuficientes na carteira online.")
     wallet.diamonds -= item["price"]
@@ -1212,7 +1216,7 @@ def claim_game_mission(mission_id: str, db: Session = Depends(db_session),
     if index is None: raise HTTPException(404,"Missão não encontrada.")
     mission = MISSION_CONFIG[index]
     profile = dict(player.profile or {})
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = int(datetime.now(timezone.utc).timestamp() // 86400)
     if profile.get("missions_day") != today: raise HTTPException(409,"As missões ainda não foram sincronizadas hoje.")
     if int(profile.get(mission["progress"],0) or 0) < mission["goal"]:
         raise HTTPException(409,"Missão ainda não concluída.")
@@ -1238,7 +1242,7 @@ def game_events(player: Player = Depends(current_player)):
     profile=player.profile or {}
     return {"events":[{"id":"season_welcome_03","name":"DESAFIO DE BOAS-VINDAS",
         "description":"Entre no lobby e resgate o pacote de participação.",
-        "diamonds":50,"claimed":bool(profile.get("event_season_claimed",False))}],
+        "diamonds":75,"xp":150,"claimed":bool(profile.get("event_season_claimed",False))}],
         "currency":"virtual_diamonds"}
 
 @app.post("/v1/game/events/{event_id}/claim")
