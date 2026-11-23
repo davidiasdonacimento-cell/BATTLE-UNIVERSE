@@ -917,7 +917,7 @@ def game_mail(db: Session = Depends(db_session), player: Player = Depends(curren
         "id": row.id, "title": row.title, "body": row.body,
         "diamonds": int(row.diamonds), "claimed": row.id in claimed_ids,
         "created_at": row.created_at.isoformat(), "global": True,
-    } for row in broadcasts])
+    } for row in reversed(broadcasts)])
     return {"messages": messages}
 
 @app.post("/v1/game/mail/{message_id}/claim")
