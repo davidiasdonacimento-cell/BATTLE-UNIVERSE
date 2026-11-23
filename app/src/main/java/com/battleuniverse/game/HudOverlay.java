@@ -943,7 +943,7 @@ public final class HudOverlay extends View {
         text(c,"Explore o mapa, colete recursos",913,540,13,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"e deixe os aliados em patrulha independente.",913,560,11,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"MISSÕES  •  ROYALE  •  EVENTOS",913,599,10,0xFF7FA4B7,Typeface.DEFAULT_BOLD);
-        text(c,"Operações locais da Temporada 02.",913,616,10,0xFF7FA4B7,Typeface.DEFAULT);
+        pill(c,913,628,300,24,"ANALISAR ZIP JÁ BAIXADO",0x553B6172,0xFFBFEAF0);
     }
     private void mapArtwork(Canvas c,int map,float x,float y,float w,float h){
         int[][] palettes={{0xFF54C2D1,0xFF1B665B},{0xFF7B6BD6,0xFF171F49},{0xFFE4B366,0xFF8B5737},
@@ -1236,6 +1236,7 @@ public final class HudOverlay extends View {
             if(hit(x,y,27,ny,196,29)){page=NAV_PAGES[i];return;}
         }
         if(page==HOME){
+            if(hit(x,y,913,628,300,24)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
             if(hit(x,y,270,442,164,24)){
                 onlineMode=false;prefs.edit().putBoolean("online_mode",false).apply();
                 toast("MODO OFFLINE SELECIONADO.");return;
