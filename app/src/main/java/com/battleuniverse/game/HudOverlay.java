@@ -21,6 +21,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.HapticFeedbackConstants;
 import java.security.SecureRandom;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
@@ -78,7 +80,11 @@ public final class HudOverlay extends View {
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
     private AiCoachAction aiCoachAction;
-    private GameApiAction promoRedeemAction, dailyRewardAction;
+    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction;
+    private JSONArray mailMessages=new JSONArray();
+    private boolean mailFetchStarted, activeMailClaimed;
+    private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
+    private long activeMailDiamonds=50L;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
     private long toastUntil, lastTap;
 
@@ -802,19 +808,46 @@ public final class HudOverlay extends View {
     }
 
     private void drawMailPage(Canvas c) {
-        eyebrow(c,270,175,"CAIXA DE ENTRADA DO JOGO");
+        eyebrow(c,270,175,"CAIXA DE ENTRADA ONLINE");
         title(c,"CORREIO",270,224);
-        subtitle(c,"Avisos e recompensas locais do BATTLE UNIVERSE.",270,252);
-        boolean claimed=prefs.getBoolean("mail_welcome_claimed",false);
-        panel(c,270,286,570,112,claimed?0xA91A4650:0xAE193040,claimed?0xFF4BD4C9:0x557AA9BC,16);
+        subtitle(c,"Mensagens globais e presentes enviados pelo ADM.",270,252);
+        if(googleSignedIn && mailFetchAction!=null && !mailFetchStarted) {
+            mailFetchStarted=true;
+            mailFetchAction.run("",(result,error)->{
+                if(error!=null){mailFetchStarted=false;toast("Correio: "+error);}
+                else {mailMessages=result==null?new JSONArray():result.optJSONArray("messages");
+                    if(mailMessages==null)mailMessages=new JSONArray();
+                    postInvalidate();}
+            });
+        }
+        JSONObject message=mailMessages.length()>0?mailMessages.optJSONObject(mailMessages.length()-1):null;
+        if(message!=null) {
+            activeMailId=message.optString("id","welcome_gift_01");
+            activeMailTitle=message.optString("title","AVISO DO JOGO");
+            activeMailBody=message.optString("body","");
+            activeMailDiamonds=message.optLong("diamonds",0L);
+            activeMailClaimed=message.optBoolean("claimed",false);
+        } else {
+            activeMailId="welcome_gift_01";
+            activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE";
+            activeMailBody="Presente de entrada: 50 diamantes virtuais.";
+            activeMailDiamonds=50L;
+            activeMailClaimed=prefs.getBoolean("mail_welcome_claimed",false);
+        }
+        panel(c,270,286,570,112,activeMailClaimed?0xA91A4650:0xAE193040,
+            activeMailClaimed?0xFF4BD4C9:0x557AA9BC,16);
         circle(c,310,326,18,0xFF1F7584,0xFF65DCE7);
         text(c,"✉",301,333,17,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"BOAS-VINDAS AO BATTLE UNIVERSE",350,322,13,Color.WHITE,Typeface.DEFAULT_BOLD);
-        text(c,"Presente de entrada: 50 diamantes virtuais.",350,347,10,0xFFB3C8D4,Typeface.DEFAULT);
-        pill(c,675,318,140,36,claimed?"COLETADO":"COLETAR",claimed?0xFF176A75:0xFF345D79,Color.WHITE);
+        text(c,activeMailTitle.length()>34?activeMailTitle.substring(0,34):activeMailTitle,
+            350,322,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        String bodyLine=activeMailBody.length()>58?activeMailBody.substring(0,58):activeMailBody;
+        text(c,bodyLine,350,347,10,0xFFB3C8D4,Typeface.DEFAULT);
+        text(c,activeMailDiamonds+" DIAMANTES VIRTUAIS",350,371,9,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        pill(c,675,318,140,36,activeMailClaimed?"COLETADO":"RESGATAR",
+            activeMailClaimed?0xFF176A75:0xFF345D79,Color.WHITE);
         panel(c,270,418,570,102,0x771A3040,0x335D8495,15);
-        text(c,"AVISO DO SERVIDOR",292,450,12,0xFF69DCE5,Typeface.DEFAULT_BOLD);
-        text(c,"Notificações de partidas, manutenção e presentes online aparecerão após a conexão do servidor.",292,480,10,0xFFB3C8D4,Typeface.DEFAULT);
+        text(c,"MENSAGENS RECEBIDAS: "+mailMessages.length(),292,450,12,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+        text(c,googleSignedIn?"O correio é sincronizado com sua conta. Cada presente pode ser resgatado uma vez.":"Entre na conta para carregar mensagens enviadas pelo ADM.",292,480,10,0xFFB3C8D4,Typeface.DEFAULT);
     }
 
     private void drawAchievementsPage(Canvas c) {
@@ -858,9 +891,22 @@ public final class HudOverlay extends View {
         toast("Evento concluído: +150 XP e +75 diamantes virtuais.");
     }
     private void claimMailReward() {
-        if(prefs.getBoolean("mail_welcome_claimed",false)){toast("Presente já coletado.");return;}
-        prefs.edit().putLong("diamonds",prefs.getLong("diamonds",0L)+50L).putBoolean("mail_welcome_claimed",true).apply();
-        toast("Presente de boas-vindas: +50 diamantes virtuais.");
+        if(activeMailClaimed){toast("Presente desta mensagem já coletado.");return;}
+        if(!googleSignedIn||mailClaimAction==null){toast("Entre na sua conta para resgatar o presente online.");return;}
+        mailClaimAction.run(activeMailId,(result,error)->{
+            if(error!=null){toast("Não foi possível resgatar: "+error);return;}
+            long balance=result==null?-1L:result.optLong("diamonds_balance",-1L);
+            long awarded=result==null?0L:result.optLong("diamonds_awarded",0L);
+            if(balance>=0)prefs.edit().putLong("diamonds",balance).apply();
+            if("welcome_gift_01".equals(activeMailId))prefs.edit().putBoolean("mail_welcome_claimed",true).apply();
+            activeMailClaimed=true;
+            for(int i=0;i<mailMessages.length();i++){
+                JSONObject item=mailMessages.optJSONObject(i);
+                if(item!=null&&activeMailId.equals(item.optString("id")))try{item.put("claimed",true);}catch(Exception ignored){}
+            }
+            toast("🟢 Presente resgatado: +"+awarded+" diamantes.");
+            postInvalidate();
+        });
     }
     private void claimAchievement(int index) {
         int[] goals={500,1500,3000};long[] rewards={50,100,200};
@@ -1337,8 +1383,10 @@ public final class HudOverlay extends View {
     }
     public void setPackAnalyzerAction(Runnable action){packAnalyzerAction=action;}
     public void setAiCoachAction(AiCoachAction action){aiCoachAction=action;}
-    public void setGameApiActions(GameApiAction promo, GameApiAction daily){
+    public void setGameApiActions(GameApiAction promo, GameApiAction daily,
+                                   GameApiAction mailFetch, GameApiAction mailClaim){
         promoRedeemAction=promo;dailyRewardAction=daily;
+        mailFetchAction=mailFetch;mailClaimAction=mailClaim;
     }
     private void showAiCoachDialog(){
         if(aiCoachAction==null){toast("IA ainda não conectada.");return;}
