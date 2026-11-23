@@ -68,6 +68,10 @@ public final class MainActivity extends Activity {
         hud.setUsernameAccountActions((username,password,createAccount)->{
             if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
         },()->{if(accountSync!=null)accountSync.syncNow();},()->{if(accountSync!=null)accountSync.signOut();});
+        hud.setAiCoachAction((question,callback)->{
+            if(accountSync!=null)accountSync.askCoach(question,callback);
+            else callback.onResult(null,"Sistema de contas ainda não inicializado.");
+        });
         hud.setPackAnalyzerAction(()->{
             android.content.Intent intent=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
