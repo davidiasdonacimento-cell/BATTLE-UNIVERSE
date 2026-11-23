@@ -156,6 +156,7 @@ class GlobalMail(Base):
     title: Mapped[str] = mapped_column(String(80), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    recipient_player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -249,6 +250,18 @@ class GlobalMailBody(BaseModel):
 class OwnerPairBody(BaseModel):
     pairing_code: str = Field(min_length=32, max_length=256)
 
+class OwnerTargetMailBody(BaseModel):
+    title: str = Field(min_length=2, max_length=80)
+    body: str = Field(min_length=2, max_length=1200)
+    diamonds: int = Field(default=0, ge=0, le=100000)
+    recipient_player_id: int | None = Field(default=None, ge=1)
+    request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+
+class OwnerWalletRankBody(BaseModel):
+    diamonds: int | None = Field(default=None, ge=0, le=1000000000)
+    xp: int | None = Field(default=None, ge=0, le=1000000000)
+    rank: str | None = Field(default=None, min_length=1, max_length=24, pattern=r"^[A-Za-z0-9 _-]+$")
+
 class AccountEditBody(BaseModel):
     username: str | None = Field(default=None, min_length=3, max_length=18, pattern=r"^[A-Za-z0-9_]+$")
     character_name: str | None = Field(default=None, min_length=1, max_length=32)
@@ -303,6 +316,9 @@ def migrate_promo_code_schema() -> None:
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
     migrate_promo_code_schema()
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE global_mail ADD COLUMN IF NOT EXISTS recipient_player_id INTEGER NULL REFERENCES players(id) ON DELETE CASCADE"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_global_mail_recipient_player_id ON global_mail (recipient_player_id)"))
     # One-currency migration: transfer legacy coin balances into diamonds once.
     with SessionLocal() as db:
         wallets = db.scalars(select(PlayerWallet).where(PlayerWallet.coins > 0)).all()
@@ -906,8 +922,10 @@ def game_mail(db: Session = Depends(db_session), player: Player = Depends(curren
         "claimed": bool(profile.get("mail_welcome_claimed", False)),
     }]
     broadcasts = db.scalars(
-        select(GlobalMail).where(GlobalMail.created_at >= player.created_at)
-        .order_by(GlobalMail.created_at.desc()).limit(100)
+        select(GlobalMail).where(
+            GlobalMail.created_at >= player.created_at,
+            ((GlobalMail.recipient_player_id.is_(None)) | (GlobalMail.recipient_player_id == player.id))
+        ).order_by(GlobalMail.created_at.desc()).limit(100)
     ).all()
     claims = db.scalars(select(GlobalMailClaim).where(
         GlobalMailClaim.player_id == player.id
@@ -916,7 +934,7 @@ def game_mail(db: Session = Depends(db_session), player: Player = Depends(curren
     messages.extend([{
         "id": row.id, "title": row.title, "body": row.body,
         "diamonds": int(row.diamonds), "claimed": row.id in claimed_ids,
-        "created_at": row.created_at.isoformat(), "global": True,
+        "created_at": row.created_at.isoformat(), "global": row.recipient_player_id is None,
     } for row in reversed(broadcasts)])
     return {"messages": messages}
 
@@ -1085,6 +1103,114 @@ def owner_broadcast_mail(body: GlobalMailBody, db: Session = Depends(db_session)
         logging.getLogger("battle_universe").exception("GLOBAL_MAIL_AUDIT_FAILED")
     return {"sent": True, "replayed": False, "message_id": row.id,
             "recipients": recipients, "diamonds_per_player": int(row.diamonds)}
+
+
+@app.post("/v1/owner/mail/send", status_code=201)
+def owner_send_mail(body: OwnerTargetMailBody, db: Session = Depends(db_session),
+                    owner: str = Depends(current_owner)):
+    existing = db.scalar(select(GlobalMail).where(GlobalMail.request_id == body.request_id))
+    if existing is not None:
+        return {"sent": True, "replayed": True, "message_id": existing.id,
+                "recipient_player_id": existing.recipient_player_id}
+    recipient = None
+    if body.recipient_player_id is not None:
+        recipient = db.get(Player, body.recipient_player_id)
+        if recipient is None:
+            raise HTTPException(404, "Conta destinatária não encontrada.")
+        control = db.get(AccountControl, recipient.id)
+        if control and control.state != "active":
+            raise HTTPException(409, "A conta destinatária não está ativa.")
+    row = GlobalMail(request_id=body.request_id, title=body.title.strip(),
+                     body=body.body.strip(), diamonds=body.diamonds,
+                     recipient_player_id=body.recipient_player_id, created_by=owner)
+    db.add(row)
+    try:
+        audit(db, owner, "mail_sent", str(body.recipient_player_id or "all"),
+              {"title": body.title.strip(), "diamonds": body.diamonds})
+        db.commit()
+        db.refresh(row)
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Não foi possível salvar o correio.")
+    recipients = 1 if recipient else (db.scalar(select(func.count(Player.id)).where(Player.created_at <= row.created_at)) or 0)
+    return {"sent": True, "replayed": False, "message_id": row.id,
+            "recipient_player_id": body.recipient_player_id, "recipients": recipients}
+
+@app.patch("/v1/owner/accounts/{player_id}/economy")
+def owner_edit_economy(player_id: int, body: OwnerWalletRankBody,
+                       db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    if body.diamonds is None and body.xp is None and body.rank is None:
+        raise HTTPException(422, "Informe ao menos um valor para alterar.")
+    changes = {}
+    if body.diamonds is not None:
+        wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player_id).with_for_update())
+        if wallet is None:
+            wallet = PlayerWallet(player_id=player_id, coins=0, diamonds=0)
+            db.add(wallet)
+        changes["diamonds"] = {"from": int(wallet.diamonds), "to": body.diamonds}
+        wallet.diamonds = body.diamonds
+    profile = dict(player.profile or {})
+    if body.xp is not None:
+        changes["xp"] = {"from": int(profile.get("xp", 0) or 0), "to": body.xp}
+        profile["xp"] = body.xp
+    if body.rank is not None:
+        changes["rank"] = {"from": str(profile.get("admin_rank_override", "")), "to": body.rank.strip()}
+        profile["admin_rank_override"] = body.rank.strip()
+    player.profile = profile
+    player.updated_at = datetime.now(timezone.utc)
+    audit(db, owner, "account_economy_update", str(player_id), changes)
+    db.add(player)
+    db.commit()
+    return {"updated": changes, "player_id": player_id}
+
+@app.get("/v1/game/mail/permissions")
+def game_mail_permissions(player: Player = Depends(current_player)):
+    return {"can_send": bool((player.profile or {}).get("mail_sender_enabled", False))}
+
+@app.post("/v1/game/mail/send", status_code=201)
+def privileged_game_mail_send(body: OwnerTargetMailBody, db: Session = Depends(db_session),
+                              player: Player = Depends(current_player)):
+    if not bool((player.profile or {}).get("mail_sender_enabled", False)):
+        raise HTTPException(403, "Esta conta não tem permissão para enviar correios.")
+    if body.recipient_player_id == player.id:
+        raise HTTPException(422, "Escolha outra conta destinatária.")
+    existing = db.scalar(select(GlobalMail).where(GlobalMail.request_id == body.request_id))
+    if existing is not None:
+        return {"sent": True, "replayed": True, "message_id": existing.id}
+    recipient = None
+    if body.recipient_player_id is not None:
+        recipient = db.get(Player, body.recipient_player_id)
+        if recipient is None:
+            raise HTTPException(404, "Conta destinatária não encontrada.")
+        control = db.get(AccountControl, recipient.id)
+        if control and control.state != "active":
+            raise HTTPException(409, "A conta destinatária não está ativa.")
+    row = GlobalMail(request_id=body.request_id, title=body.title.strip(),
+                     body=body.body.strip(), diamonds=body.diamonds,
+                     recipient_player_id=body.recipient_player_id, created_by="player:"+player.username)
+    db.add(row)
+    audit(db, "player:"+player.username, "privileged_mail_sent",
+          str(body.recipient_player_id or "all"), {"title": body.title.strip()})
+    db.commit()
+    return {"sent": True, "message_id": row.id,
+            "recipients": 1 if recipient else (db.scalar(select(func.count(Player.id))) or 0)}
+
+@app.post("/v1/owner/accounts/{player_id}/mail-permission")
+def owner_set_mail_permission(player_id: int, enabled: bool = Query(...),
+                               db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    profile = dict(player.profile or {})
+    profile["mail_sender_enabled"] = bool(enabled)
+    player.profile = profile
+    audit(db, owner, "mail_sender_permission", str(player_id), {"enabled": bool(enabled)})
+    db.add(player)
+    db.commit()
+    return {"player_id": player_id, "mail_sender_enabled": bool(enabled)}
 
 @app.get("/v1/owner/promo-codes")
 def owner_list_promo_codes(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
