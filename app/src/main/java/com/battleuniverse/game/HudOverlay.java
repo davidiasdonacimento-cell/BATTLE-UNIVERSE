@@ -708,17 +708,6 @@ public final class HudOverlay extends View {
             long amount=result.optLong("diamonds_awarded",0L);
             toast(claimed?"+"+amount+" DIAMANTES ONLINE!":"Recompensa diária já coletada.");
         });
-        return;
-        // Recompensas locais antigas ficam desativadas para contas online.
-        long day=System.currentTimeMillis()/86400000L;
-        if(prefs.getLong("daily_reward_day",-1L)==day) {
-            toast("A recompensa diária já foi coletada."); return;
-        }
-        long xp=prefs.getLong("xp",0L),diamonds=prefs.getLong("diamonds",0L);
-        prefs.edit().putLong("xp",Math.min(Long.MAX_VALUE-100L,xp)+100L)
-            .putLong("diamonds",Math.min(Long.MAX_VALUE-50L,diamonds)+50L)
-            .putLong("daily_reward_day",day).apply();
-        toast("+100 XP e +50 diamantes virtuais!");
     }
 
     private void showRedeemDialog() {
