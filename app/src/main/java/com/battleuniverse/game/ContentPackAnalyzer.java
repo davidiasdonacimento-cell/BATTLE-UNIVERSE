@@ -62,10 +62,11 @@ public final class ContentPackAnalyzer {
                 // O nome externo pode ser qualquer um. A validação é feita pelo conteúdo,
                 // manifesto oficial e SHA-256, nunca pelo nome exibido pelo Android.
                 copyUri(uri,archive);
-                if(archive.length()<1024||archive.length()>MAX_ARCHIVE)throw new Exception("Tamanho do pacote inválido.");
+                if(archive.length()<1024||archive.length()>MAX_ARCHIVE)throw new Exception("Arquivo vazio ou acima do limite de 2 GB.");
                 status("CONFERINDO ASSINATURA OFICIAL DO PACOTE...");
                 JSONObject remote=downloadJson(MANIFEST_URL);
-                if(archive.length()!=remote.getLong("size_bytes"))throw new Exception("O tamanho não corresponde ao pacote oficial publicado.");
+                // O tamanho publicado pode ficar desatualizado; a autenticidade é confirmada
+                // pelo SHA-256 completo, que não depende do nome nem do campo size_bytes.
                 String archiveHash=sha256(archive);
                 if(!archiveHash.equalsIgnoreCase(remote.getString("sha256")))
                     throw new Exception("SHA-256 do pacote não confere com a versão oficial. Arquivo rejeitado.");
@@ -142,9 +143,8 @@ public final class ContentPackAnalyzer {
                 if(!names.add(key))throw new Exception("Conflito: o ZIP contém nomes duplicados ("+path+").");
                 if(!e.isDirectory()) {
                     if(++count>MAX_ENTRIES)throw new Exception("O pacote contém arquivos demais.");
-                    if(e.getSize()<0)throw new Exception("Não foi possível medir "+path+".");
-                    total+=e.getSize();
-                    if(total>MAX_EXPANDED)throw new Exception("O pacote excede o limite descompactado.");
+                    // O tamanho declarado no diretório ZIP não é tratado como autoridade.
+                    // O limite real é aplicado durante a extração, contando bytes gravados.
                 }
             }
             if(!names.contains("manifest.json"))throw new Exception("Manifesto manifest.json não encontrado na raiz.");
@@ -162,7 +162,7 @@ public final class ContentPackAnalyzer {
                     byte[] b=new byte[32768];int n;long size=0;
                     while((n=in.read(b))!=-1){size+=n;written+=n;if(written>MAX_EXPANDED)throw new Exception("Limite de extração excedido.");file.write(b,0,n);}
                     file.getFD().sync();
-                    if(size!=e.getSize())throw new Exception("Extração incompleta: "+path);
+                    // A integridade do arquivo será confirmada pelo SHA-256 do manifesto.
                 }
             }
         }
@@ -176,7 +176,7 @@ public final class ContentPackAnalyzer {
             JSONObject item=files.getJSONObject(i);String path=normalize(item.getString("path"));
             if(!safe(path)||!listed.add(path.toLowerCase(Locale.ROOT)))throw new Exception("Manifesto contém caminho duplicado ou inválido: "+path);
             File file=new File(dest,path);
-            if(!file.isFile()||file.length()!=item.getLong("size"))throw new Exception("Nome ou tamanho divergente: "+path);
+            if(!file.isFile())throw new Exception("Arquivo obrigatório do manifesto ausente: "+path);
             if(!sha256(file).equalsIgnoreCase(item.getString("sha256")))throw new Exception("SHA-256 inválido: "+path);
         }
         extracted.remove("manifest.json");
