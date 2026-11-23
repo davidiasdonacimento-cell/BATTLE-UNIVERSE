@@ -107,6 +107,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                     JSONObject player=response.optJSONObject("player");
                     JSONObject profile=player==null?new JSONObject():player.optJSONObject("profile");
                     if(profile==null||profile.length()==0)syncProfile(token);else applyProfile(profile);
+                    refreshWallet(null);
                     registerProfileListener();
                     publish(true,name,"Login concluído. Perfil recuperado do servidor.");
                 }
@@ -118,6 +119,56 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
 
     public interface CoachListener { void onResult(String answer, String error); }
     public interface ApiActionListener { void onResult(JSONObject result, String error); }
+
+    public void refreshWallet(ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()) {
+            if(callback!=null)main.post(()->callback.onResult(null,"Entre na conta para carregar a carteira."));
+            return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/accounts/me/wallet","GET",token,null);
+                JSONObject wallet=new JSONObject().put("diamonds",result.optLong("diamonds",0L));
+                profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                if(callback!=null)main.post(()->callback.onResult(wallet,null));
+            } catch(Exception e) {
+                if(callback!=null) {
+                    String message=cleanError(e);
+                    main.post(()->callback.onResult(null,message));
+                }
+            }
+        });
+    }
+
+    public void purchaseShopItem(String itemKey, String requestId, ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()) {
+            main.post(()->callback.onResult(null,"Entre na sua conta para comprar na loja."));
+            return;
+        }
+        if(itemKey==null||!itemKey.matches("[a-z0-9_]{3,64}")
+                ||requestId==null||!requestId.matches("[A-Za-z0-9._:-]{16,64}")) {
+            main.post(()->callback.onResult(null,"Solicitação de compra inválida."));
+            return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject body=new JSONObject().put("item_key",itemKey).put("request_id",requestId);
+                JSONObject result=api("/v1/shop/purchase","POST",token,body);
+                JSONObject wallet=result.optJSONObject("wallet");
+                if(wallet!=null)profilePrefs.edit().putLong("diamonds",
+                    wallet.optLong("diamonds",profilePrefs.getLong("diamonds",0L))).apply();
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null)applyProfile(profile);
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) {
+                String message=cleanError(e);
+                // HTTP 409 is an expected business response, never a fatal game error.
+                main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
 
     public void redeemPromoCode(String rawCode, ApiActionListener callback) {
         String token=getToken();
@@ -207,7 +258,9 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         worker.execute(()->{
             try {
                 syncProfile(token);
-                publish(true,username,"Perfil sincronizado com a API BATTLE UNIVERSE.");
+                JSONObject wallet=api("/v1/accounts/me/wallet","GET",token,null);
+                profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                publish(true,username,"Perfil e carteira sincronizados com o servidor.");
             } catch(Exception e) {
                 publish(true,username,"Falha ao sincronizar. Seus dados locais foram preservados. "+cleanError(e));
             } finally { busy=false; }
@@ -229,6 +282,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 JSONObject player=response.optJSONObject("player");
                 JSONObject profile=player==null?null:player.optJSONObject("profile");
                 if(profile==null||profile.length()==0)syncProfile(token);else applyProfile(profile);
+                refreshWallet(null);
                 registerProfileListener();
                 if(player!=null)username=player.optString("username",username);
                 sessionPrefs.edit().putString("username",username).apply();
