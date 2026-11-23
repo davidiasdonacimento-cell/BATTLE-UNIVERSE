@@ -79,15 +79,16 @@ public final class ContentPackAnalyzer {
                 status("CONFERINDO ASSINATURA OFICIAL DO PACOTE...");
                 JSONObject remote=downloadJson(MANIFEST_URL);
                 long expectedArchiveSize=remote.getLong("size_bytes");
-                if(archive.length()!=expectedArchiveSize)
-                    throw new Exception("Tamanho diferente do pacote Season 02 oficial. Arquivo selecionado: "
-                        +String.format(Locale.US,"%.2f MB",archive.length()/1048576.0)
-                        +"; tamanho oficial esperado: "
-                        +String.format(Locale.US,"%.2f MB",expectedArchiveSize/1048576.0)
-                        +". Confira se selecionou o ZIP Season 02 4K, e não o ZIP do APK.");
+                // O tamanho do arquivo é apenas uma informação auxiliar: provedores
+                // podem atualizar o ZIP e o manifesto de tamanho pode ficar defasado.
+                // A identidade/autenticidade é decidida pelo SHA-256 oficial completo.
+                if(archive.length()<1024||archive.length()>MAX_ARCHIVE)
+                    throw new Exception("Tamanho do ZIP fora dos limites permitidos.");
                 String archiveHash=sha256(archive);
                 if(!archiveHash.equalsIgnoreCase(remote.getString("sha256")))
-                    throw new Exception("SHA-256 do pacote não confere com a versão oficial. Arquivo rejeitado.");
+                    throw new Exception("SHA-256 do pacote não confere com a versão oficial. Arquivo rejeitado. O ZIP pode estar incompleto ou pertencer a outra versão.");
+                if(archive.length()!=expectedArchiveSize)
+                    status("TAMANHO DIFERENTE DO REGISTRO, MAS ASSINATURA SHA-256 OFICIAL CONFIRMADA...");
                 status("PROCURANDO MANIFESTO E NOMES INTERNOS...");
                 deleteTree(staging);
                 if(!staging.mkdirs()&&!staging.isDirectory())throw new Exception("Não foi possível preparar a análise.");
