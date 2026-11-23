@@ -142,7 +142,8 @@ std::array<Vec3,BOT_COUNT> gBotHomes{{
     {87,0.55f,-71},{98,0.55f,-18},{88,0.55f,48},{48,0.55f,94},
     {2,0.55f,91},{-47,0.55f,83},{-96,0.55f,42},{-101,0.55f,-22}
 }};
-struct BuildPiece { Vec3 pos; float yaw=0; int type=0; };
+struct BuildPiece { Vec3 pos; float yaw=0; int type=0; int health=100; };
+constexpr int ICE_WALL_MAX_HEALTH=100;
 std::array<BuildPiece,BUILD_CAPACITY> gBuildPieces{};
 int gBuildCount=0, gBuildType=0, gWood=120, gBuildLimit=12, gResourceCount=5;
 constexpr std::array<Vec3,32> gBuildingPositions{{
@@ -418,12 +419,53 @@ bool worldPositionBlocked(float x,float z,float radius) {
     }
     for(int i=0;i<gBuildCount;++i) {
         const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
-        if(b.type!=0)continue;
+        if(b.type!=0||b.health<=0)continue;
         const float rx=x-b.pos.x,rz=z-b.pos.z,co=std::cos(b.yaw),sn=std::sin(b.yaw);
         const float localX=co*rx-sn*rz,localZ=sn*rx+co*rz;
         if(std::fabs(localX)<1.60f+radius&&std::fabs(localZ)<0.12f+radius)return true;
     }
     return false;
+}
+bool segmentHitsIceWall(Vec3 from,Vec3 to,const BuildPiece& wall,float& hitT) {
+    const float co=std::cos(wall.yaw),sn=std::sin(wall.yaw);
+    auto local=[&](Vec3 p) {
+        const float rx=p.x-wall.pos.x,rz=p.z-wall.pos.z;
+        return Vec3{co*rx-sn*rz,p.y,sn*rx+co*rz};
+    };
+    const Vec3 a=local(from),b=local(to);
+    const float dx=b.x-a.x,dz=b.z-a.z;
+    float enter=0.0f,leave=1.0f;
+    auto clip=[&](float origin,float delta,float low,float high) {
+        if(std::fabs(delta)<0.00001f)return origin>=low&&origin<=high;
+        float t0=(low-origin)/delta,t1=(high-origin)/delta;
+        if(t0>t1)std::swap(t0,t1);
+        enter=std::max(enter,t0);leave=std::min(leave,t1);
+        return enter<=leave;
+    };
+    if(!clip(a.x,dx,-1.60f,1.60f)||!clip(a.z,dz,-0.20f,0.20f))return false;
+    if(leave<0.0f||enter>1.0f)return false;
+    hitT=std::clamp(enter,0.0f,1.0f);
+    return true;
+}
+bool damageIceWallOnPath(Vec3 from,Vec3 to,int damage,Vec3* hitPosition=nullptr) {
+    int nearest=-1;float nearestT=1.01f;
+    for(int i=0;i<gBuildCount;++i) {
+        const BuildPiece& wall=gBuildPieces[static_cast<size_t>(i)];
+        if(wall.type!=0||wall.health<=0)continue;
+        float t=0.0f;
+        if(segmentHitsIceWall(from,to,wall,t)&&t<nearestT){nearest=i;nearestT=t;}
+    }
+    if(nearest<0)return false;
+    BuildPiece& wall=gBuildPieces[static_cast<size_t>(nearest)];
+    wall.health=std::max(0,wall.health-std::max(1,damage));
+    if(hitPosition) {
+        hitPosition->x=from.x+(to.x-from.x)*nearestT;
+        hitPosition->y=from.y+(to.y-from.y)*nearestT;
+        hitPosition->z=from.z+(to.z-from.z)*nearestT;
+    }
+    if(wall.health<=0)setStatus("GELO QUEBRADO • BARREIRA DESTRUÍDA");
+    else setStatus("GELO BLOQUEOU O DISPARO • RESISTÊNCIA "+std::to_string(wall.health)+"%");
+    return true;
 }
 void moveWithCollision(Vec3& actor,float nextX,float nextZ,float radius) {
     if(!worldPositionBlocked(nextX,actor.z,radius))actor.x=nextX;
@@ -1158,6 +1200,9 @@ void updateBots(float dt) {
             if(attackDistance>4.0f && attackDistance<58.0f
                     && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
                 bot.fireFlash=0.32f;
+                Vec3 shotFrom=bot.pos,shotTo=enemy;
+                shotFrom.y+=1.28f;shotTo.y+=1.28f;
+                if(!damageIceWallOnPath(shotFrom,shotTo,8)) {
                 if(targetPlayer) {
                     applyPlayerDamage(1,"ELIMINADO • FIM DA PARTIDA");
                 } else if(targetBot>=0 && gBotActive[static_cast<size_t>(targetBot)]) {
@@ -1173,6 +1218,7 @@ void updateBots(float dt) {
                         } else { gBotActive[victim]=false;++gAiEliminations;
                             gBotRespawn[victim]=gSelectedMode==3?3.0f:0.0f; }
                     }
+                }
                 }
                 gBotAttackCooldown[static_cast<size_t>(i)]=0.95f+static_cast<float>(i%5)*0.15f;
             }
@@ -1228,13 +1274,13 @@ void placeBuildPiece() {
     for(int i=0;i<gBuildCount;++i) {
         float dx=pos.x-gBuildPieces[static_cast<size_t>(i)].pos.x;
         float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;
-        if(dx*dx+dz*dz<2.0f) {setStatus("LOCAL DE CONSTRUÇÃO BLOQUEADO");return;}
+        if(gBuildPieces[static_cast<size_t>(i)].health>0&&dx*dx+dz*dz<2.0f) {setStatus("LOCAL DE CONSTRUÇÃO BLOQUEADO");return;}
     }
     if(worldPositionBlocked(pos.x,pos.z,1.15f)) {
         setStatus("CONSTRUÇÃO BLOQUEADA • NÃO COLOQUE DENTRO DE CASAS OU BARREIRAS");return;
     }
     const int placedType=gBuildType;
-    gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,placedType};
+    gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,placedType,ICE_WALL_MAX_HEALTH};
     ++gBuildCount;gWood-=10;gBuildType=(gBuildType+1)%3;
     const char* names[]={"GELO","PLATAFORMA","RAMPA"};
     std::ostringstream out;out<<names[placedType]<<" CONSTRUÍDA  |  "<<gWood<<" MADEIRA RESTANTE";
@@ -1255,8 +1301,13 @@ void drawBuildPreview() {
 void drawBuildPieces() {
     for(int i=0;i<gBuildCount;++i) {
         const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
-        if(b.type==0) {
-            drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},{0.20f,0.67f,0.82f},b.yaw);
+        if(b.type==0&&b.health>0) {
+            const float strength=static_cast<float>(b.health)/static_cast<float>(ICE_WALL_MAX_HEALTH);
+            const Vec3 iceColor{0.12f+0.08f*strength,0.42f+0.25f*strength,0.62f+0.30f*strength};
+            drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},iceColor,b.yaw);
+            if(b.health<75)drawSegment(b.pos,b.yaw,{-0.65f,1.95f,0.15f},{-0.10f,1.35f,0.15f},0.035f,{0.035f,0.20f,0.31f});
+            if(b.health<45)drawSegment(b.pos,b.yaw,{0.55f,2.35f,0.15f},{0.02f,1.82f,0.15f},0.040f,{0.035f,0.20f,0.31f});
+            if(b.health<20)drawSegment(b.pos,b.yaw,{-0.15f,1.35f,0.15f},{0.42f,0.85f,0.15f},0.045f,{0.035f,0.20f,0.31f});
             drawCube({b.pos.x-0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.48f,0.88f,0.96f},b.yaw);
             drawCube({b.pos.x+0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.48f,0.88f,0.96f},b.yaw);
         } else if(b.type==1) {
@@ -1307,6 +1358,15 @@ void firePulse() {
         }
     }
     gPulseHitPosition={gPlayer.x+fx*best,gPlayer.y+1.45f+gJumpHeight,gPlayer.z+fz*best};
+    Vec3 iceImpact{};
+    const bool hitIceWall=damageIceWallOnPath(
+        {gPlayer.x,gPlayer.y+1.30f+gJumpHeight,gPlayer.z},
+        {gPlayer.x+fx*best,gPlayer.y+1.30f+gJumpHeight,gPlayer.z+fz*best},
+        damage*5,&iceImpact);
+    if(hitIceWall) {
+        gPulseHitPosition=iceImpact;
+        hitTarget=-1;hitBot=-1;
+    }
     if(hitTarget>=0) {
         TrainingTarget& target=gTargets[static_cast<size_t>(hitTarget)];
         target.energy=std::max(0,target.energy-damage);
@@ -1348,7 +1408,7 @@ void firePulse() {
             else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining)); }
         }
     }
-    if(hitTarget<0&&hitBot<0) {
+    if(hitTarget<0&&hitBot<0&&!hitIceWall) {
         const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI"};
         std::ostringstream out;out<<names[std::clamp(gWeaponType,0,3)]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
         setStatus(out.str());
