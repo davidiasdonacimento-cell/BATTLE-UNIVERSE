@@ -675,14 +675,27 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
     profile = dict(player.profile or {})
-    starter_changed = False
+    profile_changed = False
+    owned_keys = (
+        "shop_frame_neon", "shop_emblem_bloob", "shop_title_champion",
+        "wear_shirt_tactical", "wear_shirt_neon", "wear_shirt_frost", "wear_shirt_desert",
+        "wear_boots_combat", "wear_boots_neon", "wear_boots_frost", "wear_boots_gold",
+        "wear_set_aurora", "wear_set_champion", "wear_set_orbit", "wear_set_desert",
+        "wear_set_volcano", "wear_set_nebula", "wear_set_cerrado",
+        "wear_beard_old", "wear_pants_angelical",
+    )
+    for key in owned_keys:
+        if key not in profile:
+            profile[key] = False
+            profile_changed = True
     if not profile.get("wardrobe_starter_v2_granted"):
-        profile.setdefault("wear_shirt_tactical", True)
-        profile.setdefault("wear_boots_combat", True)
+        profile["wear_shirt_tactical"] = True
+        profile["wear_boots_combat"] = True
         profile["wardrobe_starter_v2_granted"] = True
+        profile_changed = True
+    if profile_changed:
         player.profile = profile
-        starter_changed = True
-    if wallet in db.new or starter_changed:
+    if wallet in db.new or profile_changed:
         db.commit()
         db.refresh(wallet)
     return {"diamonds": wallet.diamonds, "currency": "diamonds", "authority": "server"}
