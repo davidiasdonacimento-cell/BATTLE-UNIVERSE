@@ -686,6 +686,8 @@ def shop_purchase(body: ShopPurchaseBody, db: Session = Depends(db_session),
     replay = db.scalar(select(ShopPurchase).where(
         ShopPurchase.player_id == player.id, ShopPurchase.request_id == body.request_id))
     if replay is not None:
+        if replay.item_key != body.item_key:
+            raise HTTPException(409, "Identificador de compra já utilizado em outro item.")
         return {"purchased": True, "replayed": True, "item_key": replay.item_key,
                 "diamonds_spent": replay.diamonds_spent,
                 "wallet": {"diamonds": replay.balance_after}}
