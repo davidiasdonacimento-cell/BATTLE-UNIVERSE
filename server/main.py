@@ -989,6 +989,10 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
                 "diamonds_spent": existing.diamonds_spent,
                 "diamonds_balance": wallet_now.diamonds if wallet_now else existing.balance_after,
                 "profile": player.profile or {}, "replayed": True}
+    latest_spin = db.scalar(select(RoyaleSpin).where(
+        RoyaleSpin.player_id == player.id).order_by(RoyaleSpin.id.desc()).limit(1))
+    if latest_spin is not None and latest_spin.created_at > datetime.now(timezone.utc) - timedelta(seconds=2):
+        raise HTTPException(429, "Aguarde dois segundos entre os giros.")
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
