@@ -780,7 +780,7 @@ def complete_match(body: MatchCompleteBody, db: Session = Depends(db_session),
         db.flush()
     now = datetime.now(timezone.utc)
     profile = dict(player.profile or {})
-    day = now.date().isoformat()
+    day = int(now.timestamp() // 86400)
     if profile.get("missions_day") != day:
         profile.update({"missions_day": day, "mission_matches": 0, "mission_eliminations": 0,
                         "mission_crystals": 0, "mission_claimed_0": False,
@@ -831,7 +831,7 @@ def claim_configured_reward(reward_type: str, reward_key: str,
         config = MATCH_MISSION_CONFIG.get(reward_key)
         if config is None:
             raise HTTPException(404, "Missão não encontrada.")
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = int(datetime.now(timezone.utc).timestamp() // 86400)
         if profile.get("missions_day") != today:
             raise HTTPException(409, "As missões diárias ainda não têm progresso. Jogue uma partida.")
         if int(profile.get(config["field"], 0) or 0) < config["goal"]:
