@@ -1014,88 +1014,15 @@ def claim_daily_reward(db: Session = Depends(db_session), player: Player = Depen
 
 @app.get("/v1/royale/config")
 def royale_config(player: Player = Depends(current_player)):
-    return {"cost": ROYALE_COST, "duplicate_compensation": ROYALE_DUPLICATE_COMPENSATION,
-            "probabilities": [{"id": item["id"], "name": item["name"], "percent": item["weight"]}
-                              for item in ROYALE_PRIZES],
-            "total_percent": sum(item["weight"] for item in ROYALE_PRIZES)}
+    return {"enabled": False, "message": "Recompensas aleatórias estão desativadas. Use a loja de preços fixos."}
 
 @app.post("/v1/royale/spin")
-def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
-                player: Player = Depends(current_player)):
-    existing = db.scalar(select(RoyaleSpin).where(
-        RoyaleSpin.player_id == player.id, RoyaleSpin.request_id == body.request_id))
-    if existing is not None:
-        wallet_now = db.get(PlayerWallet, player.id)
-        return {"spin_id": existing.id, "prize_id": existing.prize_id,
-                "prize_name": existing.prize_name, "duplicate": existing.duplicate,
-                "diamonds_spent": existing.diamonds_spent,
-                "diamonds_balance": wallet_now.diamonds if wallet_now else existing.balance_after,
-                "profile": player.profile or {}, "replayed": True}
-    latest_spin = db.scalar(select(RoyaleSpin).where(
-        RoyaleSpin.player_id == player.id).order_by(RoyaleSpin.id.desc()).limit(1))
-    if latest_spin is not None and latest_spin.created_at > datetime.now(timezone.utc) - timedelta(seconds=2):
-        raise HTTPException(429, "Aguarde dois segundos entre os giros.")
-    wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
-    if wallet is None:
-        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
-        db.add(wallet)
-        db.flush()
-    db.refresh(player)
-    latest_spin = db.scalar(select(RoyaleSpin).where(
-        RoyaleSpin.player_id == player.id).order_by(RoyaleSpin.id.desc()).limit(1))
-    if latest_spin is not None and latest_spin.created_at > datetime.now(timezone.utc) - timedelta(seconds=2):
-        raise HTTPException(429, "Aguarde dois segundos entre os giros.")
-    if wallet.diamonds < ROYALE_COST:
-        raise HTTPException(409, "Diamantes insuficientes na carteira online.")
-    roll = secrets.randbelow(100)
-    cursor = 0
-    selected = ROYALE_PRIZES[-1]
-    for item in ROYALE_PRIZES:
-        cursor += item["weight"]
-        if roll < cursor:
-            selected = item
-            break
-    profile = dict(player.profile or {})
-    duplicate = bool(profile.get(selected["profile_key"], False))
-    credit = ROYALE_DUPLICATE_COMPENSATION if duplicate else 0
-    wallet.diamonds = wallet.diamonds - ROYALE_COST + credit
-    if not duplicate:
-        profile[selected["profile_key"]] = True
-        player.profile = profile
-    row = RoyaleSpin(player_id=player.id, request_id=body.request_id,
-                     prize_id=selected["id"], prize_name=selected["name"],
-                     duplicate=duplicate, diamonds_spent=ROYALE_COST,
-                     balance_after=wallet.diamonds, created_at=datetime.now(timezone.utc))
-    db.add(row)
-    try:
-        db.commit()
-        db.refresh(row)
-    except Exception:
-        db.rollback()
-        replay = db.scalar(select(RoyaleSpin).where(
-            RoyaleSpin.player_id == player.id, RoyaleSpin.request_id == body.request_id))
-        if replay is None:
-            raise HTTPException(503, "Não foi possível confirmar o giro. Tente sincronizar antes de repetir.")
-        wallet_now = db.get(PlayerWallet, player.id)
-        return {"spin_id": replay.id, "prize_id": replay.prize_id,
-                "prize_name": replay.prize_name, "duplicate": replay.duplicate,
-                "diamonds_spent": replay.diamonds_spent,
-                "diamonds_balance": wallet_now.diamonds if wallet_now else replay.balance_after,
-                "profile": player.profile or {}, "replayed": True}
-    return {"spin_id": row.id, "prize_id": row.prize_id, "prize_name": row.prize_name,
-            "duplicate": row.duplicate, "diamonds_spent": row.diamonds_spent,
-            "duplicate_compensation": credit, "diamonds_balance": wallet.diamonds,
-            "profile": profile, "replayed": False}
+def royale_spin(body: RoyaleSpinBody, player: Player = Depends(current_player)):
+    raise HTTPException(410, "Giros aleatórios desativados. Use a loja de preços fixos.")
 
 @app.get("/v1/royale/history")
-def royale_history(limit: int = Query(default=20, ge=1, le=100),
-                   db: Session = Depends(db_session), player: Player = Depends(current_player)):
-    rows = db.scalars(select(RoyaleSpin).where(RoyaleSpin.player_id == player.id)
-                      .order_by(RoyaleSpin.id.desc()).limit(limit)).all()
-    return {"history": [{"spin_id": row.id, "prize_id": row.prize_id, "prize_name": row.prize_name,
-                         "duplicate": row.duplicate, "diamonds_spent": row.diamonds_spent,
-                         "diamonds_balance": row.balance_after, "created_at": row.created_at.isoformat()}
-                        for row in rows]}
+def royale_history(player: Player = Depends(current_player)):
+    return {"enabled": False, "history": [], "message": "O histórico de giros não está disponível."}
 
 @app.post("/v1/owner/pair")
 def owner_pair(body: OwnerPairBody) -> dict[str, Any]:
