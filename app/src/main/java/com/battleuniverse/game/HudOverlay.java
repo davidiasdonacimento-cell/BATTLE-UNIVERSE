@@ -86,7 +86,7 @@ public final class HudOverlay extends View {
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
-    private long toastUntil, lastTap;
+    private long toastUntil, lastTap, lastRoyaleSpinAt;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
         super(context);
@@ -530,13 +530,19 @@ public final class HudOverlay extends View {
         text(c,"ÚLTIMO PRÊMIO",530,559,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
         text(c,last,530,587,13,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"GIROS REGISTRADOS: "+prefs.getInt("royale_spin_count",0),530,612,9,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-        text(c,"As probabilidades somam 100%. Itens repetidos geram compensação virtual.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
+        text(c,"GIRO LOCAL • sem chamadas ao servidor • aguarde 1,2s entre giros.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
     private void performRoyaleSpin() {
         final long cost=100L;
         long balance=prefs.getLong("diamonds",0L);
         if(balance<cost) { toast("Diamantes insuficientes para girar.");return; }
+        long now=System.currentTimeMillis();
+        if(now-lastRoyaleSpinAt<1200L) {
+            toast("Aguarde um instante antes do próximo giro.");
+            return;
+        }
+        lastRoyaleSpinAt=now;
         int roll=royaleRandom.nextInt(100);
         int prize=roll<40?0:(roll<70?1:(roll<90?2:(roll<99?3:4)));
         long remaining=balance-cost;
