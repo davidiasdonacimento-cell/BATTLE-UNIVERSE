@@ -311,6 +311,8 @@ public final class HudOverlay extends View {
         activeMatchRequestId=java.util.UUID.randomUUID().toString();
         matchRewardPending=false;matchRewardRetryAfter=0L;
         prefs.edit().putString("active_match_request_id",activeMatchRequestId)
+            .putLong("last_match_reward_diamonds",0L).putLong("last_match_reward_xp",0L)
+            .putInt("last_match_placement",30)
             .putBoolean("match_reward_recorded",false)
             .putBoolean("match_reward_attempted",false).apply();
         resultSpectating=false;game.setSpectatorMode(false);
@@ -678,7 +680,10 @@ public final class HudOverlay extends View {
         panel(c,225,76,830,570,0xF20B1C2A,0xFF4BCDD5,25);
         eyebrow(c,275,116,"BATTLE UNIVERSE  •  RELATÓRIO DA PARTIDA");
         title(c,victory?"VITÓRIA ROYALE":"VOCÊ FOI ELIMINADO",275,164);
-        subtitle(c,(victory?"1º LUGAR • VITÓRIA. ":"POSIÇÃO "+prefs.getInt("last_match_placement",30)+"º. ")+"Recompensas calculadas pelo seu desempenho.",275,190);
+        String rewardStatus=prefs.getBoolean("match_reward_recorded",false)
+            ?"Recompensas confirmadas pela conta online."
+            :"Partida offline: aguardando conexão para confirmar as recompensas.";
+        subtitle(c,(victory?"1º LUGAR • VITÓRIA. ":"POSIÇÃO "+prefs.getInt("last_match_placement",30)+"º. ")+rewardStatus,275,190);
         panel(c,275,220,330,104,0xCC123B39,0xFF45D6AE,16);
         text(c,"RECOMPENSAS RECEBIDAS",296,247,10,0xFFB7EBDD,Typeface.DEFAULT_BOLD);
         text(c,"+"+prefs.getLong("last_match_reward_diamonds",0L)+" DIAMANTES",296,278,19,0xFFFFD36D,Typeface.create("sans-serif-black",Typeface.BOLD));
