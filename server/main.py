@@ -13,7 +13,7 @@ from typing import Any, Generator
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -462,10 +462,18 @@ check();setInterval(check,15000);
 </script></html>""")
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    with engine.connect() as connection:
-        connection.exec_driver_sql("SELECT 1")
-    return {"status": "ok", "service": "battle-universe-accounts-admin"}
+def health():
+    try:
+        with engine.connect() as connection:
+            connection.exec_driver_sql("SELECT 1")
+        return JSONResponse({"status": "ok", "service": "battle-universe-accounts-admin",
+                             "database": "ok"},
+                            headers={"Access-Control-Allow-Origin": "*"})
+    except Exception:
+        logging.getLogger("battle_universe").exception("HEALTH_CHECK_FAILED")
+        return JSONResponse({"status": "error", "service": "battle-universe-accounts-admin",
+                             "database": "unavailable"}, status_code=503,
+                            headers={"Access-Control-Allow-Origin": "*"})
 
 @app.post("/v1/accounts/register", status_code=201)
 def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str, Any]:
