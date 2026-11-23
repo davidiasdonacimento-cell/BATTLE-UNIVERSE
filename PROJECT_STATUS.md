@@ -109,3 +109,44 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Antes de ativar qualquer novo modo na interface, implementar e testar o respectivo fluxo na engine; não apresentar seleção visual como modo funcional.
 - Multiplayer humano exige servidor autoritativo e matchmaking; bots locais não contam como jogadores online.
 - Testar compilação e, separadamente, testar no Redmi 12. Não afirmar que mapas, interiores, IA, economia ou modos estão prontos sem evidência.
+
+
+## Auditoria de entrega BATTLE UNIVERSE 2.0 — 2026-11-23
+
+### Evidência de build da branch
+- A execução GitHub Actions 45209605890 terminou com sucesso.
+- O artefato confirmado é `BATTLE-UNIVERSE-debug-apk`, tamanho 9.190.114 bytes; não é APK RELEASE.
+- O pacote `BATTLE-UNIVERSE-season-02-4k-content-pack` tem 429.115.184 bytes.
+- A etapa de publicação do pacote em Release foi ignorada por ser uma execução de pull request.
+- Nenhum teste físico no Redmi 12 foi comprovado nesta execução.
+
+### Pipeline de RELEASE — endurecimento em andamento
+- `app/build.gradle` agora configura assinatura RELEASE somente quando os quatro valores de assinatura estável estiverem presentes; não usa chave debug como fallback de produção.
+- `.github/workflows/android.yml` agora tenta gerar APK RELEASE somente quando os quatro GitHub Secrets estiverem configurados, valida keystore/alias, executa `apksigner verify`, verifica que o manifesto não marca o app como debuggable e confere DEX/ABIs/integridade ZIP.
+- Sem os quatro secrets, o workflow publica apenas o artefato DEBUG e declara explicitamente que RELEASE não foi gerado.
+- Esta alteração do pipeline ainda precisa de uma nova execução CI para validação. A existência do código do pipeline não é prova de APK RELEASE.
+
+### Auditoria honesta do escopo 2.0
+Os itens abaixo continuam pendentes de implementação real e teste; telas, nomes de menu, dados locais ou assets soltos não contam como funcionalidade completa:
+- Arsenal solicitado: XM8, UMP, Carapina e Mini Uzi; remover o arsenal fictício não aprovado e implementar atributos, munição, animações/efeitos e testes de gameplay.
+- Efeitos de disparo: substituir linhas visuais simplistas por efeitos de muzzle flash, projétil/impacto e partículas apropriadas à engine.
+- Emotes: sistema de animações originais, roda de seleção, sincronização de estado e persistência do inventário.
+- Lobby: cenário e personagem 3D com assets/rig/animações reais; a HUD atual é Canvas Android e o fundo do lobby é desenhado, não um lobby 3D final completo.
+- Progressão: validar XP, estatísticas e conquistas contra eventos reais de partida; evitar recompensas apenas locais/falsificáveis.
+- Ranking: backend autoritativo, temporadas e validação de resultados.
+- Eventos/missões/passe: objetivos ligados a ações reais, janelas de datas do servidor, reivindicação idempotente e histórico persistente.
+- Professora IA: testar integração real no APK, tratamento de erros e controles de custo/segurança.
+- Multiplayer humano: ainda não existe servidor autoritativo, matchmaking, sincronização de estado, reconexão ou anti-cheat. Não habilitar online como se fosse funcional.
+- Gladiadores e Contra Squad: implementar seus estados próprios de rounds/placar/economia antes de expor como modos jogáveis.
+- Mapas: a geometria/interiores/loot específicos e interativos de cada mapa continuam pendentes.
+- Testes de dispositivo: instalar em Android físico, testar abertura/reabertura, partida, controles multitouch, uso de memória, temperatura e estabilidade no Redmi 12.
+
+### Portões obrigatórios para declarar RELEASE
+1. CI da branch aprovado com testes e APK RELEASE assinado pela chave estável.
+2. Verificação de assinatura, applicationId/versionCode, DEX e bibliotecas ARM aprovada.
+3. Testes de regressão das funcionalidades existentes e novas.
+4. Teste de instalação/atualização no dispositivo real e confirmação de que dados/conta/progresso são preservados.
+5. Artefato final anexado/publicado com SHA-256 e versão identificada.
+6. Multiplayer, compras ou recursos externos só podem ser declarados funcionais após teste ponta a ponta com os serviços reais.
+
+Não marcar nenhuma frente do escopo 2.0 como concluída apenas porque existe uma tela, um endpoint, um arquivo de asset ou uma compilação bem-sucedida.
