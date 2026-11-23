@@ -139,6 +139,12 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 JSONObject result=api("/v1/accounts/me/wallet","GET",token,null);
                 JSONObject wallet=new JSONObject().put("diamonds",result.optLong("diamonds",0L));
                 profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                JSONObject account=api("/v1/accounts/me","GET",token,null);
+                JSONObject player=account.optJSONObject("player");
+                if(player!=null) {
+                    JSONObject serverProfile=player.optJSONObject("profile");
+                    if(serverProfile!=null)applyProfile(serverProfile);
+                }
                 if(callback!=null)main.post(()->callback.onResult(wallet,null));
             } catch(Exception e) {
                 if(callback!=null) {
