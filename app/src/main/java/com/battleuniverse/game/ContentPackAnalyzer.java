@@ -74,14 +74,15 @@ public final class ContentPackAnalyzer {
                 deleteTree(staging);
                 if(!staging.mkdirs()&&!staging.isDirectory())throw new Exception("Não foi possível preparar a análise.");
                 extractAndVerify(archive,staging);
-                JSONObject marker=readMarker(new File(context.getFilesDir(),"battle-content/installed.json"));
-                if(marker!=null&&archiveHash.equalsIgnoreCase(marker.optString("archive_sha256",""))) {
+                File installed=new File(context.getFilesDir(),"battle-content");
+                JSONObject marker=readMarker(new File(installed,"installed.json"));
+                if(marker!=null&&archiveHash.equalsIgnoreCase(marker.optString("archive_sha256",""))
+                        &&ContentPackInstaller.isInstalled(context)) {
                     deleteTree(staging);archive.delete();
                     success("PACOTE JÁ INSTALADO E ÍNTEGRO. Nenhum download ou substituição foi necessário.");
                     return;
                 }
-                File installed=new File(context.getFilesDir(),"battle-content");
-                if(installed.exists()&&marker!=null) {
+                if(installed.exists()) {
                     final String hash=archiveHash;
                     status("PACOTE VÁLIDO. AGUARDANDO CONFIRMAÇÃO PARA SUBSTITUIR A VERSÃO INSTALADA...");
                     main.post(()->{
