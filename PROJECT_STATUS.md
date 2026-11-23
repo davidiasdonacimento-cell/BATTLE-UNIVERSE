@@ -150,3 +150,12 @@ Os itens abaixo continuam pendentes de implementação real e teste; telas, nome
 6. Multiplayer, compras ou recursos externos só podem ser declarados funcionais após teste ponta a ponta com os serviços reais.
 
 Não marcar nenhuma frente do escopo 2.0 como concluída apenas porque existe uma tela, um endpoint, um arquivo de asset ou uma compilação bem-sucedida.
+
+
+## Correções do arsenal e efeitos de tiro — 2026-11-23 (build pendente)
+- Substituídos os quatro rótulos/slots fictícios do arsenal por XM8, UMP, Carapina e Mini Uzi; os quatro slots agora têm silhuetas geométricas distintas na mão do jogador.
+- Ajustados alcance, tolerância e dano para diferenciar as quatro armas no gameplay local.
+- Removido o feixe alongado do disparo. O feedback visual agora usa clarão no cano, projétil curto e esfera de impacto, sem linha contínua até o alvo.
+- Disparo automático continua ativo enquanto o botão DISPARAR fica pressionado, com cadência curta específica por arma.
+- Estas mudanças estão na branch de trabalho e ainda precisam passar pela CI e por teste no Redmi 12. Não afirmar que o crash foi corrigido sem reproduzir o erro e obter logcat do aparelho.
+- O artefato RELEASE anterior contém um ZIP de 7.546.604 bytes com um APK interno de 9.292.836 bytes. O verificador deve validar o tamanho do APK extraído, não comparar o tamanho do ZIP compactado com o APK.
