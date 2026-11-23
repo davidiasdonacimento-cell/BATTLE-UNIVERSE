@@ -1370,6 +1370,11 @@ def claim_game_achievement(achievement_id: str, db: Session = Depends(db_session
     if profile.get(key): raise HTTPException(409,"Conquista já resgatada.")
     wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
     if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    db.refresh(player)
+    profile=dict(player.profile or {})
+    if profile.get(key): raise HTTPException(409,"Conquista já resgatada.")
+    progress=max(0,int(profile.get(achievement["field"],0) or 0))
+    if progress<achievement["goal"]: raise HTTPException(409,"Conquista ainda não concluída.")
     wallet.diamonds+=achievement["diamonds"]
     profile["xp"]=int(profile.get("xp",0) or 0)+achievement["xp"]
     profile[key]=True;player.profile=profile
