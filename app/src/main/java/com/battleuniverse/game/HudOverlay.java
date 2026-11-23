@@ -78,14 +78,14 @@ public final class HudOverlay extends View {
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
     private AiCoachAction aiCoachAction;
-    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction, matchResultAction, rewardClaimAction, royaleSpinAction;
+    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction, matchResultAction, rewardClaimAction;
     private JSONArray mailMessages=new JSONArray();
     private boolean mailFetchStarted, activeMailClaimed;
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
-    private long toastUntil, lastTap, lastRoyaleSpinAt;
-    private boolean shopPurchasePending, matchRewardPending, royaleSpinPending;
+    private long toastUntil, lastTap;
+    private boolean shopPurchasePending, matchRewardPending;
     private long matchRewardRetryAfter;
     private String activeMatchRequestId="";
 
@@ -482,8 +482,8 @@ public final class HudOverlay extends View {
     private void drawRoyalePage(Canvas c) {
         eyebrow(c,270,175,"TEMPORADA 02 • PROGRESSÃO DA CONTA");
         title(c,"MENU ROYALE",270,224);
-        pill(c,674,184,166,32,"GIRO ROYALE",0xFF5A4321,0xFFFFD27A);
-        subtitle(c,"Passe de temporada e giro de recompensas com probabilidades visíveis.",270,252);
+        pill(c,674,184,166,32,"ITENS FIXOS",0xFF176A75,0xFFBDF7F1);
+        subtitle(c,"Passe de temporada e cosméticos com preços definidos.",270,252);
         long xp=prefs.getLong("xp",0L);
         int level=(int)Math.min(30L,1L+xp/500L),progress=(int)(xp%500L);
         panel(c,270,276,570,128,0xAE193040,0x557AA9BC,17);
@@ -512,61 +512,26 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyaleSpinPage(Canvas c) {
-        eyebrow(c,270,175,"RECOMPENSAS ALEATÓRIAS • SOMENTE DIAMANTES VIRTUAIS");
-        title(c,"GIRO ROYALE",270,224);
+        eyebrow(c,270,175,"ITENS ROYALE • PREÇOS FIXOS");
+        title(c,"RECOMPENSAS ROYALE",270,224);
         pill(c,674,184,166,32,"VOLTAR AO PASSE",0x553B6172,0xFFD7E6ED);
-        panel(c,270,264,570,48,0xA91A3040,0x557AA9BC,14);
-        text(c,"CUSTO  ◆ 100 DIAMANTES",292,294,14,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),590,294,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-        String[] prizes={"CAMISA TÁTICA","BOTAS COMBATE","CONJUNTO AURORA","BARBINHA","CALÇA ANGELICAL"};
-        String[] chances={"40%","30%","20%","9%","1%"};
-        int[] colors={0xFF344C5C,0xFF4B5058,0xFF55B7B8,0xFFB87843,0xFF6B83C4};
-        for(int i=0;i<prizes.length;i++) {
-            int col=i%3,row=i/3;float x=270+col*192f,y=326+row*94f;
-            panel(c,x,y,174,82,0xB51A3040,0x557AA9BC,13);
+        subtitle(c,"Escolha diretamente o cosmético desejado na loja.",270,252);
+        String[] items={"CAMISA NEON","BOTAS NEON","CONJUNTO AURORA","CONJUNTO ORBITAL","CONJUNTO DESERTO"};
+        String[] prices={"800 ◆","600 ◆","1800 ◆","2500 ◆","1900 ◆"};
+        int[] colors={0xFF8D42D7,0xFF2FAFC4,0xFF55B7B8,0xFF6B83C4,0xFFB87843};
+        for(int i=0;i<items.length;i++){
+            int col=i%3,row=i/3;float x=270+col*192f,y=300+row*92f;
+            panel(c,x,y,174,78,0xB51A3040,0x557AA9BC,13);
             circle(c,x+25,y+28,15,colors[i],0xFFB5D6E1);
-            text(c,prizes[i],x+48,y+27,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,"CHANCE DE GANHAR",x+14,y+54,7,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-            text(c,chances[i],x+14,y+72,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            text(c,items[i],x+48,y+27,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"PREÇO DEFINIDO",x+14,y+54,7,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
+            text(c,prices[i],x+14,y+72,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         }
-        panel(c,270,520,570,126,0xA91A3040,0x557AA9BC,16);
-        gradientButton(c,288,546,220,68,"GIRAR • 100 ◆","USAR DIAMANTES VIRTUAIS",0xFF9A6527,0xFFE1A848);
-        String last=prefs.getString("royale_last_reward","NENHUM GIRO REALIZADO");
-        if(last.length()>38)last=last.substring(0,35)+"...";
-        text(c,"ÚLTIMO PRÊMIO",530,559,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
-        text(c,last,530,587,13,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"GIROS REGISTRADOS: "+prefs.getInt("royale_spin_count",0),530,612,9,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-        text(c,"SORTEIO ONLINE • RESULTADO, SALDO E INVENTÁRIO CONFIRMADOS PELO SERVIDOR.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
+        panel(c,270,510,570,126,0xA91A3040,0x557AA9BC,16);
+        gradientButton(c,288,536,220,68,"ABRIR LOJA","COMPRAR ITEM ESCOLHIDO",0xFF126C72,0xFF164C70);
+        text(c,"COMPRAS DIRETAS • SALDO DA CONTA",530,562,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
+        text(c,"Cada cosmético tem seu próprio preço.",530,590,10,Color.WHITE,Typeface.DEFAULT);
     }
-
-    private void performRoyaleSpin() {
-        if(!googleSignedIn){toast("Entre na conta para usar o Giro Royale online.");page=PROFILE;return;}
-        if(royaleSpinPending)return;
-        if(royaleSpinAction==null){toast("Giro Royale online indisponível.");return;}
-        long now=System.currentTimeMillis();
-        if(now-lastRoyaleSpinAt<2200L){toast("Aguarde antes de girar novamente.");return;}
-        lastRoyaleSpinAt=now;royaleSpinPending=true;
-        String requestId=prefs.getString("royale_pending_request_id","");
-        if(requestId.isEmpty()) {
-            requestId=java.util.UUID.randomUUID().toString();
-            prefs.edit().putString("royale_pending_request_id",requestId).apply();
-        }
-        final String stableRequestId=requestId;
-        toast("Validando giro e saldo no servidor...");
-        royaleSpinAction.run(stableRequestId,(result,error)->{
-            royaleSpinPending=false;
-            if(error!=null){toast("Giro não concluído: "+error);postInvalidate();return;}
-            if(result==null||!result.has("prize_id")){toast("O servidor não confirmou o prêmio.");postInvalidate();return;}
-            prefs.edit().remove("royale_pending_request_id")
-                .putLong("diamonds",result.optLong("diamonds_balance",prefs.getLong("diamonds",0L))).apply();
-            String prize=result.optString("prize_name","PRÊMIO");
-            String message=result.optBoolean("duplicate")?prize+" • ITEM REPETIDO • COMPENSAÇÃO +"+result.optLong("duplicate_compensation",0L)+" ◆":prize;
-            prefs.edit().putString("royale_last_reward",message)
-                .putInt("royale_spin_count",prefs.getInt("royale_spin_count",0)+(result.optBoolean("replayed")?0:1)).apply();
-            toast("🟢 ROYALE: "+message);postInvalidate();
-        });
-    }
-
     private void ensureStarterWardrobe() {
         if(prefs.getBoolean("wardrobe_starter_v2_granted",false)) return;
         SharedPreferences.Editor editor=prefs.edit()
@@ -1428,7 +1393,7 @@ public final class HudOverlay extends View {
             if(hit(x,y,681,423,138,30)){claimDailyReward();return;}
         }else if(page==ROYALE_SPIN){
             if(hit(x,y,674,184,166,32)){page=ROYALE;return;}
-            if(hit(x,y,288,546,220,68)){performRoyaleSpin();return;}
+            if(hit(x,y,288,536,220,68)){page=SHOP;return;}
             for(int i=0;i<ROYALE_LEVELS.length;i++){
                 float rx=270+(i%3)*192f,ry=476+(i/3)*88f;
                 if(hit(x,y,rx,ry,174,78)){claimRoyaleTier(i);return;}
@@ -1498,7 +1463,6 @@ public final class HudOverlay extends View {
     public void setShopPurchaseAction(GameApiAction action){shopPurchaseAction=action;}
     public void setMatchResultAction(GameApiAction action){matchResultAction=action;}
     public void setRewardClaimAction(GameApiAction action){rewardClaimAction=action;}
-    public void setRoyaleSpinAction(GameApiAction action){royaleSpinAction=action;}
     private void showAiCoachDialog(){
         if(aiCoachAction==null){
             new AlertDialog.Builder(getContext()).setTitle("IA PROFESSORA")
