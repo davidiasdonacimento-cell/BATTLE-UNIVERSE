@@ -430,6 +430,37 @@ def ai_coach(body: CoachBody, player: Player = Depends(current_player)) -> dict[
         logging.getLogger("battle_universe").exception("OPENROUTER_REQUEST_FAILED player_id=%s", player.id)
         raise HTTPException(503, "Não foi possível conectar à IA agora. Tente novamente.")
 
+@app.get("/admin/monitoramento", response_class=HTMLResponse)
+def admin_monitoramento():
+    return HTMLResponse("""<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BATTLE UNIVERSE • Monitoramento</title>
+<style>
+:root{color-scheme:dark}body{margin:0;background:#08131f;color:#e8f5fa;font:15px system-ui;padding:24px}
+main{max-width:900px;margin:auto}h1{color:#69dce5}small{color:#9db6c5}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-top:22px}
+.card{background:#122638;border:1px solid #315366;border-radius:16px;padding:20px}
+.value{font-size:24px;font-weight:800;margin:12px 0;color:#75e0c9}.muted{color:#9db6c5}
+#log{white-space:pre-wrap;overflow-wrap:anywhere}
+</style><main><h1>BATTLE UNIVERSE • CENTRAL DE SERVIDORES</h1>
+<small>Monitoramento da API de contas e do banco de dados • atualização automática</small>
+<div class="grid">
+<section class="card"><b>API BATTLE UNIVERSE</b><div class="value" id="api">VERIFICANDO...</div><div class="muted" id="latency">Aguardando resposta</div></section>
+<section class="card"><b>Banco de dados</b><div class="value" id="db">VERIFICANDO...</div><div class="muted">Verificação pela rota /health</div></section>
+<section class="card"><b>Última verificação</b><div class="value" id="updated">--:--:--</div><div class="muted">Atualiza a cada 15 segundos</div></section>
+</div><section class="card" style="margin-top:14px"><b>Registro de monitoramento</b><p id="log" class="muted">Inicializando...</p></section>
+</main><script>
+const api=document.getElementById('api'),db=document.getElementById('db'),lat=document.getElementById('latency'),
+updated=document.getElementById('updated'),log=document.getElementById('log');
+async function check(){const start=performance.now();try{const r=await fetch('/health',{cache:'no-store'});const data=await r.json();const ms=Math.round(performance.now()-start);
+if(!r.ok||data.status!=='ok')throw new Error('Health check recusado');
+api.textContent='🟢 ONLINE';db.textContent='🟢 CONECTADO';lat.textContent='Resposta em '+ms+' ms';
+log.textContent='API respondeu normalmente. Banco de dados acessível.\nServiço: '+(data.service||'BATTLE UNIVERSE')+'\nHTTP: '+r.status;
+}catch(e){api.textContent='🔴 INDISPONÍVEL';db.textContent='⚠️ NÃO CONFIRMADO';lat.textContent='Falha na verificação';
+log.textContent='Falha de comunicação: '+String(e)}updated.textContent=new Date().toLocaleTimeString('pt-BR')}
+check();setInterval(check,15000);
+</script></html>""")
+
 @app.get("/health")
 def health() -> dict[str, str]:
     with engine.connect() as connection:
