@@ -983,10 +983,12 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
     existing = db.scalar(select(RoyaleSpin).where(
         RoyaleSpin.player_id == player.id, RoyaleSpin.request_id == body.request_id))
     if existing is not None:
+        wallet_now = db.get(PlayerWallet, player.id)
         return {"spin_id": existing.id, "prize_id": existing.prize_id,
                 "prize_name": existing.prize_name, "duplicate": existing.duplicate,
-                "diamonds_spent": existing.diamonds_spent, "diamonds_balance": existing.balance_after,
-                "replayed": True}
+                "diamonds_spent": existing.diamonds_spent,
+                "diamonds_balance": wallet_now.diamonds if wallet_now else existing.balance_after,
+                "profile": player.profile or {}, "replayed": True}
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
@@ -1023,14 +1025,16 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
             RoyaleSpin.player_id == player.id, RoyaleSpin.request_id == body.request_id))
         if replay is None:
             raise HTTPException(503, "Não foi possível confirmar o giro. Tente sincronizar antes de repetir.")
+        wallet_now = db.get(PlayerWallet, player.id)
         return {"spin_id": replay.id, "prize_id": replay.prize_id,
                 "prize_name": replay.prize_name, "duplicate": replay.duplicate,
-                "diamonds_spent": replay.diamonds_spent, "diamonds_balance": replay.balance_after,
-                "replayed": True}
+                "diamonds_spent": replay.diamonds_spent,
+                "diamonds_balance": wallet_now.diamonds if wallet_now else replay.balance_after,
+                "profile": player.profile or {}, "replayed": True}
     return {"spin_id": row.id, "prize_id": row.prize_id, "prize_name": row.prize_name,
             "duplicate": row.duplicate, "diamonds_spent": row.diamonds_spent,
             "duplicate_compensation": credit, "diamonds_balance": wallet.diamonds,
-            "replayed": False}
+            "profile": profile, "replayed": False}
 
 @app.get("/v1/royale/history")
 def royale_history(limit: int = Query(default=20, ge=1, le=100),
