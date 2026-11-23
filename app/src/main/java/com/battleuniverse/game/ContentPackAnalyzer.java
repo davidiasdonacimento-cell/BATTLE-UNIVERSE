@@ -62,10 +62,29 @@ public final class ContentPackAnalyzer {
                 // O nome externo pode ser qualquer um. A validação é feita pelo conteúdo,
                 // manifesto oficial e SHA-256, nunca pelo nome exibido pelo Android.
                 copyUri(uri,archive);
-                if(archive.length()<1024||archive.length()>MAX_ARCHIVE)throw new Exception("Tamanho do pacote inválido.");
+                if(archive.length()<1024||archive.length()>MAX_ARCHIVE)throw new Exception("Tamanho do arquivo inválido.");
+                // Diferencia o ZIP de distribuição do APK do ZIP de conteúdo Season 02.
+                // O APK compactado não deve ser comparado ao tamanho do pacote 4K.
+                try(ZipFile selected=new ZipFile(archive)) {
+                    boolean hasApk=false,hasManifest=false;
+                    Enumeration<? extends ZipEntry> selectedEntries=selected.entries();
+                    while(selectedEntries.hasMoreElements()) {
+                        String name=selectedEntries.nextElement().getName().toLowerCase(Locale.ROOT);
+                        if(name.endsWith(".apk"))hasApk=true;
+                        if("manifest.json".equals(name))hasManifest=true;
+                    }
+                    if(hasApk&&!hasManifest)
+                        throw new Exception("Este ZIP contém um APK de instalação, não o pacote de conteúdo Season 02. Extraia e instale o arquivo app-release.apk; para o analisador, selecione o ZIP Season 02 4K.");
+                }
                 status("CONFERINDO ASSINATURA OFICIAL DO PACOTE...");
                 JSONObject remote=downloadJson(MANIFEST_URL);
-                if(archive.length()!=remote.getLong("size_bytes"))throw new Exception("O tamanho não corresponde ao pacote oficial publicado.");
+                long expectedArchiveSize=remote.getLong("size_bytes");
+                if(archive.length()!=expectedArchiveSize)
+                    throw new Exception("Tamanho diferente do pacote Season 02 oficial. Arquivo selecionado: "
+                        +String.format(Locale.US,"%.2f MB",archive.length()/1048576.0)
+                        +"; tamanho oficial esperado: "
+                        +String.format(Locale.US,"%.2f MB",expectedArchiveSize/1048576.0)
+                        +". Confira se selecionou o ZIP Season 02 4K, e não o ZIP do APK.");
                 String archiveHash=sha256(archive);
                 if(!archiveHash.equalsIgnoreCase(remote.getString("sha256")))
                     throw new Exception("SHA-256 do pacote não confere com a versão oficial. Arquivo rejeitado.");
