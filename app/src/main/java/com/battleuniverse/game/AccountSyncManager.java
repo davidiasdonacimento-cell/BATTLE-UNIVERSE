@@ -42,10 +42,17 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost","wear_shirt_desert",
         "wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
         "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
+        "character_display_name"
+    };
+    private static final String[] SERVER_PROFILE_KEYS={
         "xp","matches_played","match_wins","match_kills","match_damage","match_resources",
         "last_match_kills","last_match_damage","last_match_resources","last_match_result",
         "mission_matches","mission_eliminations","mission_crystals","missions_day",
-        "mission_claimed_0","mission_claimed_1","mission_claimed_2","character_display_name"
+        "mission_claimed_0","mission_claimed_1","mission_claimed_2",
+        "royale_tier_claimed_0","royale_tier_claimed_1","royale_tier_claimed_2",
+        "royale_tier_claimed_3","royale_tier_claimed_4","royale_tier_claimed_5",
+        "achievement_500","achievement_1500","achievement_3000","event_season_claimed",
+        "mail_welcome_claimed","wardrobe_starter_v2_granted"
     };
 
     private final Activity activity;
@@ -100,6 +107,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 if(create) {
                     String recovery=response.optString("recovery_code","");
                     try { syncProfile(token); } catch(Exception ignored) { }
+                    refreshWallet(null);
                     registerProfileListener();
                     String note=recovery.isEmpty()?"Conta criada e conectada.":"Conta criada! ANOTE E GUARDE este código de recuperação: "+recovery;
                     publish(true,name,note);
@@ -138,6 +146,40 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                     main.post(()->callback.onResult(null,message));
                 }
             }
+        });
+    }
+
+    public void completeMatch(String payload, ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na conta para sincronizar as recompensas da partida."));return;}
+        worker.execute(()->{
+            try {
+                JSONObject body=new JSONObject(payload==null?"{}":payload);
+                JSONObject result=api("/v1/game/matches/complete","POST",token,body);
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null)applyProfile(profile);
+                JSONObject wallet=result.optJSONObject("wallet");
+                if(wallet!=null)profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) { String message=cleanError(e); main.post(()->callback.onResult(null,message)); }
+        });
+    }
+
+    public void claimConfiguredReward(String rewardType,String rewardKey,ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na conta para resgatar recompensas."));return;}
+        if(rewardType==null||!rewardType.matches("[a-z_]{3,32}")||rewardKey==null||!rewardKey.matches("[a-zA-Z0-9_]{1,64}")) {
+            main.post(()->callback.onResult(null,"Recompensa inválida."));return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/game/rewards/"+rewardType+"/"+rewardKey+"/claim","POST",token,new JSONObject());
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null)applyProfile(profile);
+                JSONObject wallet=result.optJSONObject("wallet");
+                if(wallet!=null)profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) { String message=cleanError(e); main.post(()->callback.onResult(null,message)); }
         });
     }
 
@@ -258,9 +300,15 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         worker.execute(()->{
             try {
                 syncProfile(token);
+                JSONObject account=api("/v1/accounts/me","GET",token,null);
+                JSONObject player=account.optJSONObject("player");
+                if(player!=null) {
+                    JSONObject serverProfile=player.optJSONObject("profile");
+                    if(serverProfile!=null)applyProfile(serverProfile);
+                }
                 JSONObject wallet=api("/v1/accounts/me/wallet","GET",token,null);
                 profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
-                publish(true,username,"Perfil e carteira sincronizados com o servidor.");
+                publish(true,username,"Perfil, progresso e carteira sincronizados com o servidor.");
             } catch(Exception e) {
                 publish(true,username,"Falha ao sincronizar. Seus dados locais foram preservados. "+cleanError(e));
             } finally { busy=false; }
@@ -353,6 +401,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
 
     private boolean allowed(String key) {
         for(String item:PROFILE_KEYS)if(item.equals(key))return true;
+        for(String item:SERVER_PROFILE_KEYS)if(item.equals(key))return true;
         return false;
     }
 
