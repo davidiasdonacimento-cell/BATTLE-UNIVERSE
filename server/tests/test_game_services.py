@@ -54,6 +54,32 @@ class AccountIdentityTests(unittest.TestCase):
 
 
 
+class GlobalMailContractTests(unittest.TestCase):
+    def test_global_mail_validates_content_and_virtual_gift(self):
+        body = main.GlobalMailBody(
+            title="Presente da atualização",
+            body="Obrigado por jogar BATTLE UNIVERSE!",
+            diamonds=250,
+            request_id="test-request-000001",
+        )
+        self.assertEqual(body.diamonds, 250)
+        self.assertEqual(body.title, "Presente da atualização")
+
+    def test_global_mail_rejects_excessive_gift(self):
+        with self.assertRaises(Exception):
+            main.GlobalMailBody(
+                title="Presente", body="Mensagem válida",
+                diamonds=100001, request_id="test-request-000002",
+            )
+
+    def test_global_mail_claim_is_unique_per_player_and_message(self):
+        constraints = [c for c in main.GlobalMailClaim.__table__.constraints
+                       if getattr(c, "name", None) == "uq_global_mail_player_message"]
+        self.assertEqual(len(constraints), 1)
+        self.assertEqual(main.GlobalMail.__tablename__, "global_mail")
+        self.assertEqual(main.GlobalMailClaim.__tablename__, "global_mail_claims")
+
+
 class PromoCodeContractTests(unittest.TestCase):
     def test_promo_code_creation_requires_positive_diamonds_and_use_limit(self):
         body = main.PromoCreateBody(code="BATTLE2026", diamonds=500, max_uses=100)
