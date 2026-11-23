@@ -13,7 +13,7 @@ Documento de continuidade obrigatório. Antes de qualquer alteração, revisar e
 - Fluxo da partida: sala de espera, contagem, aeronave caminhável, mapa tático, salto, queda livre, paraquedas, combate, resultado e recompensas.
 - Modos solo, dupla, esquadrão e treinamento; bots NORMAL; fogo amigo desligado.
 - Armas, equipamentos, loot, construção, zona segura, reviver aliados, missões, estatísticas, progressão, clima e ciclo dia/noite.
-- Pacote adicional com conteúdo real, download dentro do jogo, validação e carregamento; nunca inflar com dados vazios ou duplicados.
+- Pacote adicional com conteúdo real, download dentro do jogo, validação e carregamento; sua geração/publicação é separada da compilação do APK para não tornar cada build excessivamente pesado.
 - Monetização futura apenas transparente e opcional, respeitando as regras das lojas. Não prometer renda.
 
 ## Arquitetura confirmada
@@ -159,3 +159,9 @@ Não marcar nenhuma frente do escopo 2.0 como concluída apenas porque existe um
 - Disparo automático continua ativo enquanto o botão DISPARAR fica pressionado, com cadência curta específica por arma.
 - Estas mudanças estão na branch de trabalho e ainda precisam passar pela CI e por teste no Redmi 12. Não afirmar que o crash foi corrigido sem reproduzir o erro e obter logcat do aparelho.
 - O artefato RELEASE anterior contém um ZIP de 7.546.604 bytes com um APK interno de 9.292.836 bytes. O verificador deve validar o tamanho do APK extraído, não comparar o tamanho do ZIP compactado com o APK.
+
+
+## Ajustes de compilação e câmera — 2026-11-23
+- O workflow Android não gera nem publica automaticamente o pacote Season 02 4K. A compilação do APK não instala dependências de imagem do pacote, não executa scripts/build_content_pack.py e não exige ZIP de conteúdo para validar o APK.
+- O pacote de conteúdo permanece uma entrega separada para download posterior; o analisador no aplicativo continua destinado ao ZIP de conteúdo, não ao ZIP do APK.
+- A câmera durante a queda/paraquedas agora acompanha 100% da altitude vertical do jogador. Antes, seguia apenas 40%, podendo ficar visualmente abaixo do personagem. Código publicado na branch de trabalho; compilação e teste no aparelho ainda pendentes.
