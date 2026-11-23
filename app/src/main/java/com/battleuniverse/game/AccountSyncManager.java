@@ -38,16 +38,23 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private static final String[] PROFILE_KEYS={
         "nickname","mode","map","character","quality","music","effects","look_sensitivity",
         "invert_camera_y","show_minimap","haptics","online_mode","selected_shirt","selected_boots",
-        "selected_set","shop_frame_neon","shop_emblem_bloob","shop_title_champion",
-        "wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost","wear_shirt_desert",
-        "wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
-        "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
+        "selected_set","character_display_name"
+    };
+    private static final String[] SERVER_PROFILE_KEYS={
         "xp","matches_played","match_wins","match_kills","match_damage","match_resources",
         "last_match_kills","last_match_damage","last_match_resources","last_match_result",
         "mission_matches","mission_eliminations","mission_crystals","missions_day",
-        "mission_claimed_0","mission_claimed_1","mission_claimed_2","character_display_name"
+        "mission_claimed_0","mission_claimed_1","mission_claimed_2",
+        "royale_tier_claimed_0","royale_tier_claimed_1","royale_tier_claimed_2",
+        "royale_tier_claimed_3","royale_tier_claimed_4","royale_tier_claimed_5",
+        "achievement_500","achievement_1500","achievement_3000","event_season_claimed",
+        "mail_welcome_claimed","wardrobe_starter_v2_granted",
+        "shop_frame_neon","shop_emblem_bloob","shop_title_champion",
+        "wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost","wear_shirt_desert",
+        "wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
+        "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
+        "wear_set_volcano","wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical"
     };
-
     private final Activity activity;
     private final SharedPreferences profilePrefs;
     private final SharedPreferences sessionPrefs;
@@ -100,6 +107,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 if(create) {
                     String recovery=response.optString("recovery_code","");
                     try { syncProfile(token); } catch(Exception ignored) { }
+                    refreshWallet(null);
                     registerProfileListener();
                     String note=recovery.isEmpty()?"Conta criada e conectada.":"Conta criada! ANOTE E GUARDE este código de recuperação: "+recovery;
                     publish(true,name,note);
@@ -107,6 +115,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                     JSONObject player=response.optJSONObject("player");
                     JSONObject profile=player==null?new JSONObject():player.optJSONObject("profile");
                     if(profile==null||profile.length()==0)syncProfile(token);else applyProfile(profile);
+                    refreshWallet(null);
                     registerProfileListener();
                     publish(true,name,"Login concluído. Perfil recuperado do servidor.");
                 }
@@ -118,6 +127,113 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
 
     public interface CoachListener { void onResult(String answer, String error); }
     public interface ApiActionListener { void onResult(JSONObject result, String error); }
+
+    public void refreshWallet(ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()) {
+            if(callback!=null)main.post(()->callback.onResult(null,"Entre na conta para carregar a carteira."));
+            return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/accounts/me/wallet","GET",token,null);
+                JSONObject wallet=new JSONObject().put("diamonds",result.optLong("diamonds",0L));
+                profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                JSONObject account=api("/v1/accounts/me","GET",token,null);
+                JSONObject player=account.optJSONObject("player");
+                if(player!=null) {
+                    JSONObject serverProfile=player.optJSONObject("profile");
+                    if(serverProfile!=null)applyProfile(serverProfile);
+                }
+                if(callback!=null)main.post(()->callback.onResult(wallet,null));
+            } catch(Exception e) {
+                if(callback!=null) {
+                    String message=cleanError(e);
+                    main.post(()->callback.onResult(null,message));
+                }
+            }
+        });
+    }
+
+    public void spinRoyale(String requestId,ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na conta para usar o Giro Royale."));return;}
+        if(requestId==null||!requestId.matches("[A-Za-z0-9._:-]{16,64}")){
+            main.post(()->callback.onResult(null,"Identificador do giro inválido."));return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/royale/spin","POST",token,new JSONObject().put("request_id",requestId));
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null)applyProfile(profile);
+                long balance=result.optLong("diamonds_balance",profilePrefs.getLong("diamonds",0L));
+                profilePrefs.edit().putLong("diamonds",balance).apply();
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) {String message=cleanError(e);main.post(()->callback.onResult(null,message));}
+        });
+    }
+    public void completeMatch(String payload, ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na conta para sincronizar as recompensas da partida."));return;}
+        worker.execute(()->{
+            try {
+                JSONObject body=new JSONObject(payload==null?"{}":payload);
+                JSONObject result=api("/v1/game/matches/complete","POST",token,body);
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null)applyProfile(profile);
+                JSONObject wallet=result.optJSONObject("wallet");
+                if(wallet!=null)profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) { String message=cleanError(e); main.post(()->callback.onResult(null,message)); }
+        });
+    }
+
+    public void claimConfiguredReward(String rewardType,String rewardKey,ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na conta para resgatar recompensas."));return;}
+        if(rewardType==null||!rewardType.matches("[a-z_]{3,32}")||rewardKey==null||!rewardKey.matches("[a-zA-Z0-9_]{1,64}")) {
+            main.post(()->callback.onResult(null,"Recompensa inválida."));return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/game/rewards/"+rewardType+"/"+rewardKey+"/claim","POST",token,new JSONObject());
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null)applyProfile(profile);
+                JSONObject wallet=result.optJSONObject("wallet");
+                if(wallet!=null)profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) { String message=cleanError(e); main.post(()->callback.onResult(null,message)); }
+        });
+    }
+
+    public void purchaseShopItem(String itemKey, String requestId, ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()) {
+            main.post(()->callback.onResult(null,"Entre na sua conta para comprar na loja."));
+            return;
+        }
+        if(itemKey==null||!itemKey.matches("[a-z0-9_]{3,64}")
+                ||requestId==null||!requestId.matches("[A-Za-z0-9._:-]{16,64}")) {
+            main.post(()->callback.onResult(null,"Solicitação de compra inválida."));
+            return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject body=new JSONObject().put("item_key",itemKey).put("request_id",requestId);
+                JSONObject result=api("/v1/shop/purchase","POST",token,body);
+                JSONObject wallet=result.optJSONObject("wallet");
+                if(wallet!=null)profilePrefs.edit().putLong("diamonds",
+                    wallet.optLong("diamonds",profilePrefs.getLong("diamonds",0L))).apply();
+                JSONObject profile=result.optJSONObject("profile");
+                if(profile!=null)applyProfile(profile);
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) {
+                String message=cleanError(e);
+                // HTTP 409 is an expected business response, never a fatal game error.
+                main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
 
     public void redeemPromoCode(String rawCode, ApiActionListener callback) {
         String token=getToken();
@@ -207,7 +323,15 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         worker.execute(()->{
             try {
                 syncProfile(token);
-                publish(true,username,"Perfil sincronizado com a API BATTLE UNIVERSE.");
+                JSONObject account=api("/v1/accounts/me","GET",token,null);
+                JSONObject player=account.optJSONObject("player");
+                if(player!=null) {
+                    JSONObject serverProfile=player.optJSONObject("profile");
+                    if(serverProfile!=null)applyProfile(serverProfile);
+                }
+                JSONObject wallet=api("/v1/accounts/me/wallet","GET",token,null);
+                profilePrefs.edit().putLong("diamonds",wallet.optLong("diamonds",0L)).apply();
+                publish(true,username,"Perfil, progresso e carteira sincronizados com o servidor.");
             } catch(Exception e) {
                 publish(true,username,"Falha ao sincronizar. Seus dados locais foram preservados. "+cleanError(e));
             } finally { busy=false; }
@@ -229,6 +353,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 JSONObject player=response.optJSONObject("player");
                 JSONObject profile=player==null?null:player.optJSONObject("profile");
                 if(profile==null||profile.length()==0)syncProfile(token);else applyProfile(profile);
+                refreshWallet(null);
                 registerProfileListener();
                 if(player!=null)username=player.optString("username",username);
                 sessionPrefs.edit().putString("username",username).apply();
@@ -299,6 +424,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
 
     private boolean allowed(String key) {
         for(String item:PROFILE_KEYS)if(item.equals(key))return true;
+        for(String item:SERVER_PROFILE_KEYS)if(item.equals(key))return true;
         return false;
     }
 

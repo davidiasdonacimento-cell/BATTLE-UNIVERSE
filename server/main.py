@@ -13,7 +13,7 @@ from typing import Any, Generator
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -50,19 +50,9 @@ PROFILE_FIELDS = {
     "selected_mode", "selected_map", "selected_character", "quality", "music", "effects",
     "look_sensitivity", "sensitivity_general", "sensitivity_aim", "invert_camera_y",
     "show_minimap", "haptics", "mode", "map", "character", "selected_shirt",
-    "selected_boots", "selected_set", "wear_shirt_tactical", "wear_shirt_neon",
-    "wear_shirt_frost", "wear_shirt_desert", "wear_boots_combat", "wear_boots_neon",
-    "wear_boots_frost", "wear_boots_gold", "wear_set_aurora", "wear_set_champion",
-    "wear_set_orbit", "wear_set_desert", "wear_set_volcano", "wear_set_nebula",
-    "wear_set_cerrado", "wear_beard_old", "wear_pants_angelical", "equipped_beard", "equipped_helmet", "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
-    "nickname", "xp", "profile_schema_version",
-    "matches_played", "match_wins", "match_kills", "match_damage", "match_resources",
-    "last_match_kills", "last_match_damage", "last_match_resources", "last_match_result", "match_history",
-    "royale_history", "royale_spin_count",
-    "mission_matches", "mission_eliminations", "mission_crystals", "missions_day",
-    "mission_claimed_0", "mission_claimed_1", "mission_claimed_2", "wardrobe_starter_v2_granted",
-    "shop_frame_neon", "shop_emblem_bloob", "shop_title_champion",
-    "last_match_reward_xp",
+    "selected_boots", "selected_set", "equipped_beard", "equipped_helmet",
+    "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
+    "nickname", "profile_schema_version"
 }
 
 class Base(DeclarativeBase):
@@ -101,6 +91,40 @@ class PlayerWallet(Base):
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), primary_key=True)
     coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+class MatchReward(Base):
+    __tablename__ = "match_rewards"
+    __table_args__ = (UniqueConstraint("player_id", "request_id", name="uq_match_player_request"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    diamonds_awarded: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    xp_awarded: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class RewardClaim(Base):
+    __tablename__ = "reward_claims"
+    __table_args__ = (UniqueConstraint("player_id", "reward_type", "reward_key", name="uq_reward_player_type_key"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    reward_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    reward_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    diamonds_awarded: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    xp_awarded: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+class ShopPurchase(Base):
+    __tablename__ = "shop_purchases"
+    __table_args__ = (UniqueConstraint("player_id", "request_id", name="uq_shop_player_request"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), index=True, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    item_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    diamonds_spent: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 
 class RoyaleSpin(Base):
     __tablename__ = "royale_spins"
@@ -230,6 +254,20 @@ class RecoverAccountBody(BaseModel):
 class RoyaleSpinBody(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+
+class MatchCompleteBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    victory: bool = False
+    placement: int = Field(ge=1, le=30)
+    kills: int = Field(ge=0, le=29)
+    damage: int = Field(ge=0, le=50000)
+    resources: int = Field(ge=0, le=100)
+class ShopPurchaseBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    item_key: str = Field(min_length=3, max_length=64, pattern=r"^[a-z0-9_]+$")
+
 
 class PromoRedeemBody(BaseModel):
     code: str = Field(min_length=3, max_length=32)
@@ -412,11 +450,50 @@ def ai_coach(body: CoachBody, player: Player = Depends(current_player)) -> dict[
         logging.getLogger("battle_universe").exception("OPENROUTER_REQUEST_FAILED player_id=%s", player.id)
         raise HTTPException(503, "Não foi possível conectar à IA agora. Tente novamente.")
 
+@app.get("/admin/monitoramento", response_class=HTMLResponse)
+def admin_monitoramento():
+    return HTMLResponse("""<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BATTLE UNIVERSE • Monitoramento</title>
+<style>
+:root{color-scheme:dark}body{margin:0;background:#08131f;color:#e8f5fa;font:15px system-ui;padding:24px}
+main{max-width:900px;margin:auto}h1{color:#69dce5}small{color:#9db6c5}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-top:22px}
+.card{background:#122638;border:1px solid #315366;border-radius:16px;padding:20px}
+.value{font-size:24px;font-weight:800;margin:12px 0;color:#75e0c9}.muted{color:#9db6c5}
+#log{white-space:pre-wrap;overflow-wrap:anywhere}
+</style><main><h1>BATTLE UNIVERSE • CENTRAL DE SERVIDORES</h1>
+<small>Monitoramento da API de contas e do banco de dados • atualização automática</small>
+<div class="grid">
+<section class="card"><b>API BATTLE UNIVERSE</b><div class="value" id="api">VERIFICANDO...</div><div class="muted" id="latency">Aguardando resposta</div></section>
+<section class="card"><b>Banco de dados</b><div class="value" id="db">VERIFICANDO...</div><div class="muted">Verificação pela rota /health</div></section>
+<section class="card"><b>Última verificação</b><div class="value" id="updated">--:--:--</div><div class="muted">Atualiza a cada 15 segundos</div></section>
+</div><section class="card" style="margin-top:14px"><b>Registro de monitoramento</b><p id="log" class="muted">Inicializando...</p></section>
+</main><script>
+const api=document.getElementById('api'),db=document.getElementById('db'),lat=document.getElementById('latency'),
+updated=document.getElementById('updated'),log=document.getElementById('log');
+async function check(){const start=performance.now();try{const r=await fetch('/health',{cache:'no-store'});const data=await r.json();const ms=Math.round(performance.now()-start);
+if(!r.ok||data.status!=='ok')throw new Error('Health check recusado');
+api.textContent='🟢 ONLINE';db.textContent='🟢 CONECTADO';lat.textContent='Resposta em '+ms+' ms';
+log.textContent='API respondeu normalmente. Banco de dados acessível.\nServiço: '+(data.service||'BATTLE UNIVERSE')+'\nHTTP: '+r.status;
+}catch(e){api.textContent='🔴 INDISPONÍVEL';db.textContent='⚠️ NÃO CONFIRMADO';lat.textContent='Falha na verificação';
+log.textContent='Falha de comunicação: '+String(e)}updated.textContent=new Date().toLocaleTimeString('pt-BR')}
+check();setInterval(check,15000);
+</script></html>""")
+
 @app.get("/health")
-def health() -> dict[str, str]:
-    with engine.connect() as connection:
-        connection.exec_driver_sql("SELECT 1")
-    return {"status": "ok", "service": "battle-universe-accounts-admin"}
+def health():
+    try:
+        with engine.connect() as connection:
+            connection.exec_driver_sql("SELECT 1")
+        return JSONResponse({"status": "ok", "service": "battle-universe-accounts-admin",
+                             "database": "ok"},
+                            headers={"Access-Control-Allow-Origin": "*"})
+    except Exception:
+        logging.getLogger("battle_universe").exception("HEALTH_CHECK_FAILED")
+        return JSONResponse({"status": "error", "service": "battle-universe-accounts-admin",
+                             "database": "unavailable"}, status_code=503,
+                            headers={"Access-Control-Allow-Origin": "*"})
 
 @app.post("/v1/accounts/register", status_code=201)
 def register(body: RegisterBody, db: Session = Depends(db_session)) -> dict[str, Any]:
@@ -598,9 +675,272 @@ def get_wallet(db: Session = Depends(db_session), player: Player = Depends(curre
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
+    profile = dict(player.profile or {})
+    profile_changed = False
+    owned_keys = (
+        "shop_frame_neon", "shop_emblem_bloob", "shop_title_champion",
+        "wear_shirt_tactical", "wear_shirt_neon", "wear_shirt_frost", "wear_shirt_desert",
+        "wear_boots_combat", "wear_boots_neon", "wear_boots_frost", "wear_boots_gold",
+        "wear_set_aurora", "wear_set_champion", "wear_set_orbit", "wear_set_desert",
+        "wear_set_volcano", "wear_set_nebula", "wear_set_cerrado",
+        "wear_beard_old", "wear_pants_angelical",
+    )
+    for key in owned_keys:
+        if key not in profile:
+            profile[key] = False
+            profile_changed = True
+    if not profile.get("wardrobe_starter_v2_granted"):
+        profile["wear_shirt_tactical"] = True
+        profile["wear_boots_combat"] = True
+        profile["wardrobe_starter_v2_granted"] = True
+        profile_changed = True
+    if profile_changed:
+        player.profile = profile
+    if wallet in db.new or profile_changed:
         db.commit()
         db.refresh(wallet)
     return {"diamonds": wallet.diamonds, "currency": "diamonds", "authority": "server"}
+
+SHOP_PRICE_BY_KEY = {
+    "shop_frame_neon": 500,
+    "shop_emblem_bloob": 1000,
+    "shop_title_champion": 1500,
+    "wear_shirt_tactical": 650,
+    "wear_shirt_neon": 800,
+    "wear_shirt_frost": 750,
+    "wear_shirt_desert": 700,
+    "wear_boots_combat": 450,
+    "wear_boots_neon": 600,
+    "wear_boots_frost": 550,
+    "wear_boots_gold": 700,
+    "wear_set_aurora": 1800,
+    "wear_set_champion": 2200,
+    "wear_set_orbit": 2500,
+    "wear_set_desert": 1900,
+}
+
+@app.post("/v1/shop/purchase")
+def shop_purchase(body: ShopPurchaseBody, db: Session = Depends(db_session),
+                  player: Player = Depends(current_player)):
+    price = SHOP_PRICE_BY_KEY.get(body.item_key)
+    if price is None:
+        raise HTTPException(422, "Item não reconhecido pela loja.")
+    replay = db.scalar(select(ShopPurchase).where(
+        ShopPurchase.player_id == player.id, ShopPurchase.request_id == body.request_id))
+    if replay is not None:
+        if replay.item_key != body.item_key:
+            raise HTTPException(409, "Identificador de compra já utilizado em outro item.")
+        wallet_now = db.get(PlayerWallet, player.id)
+        return {"purchased": True, "replayed": True, "item_key": replay.item_key,
+                "diamonds_spent": replay.diamonds_spent,
+                "wallet": {"diamonds": wallet_now.diamonds if wallet_now else replay.balance_after}}
+    wallet = db.scalar(select(PlayerWallet).where(
+        PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
+        db.add(wallet)
+        db.flush()
+    db.refresh(player)
+    profile = dict(player.profile or {})
+    if profile.get(body.item_key) is True:
+        return {"purchased": False, "already_owned": True, "item_key": body.item_key,
+                "wallet": {"diamonds": wallet.diamonds}, "profile": profile}
+    if wallet.diamonds < price:
+        raise HTTPException(409, "Diamantes insuficientes na carteira online.",
+                            headers={"X-BU-Error": "INSUFFICIENT_DIAMONDS"})
+    wallet.diamonds -= price
+    profile[body.item_key] = True
+    player.profile = profile
+    row = ShopPurchase(player_id=player.id, request_id=body.request_id,
+                       item_key=body.item_key, diamonds_spent=price,
+                       balance_after=wallet.diamonds)
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        replay = db.scalar(select(ShopPurchase).where(
+            ShopPurchase.player_id == player.id, ShopPurchase.request_id == body.request_id))
+        if replay is None:
+            raise HTTPException(503, "Compra não confirmada. Sincronize a carteira antes de tentar novamente.")
+        wallet_now = db.get(PlayerWallet, player.id)
+        return {"purchased": True, "replayed": True, "item_key": replay.item_key,
+                "diamonds_spent": replay.diamonds_spent,
+                "wallet": {"diamonds": wallet_now.diamonds if wallet_now else replay.balance_after}}
+    return {"purchased": True, "replayed": False, "item_key": body.item_key,
+            "diamonds_spent": price, "wallet": {"diamonds": wallet.diamonds},
+            "profile": player.profile}
+
+
+MATCH_MISSION_CONFIG = {
+    "0": {"field": "mission_matches", "goal": 1, "xp": 120, "diamonds": 0},
+    "1": {"field": "mission_eliminations", "goal": 3, "xp": 180, "diamonds": 0},
+    "2": {"field": "mission_crystals", "goal": 3, "xp": 0, "diamonds": 80},
+}
+ROYALE_TIER_CONFIG = {"0": (2, 40), "1": (4, 60), "2": (6, 80), "3": (8, 100), "4": (10, 120), "5": (12, 150)}
+SERVER_ACHIEVEMENT_CONFIG = {"500": (500, 50), "1500": (1500, 100), "3000": (3000, 200)}
+
+@app.post("/v1/game/matches/complete")
+def complete_match(body: MatchCompleteBody, db: Session = Depends(db_session),
+                   player: Player = Depends(current_player)):
+    existing = db.scalar(select(MatchReward).where(
+        MatchReward.player_id == player.id, MatchReward.request_id == body.request_id))
+    if existing is not None:
+        wallet = db.get(PlayerWallet, player.id)
+        return {"recorded": True, "replayed": True, "diamonds_awarded": existing.diamonds_awarded,
+                "xp_awarded": existing.xp_awarded,
+                "wallet": {"diamonds": wallet.diamonds if wallet else existing.balance_after},
+                "profile": player.profile or {}}
+    wallet = db.scalar(select(PlayerWallet).where(
+        PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
+        db.add(wallet)
+        db.flush()
+    db.refresh(player)
+    existing = db.scalar(select(MatchReward).where(
+        MatchReward.player_id == player.id, MatchReward.request_id == body.request_id))
+    if existing is not None:
+        wallet_now = db.get(PlayerWallet, player.id)
+        return {"recorded": True, "replayed": True, "diamonds_awarded": existing.diamonds_awarded,
+                "xp_awarded": existing.xp_awarded,
+                "wallet": {"diamonds": wallet_now.diamonds if wallet_now else existing.balance_after},
+                "profile": player.profile or {}}
+    now = datetime.now(timezone.utc)
+    last_match = db.scalar(select(MatchReward).where(
+        MatchReward.player_id == player.id).order_by(MatchReward.id.desc()).limit(1))
+    if last_match is not None and last_match.created_at > now - timedelta(seconds=15):
+        raise HTTPException(429, "Aguarde alguns segundos antes de registrar outra partida.")
+    profile = dict(player.profile or {})
+    day = int(now.timestamp() // 86400)
+    if profile.get("missions_day") != day:
+        profile.update({"missions_day": day, "mission_matches": 0, "mission_eliminations": 0,
+                        "mission_crystals": 0, "mission_claimed_0": False,
+                        "mission_claimed_1": False, "mission_claimed_2": False})
+    placement = 1 if body.victory else body.placement
+    placement_score = max(0, 31 - placement)
+    diamonds = 20 + body.kills * 8 + min(200, (body.damage // 100) * 3) + body.resources * 5 + placement_score * 2 + (120 if body.victory else 0)
+    xp = 60 + body.kills * 30 + min(600, body.damage // 20) + body.resources * 10 + placement_score * 18 + (250 if body.victory else 0)
+    wallet.diamonds += diamonds
+    profile["xp"] = max(0, int(profile.get("xp", 0) or 0)) + xp
+    profile["matches_played"] = max(0, int(profile.get("matches_played", 0) or 0)) + 1
+    profile["match_wins"] = max(0, int(profile.get("match_wins", 0) or 0)) + (1 if body.victory else 0)
+    profile["match_kills"] = max(0, int(profile.get("match_kills", 0) or 0)) + body.kills
+    profile["match_damage"] = max(0, int(profile.get("match_damage", 0) or 0)) + body.damage
+    profile["match_resources"] = max(0, int(profile.get("match_resources", 0) or 0)) + body.resources
+    profile["last_match_kills"] = body.kills
+    profile["last_match_damage"] = body.damage
+    profile["last_match_resources"] = body.resources
+    profile["last_match_result"] = "VITORIA" if body.victory else "ELIMINADO"
+    profile["mission_matches"] = int(profile.get("mission_matches", 0) or 0) + 1
+    profile["mission_eliminations"] = min(999, int(profile.get("mission_eliminations", 0) or 0) + body.kills)
+    profile["mission_crystals"] = min(999, int(profile.get("mission_crystals", 0) or 0) + body.resources)
+    player.profile = profile
+    db.add(MatchReward(player_id=player.id, request_id=body.request_id, diamonds_awarded=diamonds,
+                       xp_awarded=xp, balance_after=wallet.diamonds, created_at=now))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.scalar(select(MatchReward).where(
+            MatchReward.player_id == player.id, MatchReward.request_id == body.request_id))
+        if existing is None:
+            raise HTTPException(503, "Resultado não confirmado. Sincronize antes de repetir.")
+        wallet = db.get(PlayerWallet, player.id)
+        return {"recorded": True, "replayed": True, "diamonds_awarded": existing.diamonds_awarded,
+                "xp_awarded": existing.xp_awarded,
+                "wallet": {"diamonds": wallet.diamonds if wallet else existing.balance_after},
+                "profile": player.profile or {}}
+    return {"recorded": True, "replayed": False, "diamonds_awarded": diamonds,
+            "xp_awarded": xp, "wallet": {"diamonds": wallet.diamonds}, "profile": profile}
+
+@app.post("/v1/game/rewards/{reward_type}/{reward_key}/claim")
+def claim_configured_reward(reward_type: str, reward_key: str,
+                            db: Session = Depends(db_session),
+                            player: Player = Depends(current_player)):
+    profile = dict(player.profile or {})
+    if reward_type == "mission":
+        config = MATCH_MISSION_CONFIG.get(reward_key)
+        if config is None:
+            raise HTTPException(404, "Missão não encontrada.")
+        today = int(datetime.now(timezone.utc).timestamp() // 86400)
+        if profile.get("missions_day") != today:
+            raise HTTPException(409, "As missões diárias ainda não têm progresso. Jogue uma partida.")
+        if int(profile.get(config["field"], 0) or 0) < config["goal"]:
+            raise HTTPException(409, "Missão ainda não concluída.")
+        claim_key = "mission_claimed_" + reward_key
+        xp, diamonds = config["xp"], config["diamonds"]
+    elif reward_type == "royale_tier":
+        config = ROYALE_TIER_CONFIG.get(reward_key)
+        if config is None:
+            raise HTTPException(404, "Marco do passe não encontrado.")
+        level = min(30, 1 + max(0, int(profile.get("xp", 0) or 0)) // 500)
+        if level < config[0]:
+            raise HTTPException(409, "Nível do passe insuficiente.")
+        claim_key, xp, diamonds = "royale_tier_claimed_" + reward_key, 0, config[1]
+    elif reward_type == "achievement":
+        config = SERVER_ACHIEVEMENT_CONFIG.get(reward_key)
+        if config is None:
+            raise HTTPException(404, "Conquista não encontrada.")
+        if max(0, int(profile.get("xp", 0) or 0)) < config[0]:
+            raise HTTPException(409, "Experiência insuficiente para esta conquista.")
+        claim_key, xp, diamonds = "achievement_" + reward_key, 0, config[1]
+    elif reward_type == "event" and reward_key == "season03_welcome":
+        claim_key, xp, diamonds = "event_season_claimed", 150, 75
+    else:
+        raise HTTPException(404, "Recompensa não encontrada.")
+    previous = db.scalar(select(RewardClaim).where(
+        RewardClaim.player_id == player.id, RewardClaim.reward_type == reward_type,
+        RewardClaim.reward_key == reward_key))
+    wallet = db.scalar(select(PlayerWallet).where(
+        PlayerWallet.player_id == player.id).with_for_update())
+    if wallet is None:
+        wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
+        db.add(wallet)
+        db.flush()
+    db.refresh(player)
+    profile = dict(player.profile or {})
+    previous = db.scalar(select(RewardClaim).where(
+        RewardClaim.player_id == player.id, RewardClaim.reward_type == reward_type,
+        RewardClaim.reward_key == reward_key))
+    if previous is not None or profile.get(claim_key):
+        return {"claimed": False, "already_claimed": True,
+                "diamonds_awarded": previous.diamonds_awarded if previous else diamonds,
+                "xp_awarded": previous.xp_awarded if previous else xp,
+                "wallet": {"diamonds": wallet.diamonds}, "profile": profile}
+    if reward_type == "mission":
+        today = int(datetime.now(timezone.utc).timestamp() // 86400)
+        if profile.get("missions_day") != today or int(profile.get(config["field"], 0) or 0) < config["goal"]:
+            raise HTTPException(409, "Missão ainda não concluída.")
+    elif reward_type == "royale_tier":
+        level = min(30, 1 + max(0, int(profile.get("xp", 0) or 0)) // 500)
+        if level < config[0]:
+            raise HTTPException(409, "Nível do passe insuficiente.")
+    elif reward_type == "achievement" and max(0, int(profile.get("xp", 0) or 0)) < config[0]:
+        raise HTTPException(409, "Experiência insuficiente para esta conquista.")
+    wallet.diamonds += diamonds
+    profile[claim_key] = True
+    if xp:
+        profile["xp"] = max(0, int(profile.get("xp", 0) or 0)) + xp
+    player.profile = profile
+    db.add(RewardClaim(player_id=player.id, reward_type=reward_type, reward_key=reward_key,
+                       diamonds_awarded=diamonds, xp_awarded=xp, balance_after=wallet.diamonds))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        previous = db.scalar(select(RewardClaim).where(
+            RewardClaim.player_id == player.id, RewardClaim.reward_type == reward_type,
+            RewardClaim.reward_key == reward_key))
+        wallet = db.get(PlayerWallet, player.id)
+        if previous is None:
+            raise HTTPException(503, "Não foi possível confirmar a recompensa.")
+        return {"claimed": False, "already_claimed": True,
+                "diamonds_awarded": previous.diamonds_awarded, "xp_awarded": previous.xp_awarded,
+                "wallet": {"diamonds": wallet.diamonds if wallet else previous.balance_after},
+                "profile": player.profile or {}}
+    return {"claimed": True, "already_claimed": False, "diamonds_awarded": diamonds,
+            "xp_awarded": xp, "wallet": {"diamonds": wallet.diamonds}, "profile": profile}
 
 @app.get("/v1/accounts/me/stats")
 def account_stats(db: Session = Depends(db_session), player: Player = Depends(current_player)):
@@ -685,15 +1025,26 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
     existing = db.scalar(select(RoyaleSpin).where(
         RoyaleSpin.player_id == player.id, RoyaleSpin.request_id == body.request_id))
     if existing is not None:
+        wallet_now = db.get(PlayerWallet, player.id)
         return {"spin_id": existing.id, "prize_id": existing.prize_id,
                 "prize_name": existing.prize_name, "duplicate": existing.duplicate,
-                "diamonds_spent": existing.diamonds_spent, "diamonds_balance": existing.balance_after,
-                "replayed": True}
+                "diamonds_spent": existing.diamonds_spent,
+                "diamonds_balance": wallet_now.diamonds if wallet_now else existing.balance_after,
+                "profile": player.profile or {}, "replayed": True}
+    latest_spin = db.scalar(select(RoyaleSpin).where(
+        RoyaleSpin.player_id == player.id).order_by(RoyaleSpin.id.desc()).limit(1))
+    if latest_spin is not None and latest_spin.created_at > datetime.now(timezone.utc) - timedelta(seconds=2):
+        raise HTTPException(429, "Aguarde dois segundos entre os giros.")
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
         db.flush()
+    db.refresh(player)
+    latest_spin = db.scalar(select(RoyaleSpin).where(
+        RoyaleSpin.player_id == player.id).order_by(RoyaleSpin.id.desc()).limit(1))
+    if latest_spin is not None and latest_spin.created_at > datetime.now(timezone.utc) - timedelta(seconds=2):
+        raise HTTPException(429, "Aguarde dois segundos entre os giros.")
     if wallet.diamonds < ROYALE_COST:
         raise HTTPException(409, "Diamantes insuficientes na carteira online.")
     roll = secrets.randbelow(100)
@@ -725,14 +1076,16 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
             RoyaleSpin.player_id == player.id, RoyaleSpin.request_id == body.request_id))
         if replay is None:
             raise HTTPException(503, "Não foi possível confirmar o giro. Tente sincronizar antes de repetir.")
+        wallet_now = db.get(PlayerWallet, player.id)
         return {"spin_id": replay.id, "prize_id": replay.prize_id,
                 "prize_name": replay.prize_name, "duplicate": replay.duplicate,
-                "diamonds_spent": replay.diamonds_spent, "diamonds_balance": replay.balance_after,
-                "replayed": True}
+                "diamonds_spent": replay.diamonds_spent,
+                "diamonds_balance": wallet_now.diamonds if wallet_now else replay.balance_after,
+                "profile": player.profile or {}, "replayed": True}
     return {"spin_id": row.id, "prize_id": row.prize_id, "prize_name": row.prize_name,
             "duplicate": row.duplicate, "diamonds_spent": row.diamonds_spent,
             "duplicate_compensation": credit, "diamonds_balance": wallet.diamonds,
-            "replayed": False}
+            "profile": profile, "replayed": False}
 
 @app.get("/v1/royale/history")
 def royale_history(limit: int = Query(default=20, ge=1, le=100),
@@ -832,6 +1185,10 @@ def shop_purchase(item_id: str = Query(min_length=3, max_length=40),
     wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player.id).with_for_update())
     if wallet is None:
         wallet = PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    db.refresh(player)
+    profile = dict(player.profile or {})
+    if profile.get(item_id):
+        raise HTTPException(409,"Este item já pertence à sua conta.")
     if wallet.diamonds < item["price"]:
         raise HTTPException(409,"Diamantes insuficientes na carteira online.")
     wallet.diamonds -= item["price"]
@@ -844,7 +1201,7 @@ def shop_purchase(item_id: str = Query(min_length=3, max_length=40),
 @app.get("/v1/game/missions")
 def game_missions(player: Player = Depends(current_player)):
     profile = player.profile or {}
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = int(datetime.now(timezone.utc).timestamp() // 86400)
     same_day = profile.get("missions_day") == today
     return {"missions":[{"id":m["id"],"name":m["name"],"goal":m["goal"],
              "progress":min(m["goal"],int(profile.get(m["progress"],0) or 0)) if same_day else 0,
@@ -859,7 +1216,7 @@ def claim_game_mission(mission_id: str, db: Session = Depends(db_session),
     if index is None: raise HTTPException(404,"Missão não encontrada.")
     mission = MISSION_CONFIG[index]
     profile = dict(player.profile or {})
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = int(datetime.now(timezone.utc).timestamp() // 86400)
     if profile.get("missions_day") != today: raise HTTPException(409,"As missões ainda não foram sincronizadas hoje.")
     if int(profile.get(mission["progress"],0) or 0) < mission["goal"]:
         raise HTTPException(409,"Missão ainda não concluída.")
@@ -867,6 +1224,11 @@ def claim_game_mission(mission_id: str, db: Session = Depends(db_session),
     if profile.get(key): raise HTTPException(409,"Esta missão já foi resgatada.")
     wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
     if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    db.refresh(player)
+    profile=dict(player.profile or {})
+    if profile.get(key): raise HTTPException(409,"Esta missão já foi resgatada.")
+    if profile.get("missions_day") != today or int(profile.get(mission["progress"],0) or 0) < mission["goal"]:
+        raise HTTPException(409,"Missão ainda não concluída.")
     wallet.diamonds += mission["diamonds"]
     profile[key]=True
     profile["xp"]=int(profile.get("xp",0) or 0)+mission["xp"]
@@ -880,7 +1242,7 @@ def game_events(player: Player = Depends(current_player)):
     profile=player.profile or {}
     return {"events":[{"id":"season_welcome_03","name":"DESAFIO DE BOAS-VINDAS",
         "description":"Entre no lobby e resgate o pacote de participação.",
-        "diamonds":50,"claimed":bool(profile.get("event_season_claimed",False))}],
+        "diamonds":75,"xp":150,"claimed":bool(profile.get("event_season_claimed",False))}],
         "currency":"virtual_diamonds"}
 
 @app.post("/v1/game/events/{event_id}/claim")
@@ -891,9 +1253,14 @@ def claim_game_event(event_id: str, db: Session = Depends(db_session),
     if profile.get("event_season_claimed"): raise HTTPException(409,"Recompensa deste evento já coletada.")
     wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
     if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
-    wallet.diamonds+=50;profile["event_season_claimed"]=True;player.profile=profile
+    db.refresh(player)
+    profile=dict(player.profile or {})
+    if profile.get("event_season_claimed"): raise HTTPException(409,"Recompensa deste evento já coletada.")
+    wallet.diamonds+=75;profile["event_season_claimed"]=True
+    profile["xp"]=max(0,int(profile.get("xp",0) or 0))+150
+    player.profile=profile
     db.commit()
-    return {"claimed":True,"diamonds_awarded":50,"diamonds_balance":wallet.diamonds}
+    return {"claimed":True,"xp_awarded":150,"diamonds_awarded":75,"diamonds_balance":wallet.diamonds}
 
 @app.get("/v1/game/mail")
 def game_mail(db: Session = Depends(db_session), player: Player = Depends(current_player)):
@@ -933,6 +1300,10 @@ def claim_game_mail(message_id: str, db: Session = Depends(db_session),
         if wallet is None:
             wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
             db.add(wallet); db.flush()
+        db.refresh(player)
+        profile = dict(player.profile or {})
+        if profile.get("mail_welcome_claimed"):
+            raise HTTPException(409, "Presente desta mensagem já coletado.")
         wallet.diamonds += 50
         profile["mail_welcome_claimed"] = True
         player.profile = profile
@@ -999,6 +1370,11 @@ def claim_game_achievement(achievement_id: str, db: Session = Depends(db_session
     if profile.get(key): raise HTTPException(409,"Conquista já resgatada.")
     wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
     if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    db.refresh(player)
+    profile=dict(player.profile or {})
+    if profile.get(key): raise HTTPException(409,"Conquista já resgatada.")
+    progress=max(0,int(profile.get(achievement["field"],0) or 0))
+    if progress<achievement["goal"]: raise HTTPException(409,"Conquista ainda não concluída.")
     wallet.diamonds+=achievement["diamonds"]
     profile["xp"]=int(profile.get("xp",0) or 0)+achievement["xp"]
     profile[key]=True;player.profile=profile
