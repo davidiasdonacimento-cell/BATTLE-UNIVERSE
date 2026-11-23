@@ -30,6 +30,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     }
 
     public void returnToLobby() {
+        screenMode=0;
         moveX=moveY=lookDX=lookDY=0;
         aimToggled=false;
         Arrays.fill(buttonPointers,-1);
