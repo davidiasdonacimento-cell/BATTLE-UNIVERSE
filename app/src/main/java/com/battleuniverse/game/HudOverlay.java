@@ -75,7 +75,7 @@ public final class HudOverlay extends View {
     private boolean googleConfigured, googleSignedIn;
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
-    private Runnable accountSyncAction, accountSignOutAction;
+    private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
     private long toastUntil, lastTap;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
@@ -398,7 +398,9 @@ public final class HudOverlay extends View {
         panel(c,558,558,282,70,0xA91A3040,0x335D8495,16);
         text(c,"EDITAR NICKNAME",582,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Nome do seu perfil",582,607,10,0xFF9EB6C4,Typeface.DEFAULT);
-        text(c,"Use a mesma conta em APKs futuros para recuperar o progresso.",272,660,10,0xFF8FAAB8,Typeface.DEFAULT);
+        panel(c,270,642,570,42,0xA91A3040,0xFF58DDE6,12);
+        text(c,"ANALISAR / REUTILIZAR PACOTE ZIP OU BUPACK",292,669,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Use a mesma conta em APKs futuros para recuperar o progresso.",272,704,9,0xFF8FAAB8,Typeface.DEFAULT);
         if(googleSignedIn)pill(c,690,632,150,25,"SAIR DA CONTA",0x553B6172,0xFFBBD0D9);
     }
     private void drawShopPage(Canvas c) {
@@ -1220,6 +1222,7 @@ public final class HudOverlay extends View {
             }
             if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
+            if(hit(x,y,270,642,570,42)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
         }else if(page==SHOP){
             for(int i=0;i<SHOP_NAMES.length;i++){
                 float sx=270+(i%3)*192f,sy=322+(i/3)*56f;
@@ -1317,6 +1320,7 @@ public final class HudOverlay extends View {
         accountSyncAction=syncAction;
         accountSignOutAction=signOutAction;
     }
+    public void setPackAnalyzerAction(Runnable action){packAnalyzerAction=action;}
     public void setGoogleAccountStatus(boolean configured, boolean signedIn,
                                        String username, String message) {
         googleConfigured=configured;

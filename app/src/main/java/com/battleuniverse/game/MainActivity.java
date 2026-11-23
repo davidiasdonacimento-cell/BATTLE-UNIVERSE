@@ -5,14 +5,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
-import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
@@ -76,6 +71,7 @@ public final class MainActivity extends Activity {
         hud.setUsernameAccountActions((username,password,createAccount)->{
             if(accountSync!=null)accountSync.authenticateUsername(username,password,createAccount);
         },()->{if(accountSync!=null)accountSync.syncNow();},()->{if(accountSync!=null)accountSync.signOut();});
+        hud.setPackAnalyzerAction(()->packPicker.launch(new String[]{"application/zip","application/octet-stream","application/x-zip-compressed","*/*"}));
         accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
             if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
         });
@@ -88,23 +84,8 @@ public final class MainActivity extends Activity {
         root.addView(hud,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
 
-        Button packButton=new Button(this);
-        packButton.setText("ANALISAR ZIP");
-        packButton.setTextSize(11);
-        packButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        packButton.setTextColor(Color.WHITE);
-        GradientDrawable bg=new GradientDrawable();
-        bg.setColor(0xE51B5364);bg.setCornerRadius(dp(12));bg.setStroke(dp(1),0xFF58DDE6);
-        packButton.setBackground(bg);
-        packButton.setAllCaps(false);
-        packButton.setOnClickListener(v->packPicker.launch(new String[]{"application/zip","application/octet-stream","application/x-zip-compressed","*/*"}));
-        FrameLayout.LayoutParams buttonParams=new FrameLayout.LayoutParams(dp(142),dp(44),Gravity.BOTTOM|Gravity.END);
-        buttonParams.setMargins(0,0,dp(18),dp(16));
-        root.addView(packButton,buttonParams);
         setContentView(root);
     }
-
-    private int dp(int value){return (int)(value*getResources().getDisplayMetrics().density+.5f);}
 
     private void analyzeSelectedPack(Uri uri) {
         if(packAnalyzer!=null)packAnalyzer.close();
