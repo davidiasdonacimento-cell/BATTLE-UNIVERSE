@@ -80,13 +80,14 @@ public final class HudOverlay extends View {
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
     private AiCoachAction aiCoachAction;
-    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction;
+    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction;
     private JSONArray mailMessages=new JSONArray();
     private boolean mailFetchStarted, activeMailClaimed;
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
     private long toastUntil, lastTap, lastRoyaleSpinAt;
+    private boolean shopPurchasePending;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
         super(context);
@@ -809,11 +810,32 @@ public final class HudOverlay extends View {
         if(prefs.getBoolean(SHOP_KEYS[index],false)) {
             toast("Este item já está no seu inventário.");return;
         }
-        long balance=prefs.getLong("diamonds",0L),price=SHOP_PRICES[index];
-        if(balance<price) { toast("Diamantes insuficientes.");return; }
-        prefs.edit().putLong("diamonds",balance-price)
-            .putBoolean(SHOP_KEYS[index],true).apply();
-        toast(SHOP_NAMES[index]+" adquirido!");
+        if(!googleSignedIn) {
+            toast("Entre na conta para comprar com a carteira online.");
+            page=PROFILE;invalidate();return;
+        }
+        if(shopPurchasePending)return;
+        if(shopPurchaseAction==null) {
+            toast("Loja online indisponível. Tente novamente mais tarde.");return;
+        }
+        shopPurchasePending=true;
+        toast("Confirmando compra no servidor...");
+        String requestId=java.util.UUID.randomUUID().toString();
+        shopPurchaseAction.run(SHOP_KEYS[index]+"|"+requestId,(result,error)->{
+            shopPurchasePending=false;
+            if(error!=null) {
+                toast(error.toLowerCase(java.util.Locale.ROOT).contains("diamantes insuficientes")
+                    ?"Diamantes insuficientes na carteira online.":"Compra não concluída: "+error);
+                invalidate();return;
+            }
+            if(result==null||!result.optBoolean("purchased",false)) {
+                toast("O servidor não confirmou a compra.");invalidate();return;
+            }
+            prefs.edit().putBoolean(SHOP_KEYS[index],true).apply();
+            JSONObjectWalletUpdate(result);
+            toast(SHOP_NAMES[index]+" adquirido na conta!");
+            invalidate();
+        });
     }
 
     private void drawEventsPage(Canvas c) {
@@ -1435,6 +1457,7 @@ public final class HudOverlay extends View {
         promoRedeemAction=promo;dailyRewardAction=daily;
         mailFetchAction=mailFetch;mailClaimAction=mailClaim;
     }
+    public void setShopPurchaseAction(GameApiAction action){shopPurchaseAction=action;}
     private void showAiCoachDialog(){
         if(aiCoachAction==null){
             new AlertDialog.Builder(getContext()).setTitle("IA PROFESSORA")
