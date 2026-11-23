@@ -1197,7 +1197,7 @@ def shop_purchase(item_id: str = Query(min_length=3, max_length=40),
 @app.get("/v1/game/missions")
 def game_missions(player: Player = Depends(current_player)):
     profile = player.profile or {}
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = int(datetime.now(timezone.utc).timestamp() // 86400)
     same_day = profile.get("missions_day") == today
     return {"missions":[{"id":m["id"],"name":m["name"],"goal":m["goal"],
              "progress":min(m["goal"],int(profile.get(m["progress"],0) or 0)) if same_day else 0,
@@ -1220,6 +1220,11 @@ def claim_game_mission(mission_id: str, db: Session = Depends(db_session),
     if profile.get(key): raise HTTPException(409,"Esta missão já foi resgatada.")
     wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
     if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
+    db.refresh(player)
+    profile=dict(player.profile or {})
+    if profile.get(key): raise HTTPException(409,"Esta missão já foi resgatada.")
+    if profile.get("missions_day") != today or int(profile.get(mission["progress"],0) or 0) < mission["goal"]:
+        raise HTTPException(409,"Missão ainda não concluída.")
     wallet.diamonds += mission["diamonds"]
     profile[key]=True
     profile["xp"]=int(profile.get("xp",0) or 0)+mission["xp"]
@@ -1244,9 +1249,14 @@ def claim_game_event(event_id: str, db: Session = Depends(db_session),
     if profile.get("event_season_claimed"): raise HTTPException(409,"Recompensa deste evento já coletada.")
     wallet=db.scalar(select(PlayerWallet).where(PlayerWallet.player_id==player.id).with_for_update())
     if wallet is None: wallet=PlayerWallet(player_id=player.id,coins=0,diamonds=0);db.add(wallet);db.flush()
-    wallet.diamonds+=50;profile["event_season_claimed"]=True;player.profile=profile
+    db.refresh(player)
+    profile=dict(player.profile or {})
+    if profile.get("event_season_claimed"): raise HTTPException(409,"Recompensa deste evento já coletada.")
+    wallet.diamonds+=75;profile["event_season_claimed"]=True
+    profile["xp"]=max(0,int(profile.get("xp",0) or 0))+150
+    player.profile=profile
     db.commit()
-    return {"claimed":True,"diamonds_awarded":50,"diamonds_balance":wallet.diamonds}
+    return {"claimed":True,"xp_awarded":150,"diamonds_awarded":75,"diamonds_balance":wallet.diamonds}
 
 @app.get("/v1/game/mail")
 def game_mail(db: Session = Depends(db_session), player: Player = Depends(current_player)):
@@ -1286,6 +1296,10 @@ def claim_game_mail(message_id: str, db: Session = Depends(db_session),
         if wallet is None:
             wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
             db.add(wallet); db.flush()
+        db.refresh(player)
+        profile = dict(player.profile or {})
+        if profile.get("mail_welcome_claimed"):
+            raise HTTPException(409, "Presente desta mensagem já coletado.")
         wallet.diamonds += 50
         profile["mail_welcome_claimed"] = True
         player.profile = profile
