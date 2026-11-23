@@ -1516,9 +1516,12 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         resetBots();updateStatus();
     } else {
         gDropState=0;gJumpHeight=0;gJumpVelocity=0;gParachuteOpen=false;
+        gSpectatorMode=false;gSpectatorTarget=-1;gMatchFinished=false;
+        gPlayerDowned=false;gPlayerHealth=100;gPreviousButtons=0;
         gPlayer={32.0f,0.55f,-8.0f};
         gPlayerXSnapshot.store(gPlayer.x);gPlayerZSnapshot.store(gPlayer.z);
         gWaypointActive=false;
+        setStatus("LOBBY • PRONTO PARA NOVA PARTIDA");
     }
     publishFlightInfo();
 }
