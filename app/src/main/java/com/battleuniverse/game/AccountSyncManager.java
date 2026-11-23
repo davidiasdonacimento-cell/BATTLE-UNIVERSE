@@ -117,6 +117,39 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
 
     public interface CoachListener { void onResult(String answer, String error); }
+    public interface ApiActionListener { void onResult(JSONObject result, String error); }
+
+    public void redeemPromoCode(String rawCode, ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na sua conta para resgatar códigos."));return;}
+        String code=rawCode==null?"":rawCode.trim().toUpperCase(java.util.Locale.ROOT);
+        if(!code.matches("[A-Z0-9_-]{3,32}")){main.post(()->callback.onResult(null,"Código inválido."));return;}
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/promo-codes/redeem","POST",token,new JSONObject().put("code",code));
+                main.post(()->callback.onResult(result,null));
+                syncNow();
+            } catch(Exception e) {
+                String message=cleanError(e);
+                main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
+
+    public void claimDailyReward(ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na sua conta para coletar a recompensa."));return;}
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/game/rewards/daily","POST",token,new JSONObject());
+                main.post(()->callback.onResult(result,null));
+                syncNow();
+            } catch(Exception e) {
+                String message=cleanError(e);
+                main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
 
     public void askCoach(String question, CoachListener callback) {
         String token=getToken();
