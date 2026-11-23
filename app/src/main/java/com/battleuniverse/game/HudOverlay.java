@@ -73,10 +73,12 @@ public final class HudOverlay extends View {
         void authenticate(String username, String password, boolean createAccount);
     }
     public interface AiCoachAction { void ask(String question, AccountSyncManager.CoachListener callback); }
+    public interface GameApiAction { void run(String value, AccountSyncManager.ApiActionListener callback); }
     private boolean googleConfigured, googleSignedIn;
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
     private AiCoachAction aiCoachAction;
+    private GameApiAction promoRedeemAction, dailyRewardAction;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
     private long toastUntil, lastTap;
 
@@ -696,6 +698,18 @@ public final class HudOverlay extends View {
         toast("Recompensa Royale resgatada!");
     }
     private void claimDailyReward() {
+        if(!googleSignedIn){toast("Entre na sua conta para coletar a recompensa online.");page=PROFILE;return;}
+        if(dailyRewardAction==null){toast("Recompensa online indisponível.");return;}
+        toast("Confirmando recompensa no servidor...");
+        dailyRewardAction.run("",(result,error)->{
+            if(error!=null){toast("Falha: "+error);return;}
+            JSONObjectWalletUpdate(result);
+            boolean claimed=result.optBoolean("claimed",false);
+            long amount=result.optLong("diamonds_awarded",0L);
+            toast(claimed?"+"+amount+" DIAMANTES ONLINE!":"Recompensa diária já coletada.");
+        });
+        return;
+        // Recompensas locais antigas ficam desativadas para contas online.
         long day=System.currentTimeMillis()/86400000L;
         if(prefs.getLong("daily_reward_day",-1L)==day) {
             toast("A recompensa diária já foi coletada."); return;
@@ -709,25 +723,34 @@ public final class HudOverlay extends View {
 
     private void showRedeemDialog() {
         EditText input=new EditText(getContext());
-        input.setSingleLine(true); input.setHint("Digite 100K");
+        input.setSingleLine(true); input.setHint("Digite seu código promocional");
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         new AlertDialog.Builder(getContext())
-            .setTitle("Resgatar código secreto")
-            .setMessage("O código 100K concede 100.000 diamantes virtuais uma única vez neste perfil local.")
+            .setTitle("Resgatar código promocional")
+            .setMessage("Os códigos são validados pela API oficial e vinculados à sua conta.")
             .setView(input).setNegativeButton("CANCELAR",null)
             .setPositiveButton("RESGATAR",(dialog,which)->redeemCode(input.getText().toString()))
             .show();
     }
     private void redeemCode(String rawCode) {
         String code=rawCode==null?"":rawCode.trim().toUpperCase(Locale.ROOT);
-        if(!"100K".equals(code)) { toast("Código inválido."); return; }
-        if(prefs.getBoolean("code_100k_redeemed",false)) {
-            toast("O código 100K já foi resgatado neste perfil."); return;
-        }
-        long current=prefs.getLong("diamonds",0L);
-        prefs.edit().putLong("diamonds",Math.min(Long.MAX_VALUE-100000L,current)+100000L)
-            .putBoolean("code_100k_redeemed",true).apply();
-        toast("+100.000 DIAMANTES VIRTUAIS!");
+        if(code.length()<3){toast("Digite um código válido.");return;}
+        if(!googleSignedIn){toast("Entre na sua conta para resgatar códigos.");page=PROFILE;return;}
+        if(promoRedeemAction==null){toast("Resgate pela API ainda não conectado.");return;}
+        toast("Validando código na API...");
+        promoRedeemAction.run(code,(result,error)->{
+            if(error!=null){toast("Resgate recusado: "+error);return;}
+            long awarded=result.optLong("diamonds_awarded",0L);
+            JSONObject wallet=result.optJSONObject("wallet");
+            if(wallet!=null) prefs.edit().putLong("diamonds",wallet.optLong("diamonds",prefs.getLong("diamonds",0L))).apply();
+            else if(result.has("diamonds_balance"))prefs.edit().putLong("diamonds",result.optLong("diamonds_balance")).apply();
+            toast("+"+awarded+" DIAMANTES • CÓDIGO RESGATADO!");
+        });
+    }
+
+    private void JSONObjectWalletUpdate(org.json.JSONObject result) {
+        org.json.JSONObject wallet=result.optJSONObject("wallet");
+        if(wallet!=null)prefs.edit().putLong("diamonds",wallet.optLong("diamonds",prefs.getLong("diamonds",0L))).apply();
     }
     private void showNicknameDialog() {
         EditText input=new EditText(getContext());
@@ -1325,6 +1348,9 @@ public final class HudOverlay extends View {
     }
     public void setPackAnalyzerAction(Runnable action){packAnalyzerAction=action;}
     public void setAiCoachAction(AiCoachAction action){aiCoachAction=action;}
+    public void setGameApiActions(GameApiAction promo, GameApiAction daily){
+        promoRedeemAction=promo;dailyRewardAction=daily;
+    }
     private void showAiCoachDialog(){
         if(aiCoachAction==null){toast("IA ainda não conectada.");return;}
         if(!googleSignedIn){toast("Entre na sua conta para conversar com a IA.");page=PROFILE;return;}
