@@ -38,8 +38,6 @@ public final class ContentPackAnalyzer {
     }
     private static final Object INSTALL_LOCK=new Object();
     private static final String MANIFEST_URL="https://github.com/davidiasdonacimento-cell/BATTLE-UNIVERSE/releases/download/data-pack-v2/content-pack-manifest.json";
-    private static final String ZIP_NAME="battle-universe-season-02-pack.zip";
-    private static final String BUPACK_NAME="battle-universe-season-02-pack.bupack";
     private static final String PACK_ID="battle_universe_season_02";
     private static final int VERSION=2;
     private static final long MAX_ARCHIVE=2L*1024*1024*1024;
@@ -60,11 +58,9 @@ public final class ContentPackAnalyzer {
             File archive=new File(context.getCacheDir(),"bu-pack-import-"+operationId+".part");
             File staging=new File(context.getFilesDir(),"battle-content-import-staging-"+operationId);
             try {
-                status("IDENTIFICANDO O NOME DO ARQUIVO...");
-                String name=displayName(uri);
-                String normalized=name.toLowerCase(Locale.ROOT);
-                if(!ZIP_NAME.equals(normalized)&&!BUPACK_NAME.equals(normalized))
-                    throw new Exception("Nome incompatível. Selecione "+ZIP_NAME+" ou "+BUPACK_NAME+".");
+                status("LENDO O ARQUIVO QUE VOCÊ SELECIONOU...");
+                // O nome externo pode ser qualquer um. A validação é feita pelo conteúdo,
+                // manifesto oficial e SHA-256, nunca pelo nome exibido pelo Android.
                 copyUri(uri,archive);
                 if(archive.length()<1024||archive.length()>MAX_ARCHIVE)throw new Exception("Tamanho do pacote inválido.");
                 status("CONFERINDO ASSINATURA OFICIAL DO PACOTE...");
