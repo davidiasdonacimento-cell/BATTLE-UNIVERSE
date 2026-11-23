@@ -778,7 +778,7 @@ MATCH_MISSION_CONFIG = {
     "2": {"field": "mission_crystals", "goal": 3, "xp": 0, "diamonds": 80},
 }
 ROYALE_TIER_CONFIG = {"0": (2, 40), "1": (4, 60), "2": (6, 80), "3": (8, 100), "4": (10, 120), "5": (12, 150)}
-ACHIEVEMENT_CONFIG = {"500": (500, 50), "1500": (1500, 100), "3000": (3000, 200)}
+SERVER_ACHIEVEMENT_CONFIG = {"500": (500, 50), "1500": (1500, 100), "3000": (3000, 200)}
 
 @app.post("/v1/game/matches/complete")
 def complete_match(body: MatchCompleteBody, db: Session = Depends(db_session),
@@ -879,7 +879,7 @@ def claim_configured_reward(reward_type: str, reward_key: str,
             raise HTTPException(409, "Nível do passe insuficiente.")
         claim_key, xp, diamonds = "royale_tier_claimed_" + reward_key, 0, config[1]
     elif reward_type == "achievement":
-        config = ACHIEVEMENT_CONFIG.get(reward_key)
+        config = SERVER_ACHIEVEMENT_CONFIG.get(reward_key)
         if config is None:
             raise HTTPException(404, "Conquista não encontrada.")
         if max(0, int(profile.get("xp", 0) or 0)) < config[0]:
