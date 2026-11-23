@@ -838,7 +838,14 @@ public final class HudOverlay extends View {
                     ?"Diamantes insuficientes na carteira online.":"Compra não concluída: "+error);
                 invalidate();return;
             }
-            if(result==null||!result.optBoolean("purchased",false)) {
+            if(result==null) {
+                toast("O servidor não confirmou a compra.");invalidate();return;
+            }
+            if(result.optBoolean("already_owned",false)) {
+                toast("Este item já está vinculado à sua conta.");
+                invalidate();return;
+            }
+            if(!result.optBoolean("purchased",false)) {
                 toast("O servidor não confirmou a compra.");invalidate();return;
             }
             prefs.edit().putBoolean(SHOP_KEYS[index],true).apply();
