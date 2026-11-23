@@ -72,9 +72,11 @@ public final class HudOverlay extends View {
     public interface UsernameAccountAction {
         void authenticate(String username, String password, boolean createAccount);
     }
+    public interface AiCoachAction { void ask(String question, AccountSyncManager.CoachListener callback); }
     private boolean googleConfigured, googleSignedIn;
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
+    private AiCoachAction aiCoachAction;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
     private long toastUntil, lastTap;
 
@@ -228,9 +230,9 @@ public final class HudOverlay extends View {
         text(c,"MENU ROYALE",650,522,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,onlineMode?"ONLINE AINDA NÃO DISPONÍVEL • SERVIDOR MULTIPLAYER PENDENTE":
             "30 participantes offline • 1 jogador + 29 bots IA.",274,579,10,0xFF9CB5C2,Typeface.DEFAULT);
-        panel(c,270,608,580,58,0x70152B3A,0x225B8296,14);
-        stat(c,292,642,"30","PARTICIPANTES");stat(c,468,642,"29","BOTS IA");
-        stat(c,665,642,onlineMode?"PEND.":"OFF",onlineMode?"ONLINE NÃO ATIVO":"MODO OFFLINE");
+        panel(c,270,608,580,58,0xB9183040,0xFF4CD6E2,14);
+        text(c,"✦ IA PROFESSORA • BATTLE UNIVERSE",292,635,15,0xFF70E8E8,Typeface.DEFAULT_BOLD);
+        text(c,"Toque para perguntar como jogar, melhorar e sobreviver.",292,653,10,0xFFB5CBD5,Typeface.DEFAULT);
     }
     private void drawCharacters(Canvas c){
         eyebrow(c,270,175,"PERSONALIZAÇÃO");title(c,"SUA EQUIPE",270,224);
@@ -1188,6 +1190,7 @@ public final class HudOverlay extends View {
                 page=PREMATCH;return;
             }
             if(hit(x,y,628,472,222,78)){page=ROYALE;return;}
+            if(hit(x,y,270,608,580,58)){showAiCoachDialog();return;}
         }else if(page==PREMATCH){
             if(hit(x,y,270,636,170,34)){page=HOME;return;}
             if(hit(x,y,862,636,350,34)){beginOfflineMatch();return;}
@@ -1321,6 +1324,36 @@ public final class HudOverlay extends View {
         accountSignOutAction=signOutAction;
     }
     public void setPackAnalyzerAction(Runnable action){packAnalyzerAction=action;}
+    public void setAiCoachAction(AiCoachAction action){aiCoachAction=action;}
+    private void showAiCoachDialog(){
+        if(aiCoachAction==null){toast("IA ainda não conectada.");return;}
+        if(!googleSignedIn){toast("Entre na sua conta para conversar com a IA.");page=PROFILE;return;}
+        LinearLayout box=new LinearLayout(getContext());
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad=(int)(18*getResources().getDisplayMetrics().density);
+        box.setPadding(pad,pad,pad,pad);
+        TextView hint=new TextView(getContext());
+        hint.setText("Pergunte sobre controles, mapas, modos, mira, posicionamento ou estratégias.");
+        box.addView(hint);
+        EditText input=new EditText(getContext());
+        input.setSingleLine(false);input.setMinLines(2);input.setMaxLines(4);
+        input.setHint("Ex.: como sobreviver mais tempo no Battle Royale?");
+        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES|InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        box.addView(input);
+        new AlertDialog.Builder(getContext()).setTitle("IA PROFESSORA")
+            .setView(box).setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PERGUNTAR",(dialog,which)->{
+                String question=input.getText().toString().trim();
+                if(question.length()<2){toast("Escreva uma pergunta.");return;}
+                toast("IA analisando sua dúvida...");
+                aiCoachAction.ask(question,(answer,error)->{
+                    if(error!=null){new AlertDialog.Builder(getContext()).setTitle("IA BATTLE UNIVERSE")
+                        .setMessage(error).setPositiveButton("OK",null).show();return;}
+                    new AlertDialog.Builder(getContext()).setTitle("RESPOSTA DA IA")
+                        .setMessage(answer).setPositiveButton("FECHAR",null).show();
+                });
+            }).show();
+    }
     public void setGoogleAccountStatus(boolean configured, boolean signedIn,
                                        String username, String message) {
         googleConfigured=configured;
