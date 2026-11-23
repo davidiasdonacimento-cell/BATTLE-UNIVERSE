@@ -6,6 +6,8 @@ import secrets
 import hashlib
 import logging
 import uuid
+import urllib.request
+import urllib.error
 from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
 
@@ -26,6 +28,8 @@ JWT_ISSUER = os.environ.get("JWT_ISSUER", "battle-universe-accounts")
 ACCESS_TOKEN_MINUTES = max(15, min(43200, int(os.environ.get("ACCESS_TOKEN_MINUTES", "43200"))))
 ADMIN_TOKEN_MINUTES = max(10, min(720, int(os.environ.get("ADMIN_TOKEN_MINUTES", "120"))))
 OWNER_PAIRING_CODE = os.environ.get("OWNER_PAIRING_CODE", "").strip()
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "openrouter/auto").strip() or "openrouter/auto"
 OWNER_TOKEN_MINUTES = 43200
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is required")
@@ -187,6 +191,9 @@ class LoginBody(BaseModel):
 class ProfileBody(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
 
+class CoachBody(BaseModel):
+    question: str = Field(min_length=2, max_length=800)
+
 class DeviceRegisterBody(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
@@ -321,6 +328,63 @@ def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bea
     if claims.get("role") != "owner" or claims.get("sub") != "owner-device":
         raise HTTPException(403, "Aparelho não autorizado para configurar o jogo.")
     return "owner-device"
+
+
+
+@app.post("/v1/ai/coach")
+def ai_coach(body: CoachBody, player: Player = Depends(current_player)) -> dict[str, Any]:
+    """Game coach proxy. The OpenRouter secret is never sent to Android."""
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(503, "A IA ainda não foi configurada no servidor.")
+    question = body.question.strip()
+    if len(question) < 2:
+        raise HTTPException(422, "Escreva uma dúvida para a IA.")
+    payload = {
+        "model": OPENROUTER_MODEL,
+        "temperature": 0.55,
+        "max_tokens": 650,
+        "messages": [
+            {"role": "system", "content": (
+                "Você é o treinador oficial do jogo BATTLE UNIVERSE. Responda em português do Brasil, "
+                "com instruções práticas, curtas e adequadas para iniciantes. Explique controles, "
+                "modos, mapas, posicionamento, sobrevivência e estratégias gerais. Não invente "
+                "funções que o jogo não possui: atualmente há partidas offline com bots e o modo "
+                "multiplayer online ainda não está disponível. Não peça senhas, tokens ou dados pessoais. "
+                "Se não souber algo específico do jogo, deixe isso claro."
+            )},
+            {"role": "user", "content": question},
+        ],
+    }
+    request = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=__import__("json").dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://battle-universe-accounts.onrender.com",
+            "X-Title": "BATTLE UNIVERSE Coach",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            result = __import__("json").loads(response.read(1024 * 1024).decode("utf-8"))
+        answer = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        if not isinstance(answer, str) or not answer.strip():
+            raise ValueError("empty model response")
+        return {"answer": answer.strip(), "model": result.get("model", OPENROUTER_MODEL)}
+    except urllib.error.HTTPError as exc:
+        # Do not expose provider response headers, credentials, or raw secrets.
+        detail = "O serviço de IA recusou a solicitação."
+        if exc.code in (401, 403):
+            detail = "A chave OpenRouter está ausente ou inválida no Render."
+        elif exc.code == 429:
+            detail = "A IA está ocupada ou atingiu o limite. Tente novamente mais tarde."
+        logging.getLogger("battle_universe").warning("OPENROUTER_HTTP_ERROR status=%s player_id=%s", exc.code, player.id)
+        raise HTTPException(503, detail)
+    except Exception:
+        logging.getLogger("battle_universe").exception("OPENROUTER_REQUEST_FAILED player_id=%s", player.id)
+        raise HTTPException(503, "Não foi possível conectar à IA agora. Tente novamente.")
 
 @app.get("/health")
 def health() -> dict[str, str]:
