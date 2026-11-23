@@ -38,11 +38,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private static final String[] PROFILE_KEYS={
         "nickname","mode","map","character","quality","music","effects","look_sensitivity",
         "invert_camera_y","show_minimap","haptics","online_mode","selected_shirt","selected_boots",
-        "selected_set","shop_frame_neon","shop_emblem_bloob","shop_title_champion",
-        "wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost","wear_shirt_desert",
-        "wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
-        "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
-        "character_display_name"
+        "selected_set","character_display_name"
     };
     private static final String[] SERVER_PROFILE_KEYS={
         "xp","matches_played","match_wins","match_kills","match_damage","match_resources",
@@ -52,9 +48,13 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         "royale_tier_claimed_0","royale_tier_claimed_1","royale_tier_claimed_2",
         "royale_tier_claimed_3","royale_tier_claimed_4","royale_tier_claimed_5",
         "achievement_500","achievement_1500","achievement_3000","event_season_claimed",
-        "mail_welcome_claimed","wardrobe_starter_v2_granted"
+        "mail_welcome_claimed","wardrobe_starter_v2_granted",
+        "shop_frame_neon","shop_emblem_bloob","shop_title_champion",
+        "wear_shirt_tactical","wear_shirt_neon","wear_shirt_frost","wear_shirt_desert",
+        "wear_boots_combat","wear_boots_neon","wear_boots_frost","wear_boots_gold",
+        "wear_set_aurora","wear_set_champion","wear_set_orbit","wear_set_desert",
+        "wear_set_volcano","wear_set_nebula","wear_set_cerrado","wear_beard_old","wear_pants_angelical"
     };
-
     private final Activity activity;
     private final SharedPreferences profilePrefs;
     private final SharedPreferences sessionPrefs;
