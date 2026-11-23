@@ -91,8 +91,22 @@ jobs:
       - name: Verify production keystore and alias
         if: env.BU_RELEASE_SIGNING_READY == 'true'
         run: |
-          keytool -list -keystore "$BU_KEYSTORE_PATH" -storepass "$BU_KEYSTORE_PASSWORD" -alias "$BU_KEY_ALIAS" > /dev/null
-          echo "Production keystore and alias verified."
+          # Validate the store password independently before checking the alias.
+          if ! keytool -list -keystore "$BU_KEYSTORE_PATH" -storepass "$BU_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/keystore-list.txt" 2> "$RUNNER_TEMP/keystore-error.txt"; then
+            cat "$RUNNER_TEMP/keystore-error.txt"
+            echo "::error::The release keystore could not be opened. Check BATTLE_UNIVERSE_KEYSTORE_PASSWORD and confirm the uploaded JKS is the original signing key."
+            exit 1
+          fi
+
+          # Print only public alias names if the configured alias does not exist.
+          if ! keytool -list -keystore "$BU_KEYSTORE_PATH" -storepass "$BU_KEYSTORE_PASSWORD" -alias "$BU_KEY_ALIAS" > /dev/null 2> "$RUNNER_TEMP/alias-error.txt"; then
+            cat "$RUNNER_TEMP/alias-error.txt"
+            echo "::error::BATTLE_UNIVERSE_KEY_ALIAS does not match an entry in the keystore. Available entries:"
+            grep -E '^[^[:space:]][^,]*, .* (PrivateKeyEntry|trustedCertEntry)' "$RUNNER_TEMP/keystore-list.txt" || cat "$RUNNER_TEMP/keystore-list.txt"
+            exit 1
+          fi
+
+          echo "Production keystore password and alias verified."
 
       - name: Set up Android SDK, NDK and CMake
         uses: android-actions/setup-android@v4
