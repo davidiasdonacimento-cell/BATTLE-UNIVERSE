@@ -544,13 +544,19 @@ public final class HudOverlay extends View {
         long now=System.currentTimeMillis();
         if(now-lastRoyaleSpinAt<2200L){toast("Aguarde antes de girar novamente.");return;}
         lastRoyaleSpinAt=now;royaleSpinPending=true;
-        String requestId=java.util.UUID.randomUUID().toString();
+        String requestId=prefs.getString("royale_pending_request_id","");
+        if(requestId.isEmpty()) {
+            requestId=java.util.UUID.randomUUID().toString();
+            prefs.edit().putString("royale_pending_request_id",requestId).apply();
+        }
+        final String stableRequestId=requestId;
         toast("Validando giro e saldo no servidor...");
-        royaleSpinAction.run(requestId,(result,error)->{
+        royaleSpinAction.run(stableRequestId,(result,error)->{
             royaleSpinPending=false;
             if(error!=null){toast("Giro não concluído: "+error);postInvalidate();return;}
             if(result==null||!result.has("prize_id")){toast("O servidor não confirmou o prêmio.");postInvalidate();return;}
-            prefs.edit().putLong("diamonds",result.optLong("diamonds_balance",prefs.getLong("diamonds",0L))).apply();
+            prefs.edit().remove("royale_pending_request_id")
+                .putLong("diamonds",result.optLong("diamonds_balance",prefs.getLong("diamonds",0L))).apply();
             String prize=result.optString("prize_name","PRÊMIO");
             String message=result.optBoolean("duplicate")?prize+" • ITEM REPETIDO • COMPENSAÇÃO +"+result.optLong("duplicate_compensation",0L)+" ◆":prize;
             prefs.edit().putString("royale_last_reward",message)
