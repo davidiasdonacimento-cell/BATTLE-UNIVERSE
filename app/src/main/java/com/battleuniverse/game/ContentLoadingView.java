@@ -28,7 +28,7 @@ public final class ContentLoadingView extends View {
     private long downloaded=0,total=0,started=System.currentTimeMillis();
     private String status="PREPARANDO CONEXÃO SEGURA...";
     private String error="";
-    private Runnable retryAction,continueAction;
+    private Runnable retryAction,continueAction,localPackAction;
 
     public ContentLoadingView(Context context) {
         super(context);
@@ -43,6 +43,8 @@ public final class ContentLoadingView extends View {
         error="";
         postInvalidate();
     }
+
+    public void setLocalPackAction(Runnable action){localPackAction=action; postInvalidate();}
 
     public void setStatus(String message) {
         status=message==null?status:message;
@@ -138,6 +140,9 @@ public final class ContentLoadingView extends View {
                 paint.setColor(row.complete?0xFF56D9B8:0xFF36B9D0);
                 canvas.drawRoundRect(rect,3,3,paint);
             }
+            panel(canvas,390,570,500,62,0xFF123B4C,0xFF54DCE9);
+            text(canvas,"USAR ZIP JÁ BAIXADO",640,608,16,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,"Selecione o pacote no armazenamento do celular",640,650,10,0xFF8FB9C8,Typeface.DEFAULT,Paint.Align.CENTER);
             text(canvas,"Cada arquivo é conferido antes de ser ativado.",640,692,9,0xFF648DA1,Typeface.DEFAULT,Paint.Align.CENTER);
             postInvalidateDelayed(70);
         }
@@ -165,12 +170,14 @@ public final class ContentLoadingView extends View {
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
-        if(event.getActionMasked()==MotionEvent.ACTION_UP&&!error.isEmpty()) {
+        if(event.getActionMasked()==MotionEvent.ACTION_UP) {
             float x=(event.getX()-offsetX)/scale,y=(event.getY()-offsetY)/scale;
-            if(y>=550&&y<=635) {
+            if(!error.isEmpty()&&y>=550&&y<=635) {
                 if(x>=275&&x<=625&&retryAction!=null)retryAction.run();
                 else if(x>=655&&x<=1005&&continueAction!=null)continueAction.run();
                 performClick();
+            } else if(error.isEmpty()&&x>=390&&x<=890&&y>=565&&y<=635&&localPackAction!=null) {
+                localPackAction.run(); performClick();
             }
             return true;
         }
