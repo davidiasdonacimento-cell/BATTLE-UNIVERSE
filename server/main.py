@@ -740,6 +740,7 @@ def shop_purchase(body: ShopPurchaseBody, db: Session = Depends(db_session),
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
         db.flush()
+    db.refresh(player)
     profile = dict(player.profile or {})
     if profile.get(body.item_key) is True:
         return {"purchased": False, "already_owned": True, "item_key": body.item_key,
@@ -796,7 +797,20 @@ def complete_match(body: MatchCompleteBody, db: Session = Depends(db_session),
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
         db.flush()
+    db.refresh(player)
+    existing = db.scalar(select(MatchReward).where(
+        MatchReward.player_id == player.id, MatchReward.request_id == body.request_id))
+    if existing is not None:
+        wallet_now = db.get(PlayerWallet, player.id)
+        return {"recorded": True, "replayed": True, "diamonds_awarded": existing.diamonds_awarded,
+                "xp_awarded": existing.xp_awarded,
+                "wallet": {"diamonds": wallet_now.diamonds if wallet_now else existing.balance_after},
+                "profile": player.profile or {}}
     now = datetime.now(timezone.utc)
+    last_match = db.scalar(select(MatchReward).where(
+        MatchReward.player_id == player.id).order_by(MatchReward.id.desc()).limit(1))
+    if last_match is not None and last_match.created_at > now - timedelta(seconds=15):
+        raise HTTPException(429, "Aguarde alguns segundos antes de registrar outra partida.")
     profile = dict(player.profile or {})
     day = int(now.timestamp() // 86400)
     if profile.get("missions_day") != day:
@@ -884,12 +898,26 @@ def claim_configured_reward(reward_type: str, reward_key: str,
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
         db.flush()
-    if previous is not None:
+    db.refresh(player)
+    profile = dict(player.profile or {})
+    previous = db.scalar(select(RewardClaim).where(
+        RewardClaim.player_id == player.id, RewardClaim.reward_type == reward_type,
+        RewardClaim.reward_key == reward_key))
+    if previous is not None or profile.get(claim_key):
         return {"claimed": False, "already_claimed": True,
-                "diamonds_awarded": previous.diamonds_awarded, "xp_awarded": previous.xp_awarded,
+                "diamonds_awarded": previous.diamonds_awarded if previous else diamonds,
+                "xp_awarded": previous.xp_awarded if previous else xp,
                 "wallet": {"diamonds": wallet.diamonds}, "profile": profile}
-    if profile.get(claim_key):
-        raise HTTPException(409, "Esta recompensa já foi resgatada.")
+    if reward_type == "mission":
+        today = int(datetime.now(timezone.utc).timestamp() // 86400)
+        if profile.get("missions_day") != today or int(profile.get(config["field"], 0) or 0) < config["goal"]:
+            raise HTTPException(409, "Missão ainda não concluída.")
+    elif reward_type == "royale_tier":
+        level = min(30, 1 + max(0, int(profile.get("xp", 0) or 0)) // 500)
+        if level < config[0]:
+            raise HTTPException(409, "Nível do passe insuficiente.")
+    elif reward_type == "achievement" and max(0, int(profile.get("xp", 0) or 0)) < config[0]:
+        raise HTTPException(409, "Experiência insuficiente para esta conquista.")
     wallet.diamonds += diamonds
     profile[claim_key] = True
     if xp:
@@ -1012,6 +1040,11 @@ def royale_spin(body: RoyaleSpinBody, db: Session = Depends(db_session),
         wallet = PlayerWallet(player_id=player.id, coins=0, diamonds=0)
         db.add(wallet)
         db.flush()
+    db.refresh(player)
+    latest_spin = db.scalar(select(RoyaleSpin).where(
+        RoyaleSpin.player_id == player.id).order_by(RoyaleSpin.id.desc()).limit(1))
+    if latest_spin is not None and latest_spin.created_at > datetime.now(timezone.utc) - timedelta(seconds=2):
+        raise HTTPException(429, "Aguarde dois segundos entre os giros.")
     if wallet.diamonds < ROYALE_COST:
         raise HTTPException(409, "Diamantes insuficientes na carteira online.")
     roll = secrets.randbelow(100)
