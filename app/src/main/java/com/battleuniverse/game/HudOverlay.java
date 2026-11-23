@@ -80,14 +80,14 @@ public final class HudOverlay extends View {
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
     private AiCoachAction aiCoachAction;
-    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction, royaleSpinAction;
+    private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction;
     private JSONArray mailMessages=new JSONArray();
     private boolean mailFetchStarted, activeMailClaimed;
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
     private long toastUntil, lastTap, lastRoyaleSpinAt;
-    private boolean shopPurchasePending, royaleSpinPending;
+    private boolean shopPurchasePending;
 
     public HudOverlay(Context context, GameSurfaceView game, SharedPreferences prefs) {
         super(context);
@@ -531,49 +531,11 @@ public final class HudOverlay extends View {
         text(c,"ÚLTIMO PRÊMIO",530,559,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
         text(c,last,530,587,13,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"GIROS REGISTRADOS: "+prefs.getInt("royale_spin_count",0),530,612,9,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-        text(c,"GIRO ONLINE • saldo e prêmio validados pelo servidor.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
+        text(c,"GIRO ALEATÓRIO DESATIVADO • use itens com preço fixo.",272,668,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
     private void performRoyaleSpin() {
-        if(!googleSignedIn) {
-            toast("Entre na conta para usar o Giro Royale online.");
-            page=PROFILE;invalidate();return;
-        }
-        if(royaleSpinPending)return;
-        if(royaleSpinAction==null) {
-            toast("Giro online indisponível. Tente novamente.");return;
-        }
-        long now=System.currentTimeMillis();
-        if(now-lastRoyaleSpinAt<1200L) {
-            toast("Aguarde um instante antes do próximo giro.");return;
-        }
-        lastRoyaleSpinAt=now;
-        royaleSpinPending=true;
-        toast("Validando saldo e prêmio no servidor...");
-        String requestId=java.util.UUID.randomUUID().toString();
-        royaleSpinAction.run(requestId,(response,error)->{
-            royaleSpinPending=false;
-            if(error!=null) {
-                toast(error.toLowerCase(java.util.Locale.ROOT).contains("diamantes insuficientes")
-                    ?"Diamantes insuficientes na carteira online.":"Giro não concluído: "+error);
-                invalidate();return;
-            }
-            if(response==null) {
-                toast("O servidor não confirmou o giro.");invalidate();return;
-            }
-            long balance=response.optLong("diamonds_balance",prefs.getLong("diamonds",0L));
-            String prize=response.optString("prize_name","PRÊMIO");
-            String prizeId=response.optString("prize_id","");
-            String[] ids={"shirt_tactical","boots_combat","set_aurora","beard_old","pants_angelical"};
-            String[] keys={"wear_shirt_tactical","wear_boots_combat","wear_set_aurora","wear_beard_old","wear_pants_angelical"};
-            SharedPreferences.Editor edit=prefs.edit().putLong("diamonds",balance)
-                .putString("royale_last_reward",prize)
-                .putInt("royale_spin_count",prefs.getInt("royale_spin_count",0)+1);
-            for(int i=0;i<ids.length;i++)if(ids[i].equals(prizeId))edit.putBoolean(keys[i],true);
-            edit.apply();
-            toast("ROYALE ONLINE: "+prize+(response.optBoolean("duplicate")?" • REPETIDO":""));
-            invalidate();
-        });
+        toast("Giro aleatório desativado. Use a loja com preços fixos.");
     }
 
     private void ensureStarterWardrobe() {
@@ -1468,7 +1430,6 @@ public final class HudOverlay extends View {
         mailFetchAction=mailFetch;mailClaimAction=mailClaim;
     }
     public void setShopPurchaseAction(GameApiAction action){shopPurchaseAction=action;}
-    public void setRoyaleSpinAction(GameApiAction action){royaleSpinAction=action;}
     private void showAiCoachDialog(){
         if(aiCoachAction==null){
             new AlertDialog.Builder(getContext()).setTitle("IA PROFESSORA")
