@@ -898,15 +898,38 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.075f,0.09f,0.07f},skin,yaw);
     drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.075f,0.09f,0.07f},skin,yaw);
 
-    if(bot||gWeaponType>=0) {
+    if(bot) {
         drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),
             {0.16f,0.13f,0.42f},{0.045f,0.075f,0.085f},yaw);
         drawCube(localPoint(p,0,1.40f+bob,-0.77f+recoil,yaw),
             {0.10f,0.045f,0.23f},{0.18f,0.30f,0.30f},yaw);
         drawCube(localPoint(p,0,1.31f+bob,-1.03f+recoil,yaw),
             {0.07f,0.075f,0.22f},{0.12f,0.20f,0.22f},yaw);
-        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.22f+recoil,yaw),
-            {0.13f,0.13f,0.13f},{0.45f,0.98f,1.0f},yaw);
+    } else if(gWeaponType>=0&&gWeaponType<4) {
+        const Vec3 receiver{0.075f,0.075f,0.28f};
+        const Vec3 darkMetal{0.055f,0.075f,0.085f};
+        const Vec3 accent=gWeaponType==2?Vec3{0.70f,0.72f,0.74f}:
+            (gWeaponType==3?Vec3{0.16f,0.18f,0.20f}:Vec3{0.12f,0.22f,0.25f});
+        drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),receiver,darkMetal,yaw);
+        if(gWeaponType==0) { // XM8: corpo e coronha alongados, trilho superior.
+            drawCube(localPoint(p,0,1.31f+bob,-0.53f+recoil,yaw),{0.12f,0.09f,0.34f},accent,yaw);
+            drawCube(localPoint(p,0,1.40f+bob,-0.79f+recoil,yaw),{0.08f,0.035f,0.34f},{0.24f,0.31f,0.33f},yaw);
+            drawCube(localPoint(p,0,1.28f+bob,-1.13f+recoil,yaw),{0.055f,0.055f,0.48f},darkMetal,yaw);
+        } else if(gWeaponType==1) { // UMP: corpo compacto e carregador curvo estilizado.
+            drawCube(localPoint(p,0,1.31f+bob,-0.98f+recoil,yaw),{0.10f,0.08f,0.32f},accent,yaw);
+            drawCube(localPoint(p,0,1.17f+bob,-0.78f+recoil,yaw),{0.075f,0.22f,0.13f},darkMetal,yaw);
+            drawCube(localPoint(p,0,1.38f+bob,-0.78f+recoil,yaw),{0.075f,0.035f,0.26f},{0.30f,0.34f,0.36f},yaw);
+        } else if(gWeaponType==2) { // Carapina: cano longo e mira óptica.
+            drawCube(localPoint(p,0,1.30f+bob,-1.16f+recoil,yaw),{0.055f,0.055f,0.72f},accent,yaw);
+            drawCube(localPoint(p,0,1.43f+bob,-0.77f+recoil,yaw),{0.09f,0.10f,0.22f},darkMetal,yaw);
+            drawCylinder(localPoint(p,0,1.49f+bob,-0.83f+recoil,yaw),{0.10f,0.12f,0.22f},{0.16f,0.22f,0.27f},yaw);
+        } else { // Mini Uzi: formato curto e carregador frontal.
+            drawCube(localPoint(p,0,1.31f+bob,-0.99f+recoil,yaw),{0.12f,0.09f,0.24f},accent,yaw);
+            drawCube(localPoint(p,0,1.18f+bob,-0.91f+recoil,yaw),{0.075f,0.22f,0.10f},darkMetal,yaw);
+            drawCube(localPoint(p,0,1.31f+bob,-1.17f+recoil,yaw),{0.045f,0.045f,0.25f},darkMetal,yaw);
+        }
+        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.34f+recoil,yaw),
+            {0.16f,0.12f,0.16f},{1.0f,0.72f,0.28f},yaw);
     }
     gCharacterPoseScale=1.0f;
 }
@@ -964,7 +987,7 @@ void drawSafeZone() {
     }
 }
 const char* weaponName() {
-    static const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI"};
+    static const char* names[]={"XM8","UMP","CARAPINA","MINI UZI"};
     if(gWeaponType<0||gWeaponType>3)return "SEM ARMA";
     return names[gWeaponType];
 }
@@ -1332,9 +1355,9 @@ void firePulse() {
     gPlayerYaw=gCameraYaw;
     gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gCameraYaw);
     const float fx=-std::sin(gCameraYaw),fz=-std::cos(gCameraYaw);
-    const float range=gWeaponType==2?42.0f:56.0f;
-    const float tolerance=gWeaponType==1?2.7f:2.0f;
-    const int damage=gWeaponType==2?3:(gWeaponType==1?2:1);
+    const float range=gWeaponType==2?88.0f:56.0f;
+    const float tolerance=gWeaponType==2?1.25f:(gWeaponType==1?2.35f:1.85f);
+    const int damage=gWeaponType==2?4:(gWeaponType==0?2:1);
     float best=range;
     int hitTarget=-1,hitBot=-1;
     if(gSelectedMode==3) {
@@ -1430,11 +1453,19 @@ void drawTargets(float time) {
         }
     }
     if(gPulseFlash>0.0f) {
-        Vec3 boltColor=gWeaponType==2?Vec3{0.92f,0.46f,0.16f}:
-            (gWeaponType==1?Vec3{0.38f,0.75f,1.0f}:Vec3{0.25f,0.96f,1.0f});
-        drawSegment({0,0,0},0.0f,gPulseStartPosition,gPulseHitPosition,
-            gWeaponType==2?0.19f:0.10f,boltColor);
-        drawSphere(gPulseHitPosition,{0.33f,0.33f,0.33f},boltColor);
+        const Vec3 boltColor=gWeaponType==2?Vec3{1.0f,0.66f,0.24f}:
+            (gWeaponType==1?Vec3{0.34f,0.78f,1.0f}:
+             (gWeaponType==3?Vec3{1.0f,0.78f,0.30f}:Vec3{0.35f,0.96f,0.88f}));
+        const float progress=std::clamp(1.0f-gPulseFlash/0.18f,0.0f,1.0f);
+        const Vec3 projectile{
+            gPulseStartPosition.x+(gPulseHitPosition.x-gPulseStartPosition.x)*progress,
+            gPulseStartPosition.y+(gPulseHitPosition.y-gPulseStartPosition.y)*progress,
+            gPulseStartPosition.z+(gPulseHitPosition.z-gPulseStartPosition.z)*progress
+        };
+        // Efeito curto de projétil, clarão no cano e impacto; sem feixe/linha atravessando a tela.
+        drawSphere(gPulseStartPosition,{0.22f,0.22f,0.22f},boltColor);
+        drawSphere(projectile,{0.13f,0.13f,0.13f},boltColor);
+        drawSphere(gPulseHitPosition,{0.24f,0.24f,0.24f},boltColor);
     }
 }
 void drawTransportPlaneCabin(Vec3 pos,float time) {
@@ -1884,7 +1915,12 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     }
     // Segurar DISPARAR mantém o disparo automático; um toque rápido dispara uma vez.
     if(pulseHeld&&gDropState==3&&!gPlayerDowned&&gPulseCooldown<=0.0f) {
-        firePulse();gPulseCooldown=(gWeaponType==3?0.10f:(gWeaponType==2?0.55f:0.24f));
+        firePulse();
+        // Disparo automático contínuo enquanto o botão estiver pressionado.
+        // Cadência curta por arma, sem bloqueio longo do botão de disparo.
+        const float cadence[4]={0.12f,0.095f,0.42f,0.075f};
+        const int firedType=std::clamp(gWeaponType,0,3);
+        gPulseCooldown=cadence[firedType];
     }
 
     if(gDropState==3) {
