@@ -217,8 +217,8 @@ public final class HudOverlay extends View {
                 active?0xFF59DDE6:0x44618B9B,14);
             circle(c,x+55,y+38,19,active?0xFF1B8994:0xFF24485A,0xFF70DCE6);
             text(c,""+(i+1),x+51,y+43,12,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,MORE_NAV[i],x+55,y+83,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
-            text(c,"ABRIR",x+55,y+103,7,0xFF9DBBC8,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(c,MORE_NAV[i],x+12,y+83,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"ABRIR",x+12,y+103,7,0xFF9DBBC8,Typeface.DEFAULT_BOLD);
         }
     }
     private void drawNavIcon(Canvas c,int i,float x,float y,boolean active){
