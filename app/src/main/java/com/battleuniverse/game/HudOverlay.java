@@ -176,6 +176,11 @@ public final class HudOverlay extends View {
         text(c,"MISSÕES DIÁRIAS",50,408,16,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"Veja objetivos e recompensas",50,431,10,0xFFB5C8D3,Typeface.DEFAULT);
         pill(c,50,438,128,19,"ABRIR MISSÕES",0x553A6B7C,0xFFD6E8EF);
+        panel(c,354,350,586,112,0xD0091826,0xFF43C9D8,16);
+        pill(c,376,367,132,22,"ASSISTENTE IA",0x553A6B7C,0xFF9BEAF0);
+        text(c,"IA PROFESSORA",376,416,22,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Tire dúvidas sobre controles, mapas e partidas.",376,439,10,0xFFB9CDD8,Typeface.DEFAULT);
+        pill(c,758,389,158,34,"ABRIR ASSISTENTE",0xFF176A75,Color.WHITE);
         long xp=prefs.getLong("xp",0L);
         panel(c,970,132,280,106,0xA9081725,0x447AA0B8,16);
         eyebrow(c,992,158,"SUA PATENTE");
@@ -1436,6 +1441,7 @@ public final class HudOverlay extends View {
             if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
             if(hit(x,y,30,132,284,204)){page=EVENTS;return;}
             if(hit(x,y,30,350,284,112)){page=MISSIONS;return;}
+            if(hit(x,y,354,350,586,112)){showAiCoachDialog();return;}
             if(hit(x,y,300,24,112,43)){page=CHARACTERS;return;}
             if(hit(x,y,420,24,96,43)){page=INVENTORY;return;}
             if(hit(x,y,530,24,78,43)){page=SHOP;return;}
