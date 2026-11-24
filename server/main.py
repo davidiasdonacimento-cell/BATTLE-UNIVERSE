@@ -639,23 +639,22 @@ def send_ai_message(
         raise HTTPException(503, "A IA ainda não foi configurada no servidor.")
 
     now = datetime.now(timezone.utc)
-    recent_count = db.scalar(
-        select(func.count(AiChatMessage.id))
-        .join(AiChatConversation, AiChatConversation.id == AiChatMessage.conversation_id)
-        .where(
-            AiChatConversation.player_id == player.id,
-            AiChatMessage.role == "user",
-            AiChatMessage.created_at >= now - timedelta(minutes=1),
-        )
-    ) or 0
-    if recent_count >= 12:
-        raise HTTPException(429, "Você enviou muitas mensagens. Aguarde um minuto.")
-
     user_message = db.scalar(select(AiChatMessage).where(
         AiChatMessage.conversation_id == conversation.id,
         AiChatMessage.client_message_id == body.client_message_id,
     ))
     if user_message is None:
+        recent_count = db.scalar(
+            select(func.count(AiChatMessage.id))
+            .join(AiChatConversation, AiChatConversation.id == AiChatMessage.conversation_id)
+            .where(
+                AiChatConversation.player_id == player.id,
+                AiChatMessage.role == "user",
+                AiChatMessage.created_at >= now - timedelta(minutes=1),
+            )
+        ) or 0
+        if recent_count >= 12:
+            raise HTTPException(429, "Você enviou muitas mensagens. Aguarde um minuto.")
         user_message = AiChatMessage(
             conversation_id=conversation.id,
             role="user",
@@ -665,7 +664,7 @@ def send_ai_message(
         db.add(user_message)
         conversation.updated_at = now
         if conversation.title == "Nova conversa":
-            conversation.title = body.content.strip().replace("\\n", " ")[:60] or "Nova conversa"
+            conversation.title = " ".join(body.content.split())[:60] or "Nova conversa"
         try:
             db.commit()
             db.refresh(user_message)
@@ -677,6 +676,8 @@ def send_ai_message(
             ))
             if user_message is None:
                 raise HTTPException(409, "Não foi possível registrar a mensagem. Tente novamente.")
+    elif user_message.content != body.content.strip():
+        raise HTTPException(409, "Este identificador de mensagem já foi usado com outro conteúdo.")
 
     assistant_message = db.scalar(select(AiChatMessage).where(
         AiChatMessage.reply_to_message_id == user_message.id,
