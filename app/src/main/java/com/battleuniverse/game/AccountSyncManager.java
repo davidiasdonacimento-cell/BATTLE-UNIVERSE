@@ -542,6 +542,15 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
 
     private boolean isIntegerPreference(String key) {
+        return isBoundedGamePreference(key)
+            ||"matches_played".equals(key)||"match_wins".equals(key)||"match_kills".equals(key)
+            ||"match_damage".equals(key)||"match_resources".equals(key)
+            ||"last_match_kills".equals(key)||"last_match_damage".equals(key)
+            ||"last_match_resources".equals(key)||"mission_matches".equals(key)
+            ||"mission_eliminations".equals(key)||"mission_crystals".equals(key);
+    }
+
+    private boolean isBoundedGamePreference(String key) {
         return "mode".equals(key)||"map".equals(key)||"character".equals(key)||"quality".equals(key)
             ||"look_sensitivity".equals(key)||"selected_shirt".equals(key)||"selected_boots".equals(key)
             ||"selected_set".equals(key);
@@ -550,13 +559,14 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private int normalizeProfileInt(String key,Number number) {
         double raw=number.doubleValue();
         if(Double.isNaN(raw)||Double.isInfinite(raw)||raw!=Math.rint(raw))return defaultProfileInt(key);
-        int minimum=0,maximum=0;
-        if("mode".equals(key)){maximum=3;}
+        if(!isBoundedGamePreference(key))
+            return (int)Math.max(0d,Math.min((double)Integer.MAX_VALUE,raw));
+        int maximum=0;
+        if("mode".equals(key)||"character".equals(key)){maximum=3;}
         else if("map".equals(key)){maximum=7;}
-        else if("character".equals(key)){maximum=3;}
         else if("quality".equals(key)||"look_sensitivity".equals(key)){maximum=2;}
         else if("selected_shirt".equals(key)||"selected_boots".equals(key)||"selected_set".equals(key)){maximum=4;}
-        return (int)Math.max(minimum,Math.min(maximum,raw));
+        return (int)Math.max(0d,Math.min((double)maximum,raw));
     }
 
     private int defaultProfileInt(String key) {
