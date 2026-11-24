@@ -431,6 +431,7 @@ def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bea
         raise HTTPException(403, "Este controlador não é o aparelho autorizado.")
     device.last_seen_at = datetime.now(timezone.utc)
     db.add(device)
+    db.commit()
     return "owner-device"
 
 
@@ -1122,7 +1123,10 @@ def owner_pair(body: OwnerPairBody, db: Session = Depends(db_session)) -> dict[s
     if device is None:
         raise HTTPException(503, "Não foi possível registrar o aparelho controlador.")
     if not secrets.compare_digest(device.install_id, install_id):
-        raise HTTPException(409, "Já existe outro aparelho autorizado. Revogue o controlador atual antes de parear outro.")
+        if not device.revoked:
+            raise HTTPException(409, "Já existe outro aparelho autorizado. Revogue o controlador atual antes de parear outro.")
+        device.install_id = install_id
+        device.paired_at = now
     device.device_label = body.device_label.strip()
     device.revoked = False
     device.last_seen_at = now
@@ -1459,11 +1463,16 @@ small{color:#8baab9}@media(max-width:560px){.row{grid-template-columns:1fr}main{
 </main><script>
 const API=location.origin, $=id=>document.getElementById(id);
 let token="";
+let browserInstallId=localStorage.getItem("bu_owner_install_id")||"";
+if(!/^[A-Za-z0-9._:-]{16,64}$/.test(browserInstallId)){
+ browserInstallId=(crypto.randomUUID?crypto.randomUUID():("web-"+Date.now()+"-"+Math.random().toString(36).slice(2)));
+ localStorage.setItem("bu_owner_install_id",browserInstallId);
+}
 function show(s){$("status").textContent=s}
 $("connect").onclick=async()=>{
  const code=$("pair").value.trim(); if(code.length<32){show("Código de autorização inválido.");return}
  $("connect").disabled=true;
- try{const r=await fetch(API+"/v1/owner/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pairing_code:code})});
+ try{const r=await fetch(API+"/v1/owner/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pairing_code:code,install_id:browserInstallId,device_label:"Navegador administrativo"})});
  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha na autorização.");
  token=d.access_token;$("pair").value="";$("pair").disabled=true;$("connect").hidden=true;$("composer").hidden=false;$("accountTools").hidden=false;show("ADM autorizado. Correio e ferramentas de conta disponíveis.");
  }catch(e){show("Erro: "+e.message)}finally{$("connect").disabled=false}
