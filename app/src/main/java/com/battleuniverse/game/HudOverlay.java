@@ -28,11 +28,13 @@ import org.json.JSONObject;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17;
+        GAME=11, ROYALE_CATALOG=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
     private static final int[] NAV_PAGES={HOME,CHARACTERS,MODES_PAGE,MAPS_PAGE,INVENTORY,SETTINGS,PROFILE,SHOP,ROYALE,MISSIONS,WARDROBE,EVENTS,FRIENDS,MAIL,ACHIEVEMENTS};
+    private static final String[] MORE_NAV={"MAPAS","MISSÕES","ROUPAS","EVENTOS","EQUIPE","CORREIO","PERFIL","AJUSTES","CONQUISTAS"};
+    private static final int[] MORE_NAV_PAGES={MAPS_PAGE,MISSIONS,WARDROBE,EVENTS,FRIENDS,MAIL,PROFILE,SETTINGS,ACHIEVEMENTS};
     private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
         "CAMISA TÁTICA","CAMISA NEON","CAMISA FROST","CAMISA DESERTO",
         "BOTAS COMBATE","BOTAS NEON","BOTAS FROST","BOTAS DOURADAS",
@@ -66,7 +68,7 @@ public final class HudOverlay extends View {
     private final RectF r=new RectF();
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private int selectedShirt,selectedBoots,selectedSet;
-    private boolean music=true, effects=true, forwarding, resultSpectating;
+    private boolean music=true, effects=true, forwarding, resultSpectating, moreMenuOpen;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
     private boolean onlineMode, tacticalMapVisible;
     private float scale=1, offsetX, offsetY;
@@ -139,7 +141,7 @@ public final class HudOverlay extends View {
         drawLobbyBackdrop(c);
         p.setColor(0xB9071421);c.drawRect(0,0,1280,96,p);
         p.setColor(0x5579DDEB);c.drawRect(0,94,1280,96,p);
-        drawBrand(c);drawProfile(c);drawSidebar(c);drawPage(c);drawTeam(c);
+        drawBrand(c);drawProfile(c);drawSidebar(c);drawPage(c);drawTeam(c);if(moreMenuOpen)drawMoreMenu(c);
     }
     private void drawLobbyBackdrop(Canvas c) {
         p.setShader(new LinearGradient(0,0,1280,720,
@@ -185,18 +187,39 @@ public final class HudOverlay extends View {
         return NumberFormat.getIntegerInstance(new Locale("pt","BR")).format(value);
     }
     private void drawSidebar(Canvas c) {
-        // Navegação vertical de lobby mobile: libera o topo e mantém as telas dentro do jogo.
         panel(c,18,104,214,562,0xD90A1B2B,0x446CA4B7,18);
-        text(c,"CENTRAL",38,130,9,0xFF79DCE7,Typeface.create("sans-serif-black",Typeface.BOLD));
-        for(int i=0;i<NAV.length;i++) {
-            float y=143+i*33.2f;boolean active=page==NAV_PAGES[i];boolean royale=NAV_PAGES[i]==ROYALE;
-            panel(c,27,y,196,29,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
-                    active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),10);
-            drawNavIcon(c,i,48,y+14.5f,active||royale);
-            text(c,NAV[i],67,y+19.5f,royale?8.2f:7.7f,active||royale?Color.WHITE:0xFFB8CBD7,
+        text(c,"NAVEGAÇÃO",38,132,9,0xFF79DCE7,Typeface.create("sans-serif-black",Typeface.BOLD));
+        String[] labels={"INÍCIO","JOGAR","PERSONAGENS","COLEÇÃO","LOJA","ROYALE"};
+        int[] pages={HOME,MODES_PAGE,CHARACTERS,INVENTORY,SHOP,ROYALE};
+        for(int i=0;i<labels.length;i++) {
+            float y=150+i*49f;boolean active=page==pages[i]||(pages[i]==ROYALE&&page==ROYALE_CATALOG);
+            boolean royale=pages[i]==ROYALE;
+            panel(c,28,y,194,41,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
+                active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),12);
+            drawNavIcon(c,i,50,y+20.5f,active||royale);
+            text(c,labels[i],72,y+25,9.5f,active||royale?Color.WHITE:0xFFB8CBD7,
                 Typeface.create(active||royale?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
         }
-        text(c,"BATTLE ROYALE",38,655,8,0xFF7895A6,Typeface.DEFAULT_BOLD);
+        panel(c,28,462,194,46,moreMenuOpen?0xFF176A75:0x33243B4D,
+            moreMenuOpen?0xFF65E5ED:0x557AA0B2,12);
+        text(c,moreMenuOpen?"FECHAR MENU":"MAIS OPÇÕES",54,490,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Organizado por categoria",38,642,8,0xFF7895A6,Typeface.DEFAULT);
+    }
+    private void drawMoreMenu(Canvas c) {
+        panel(c,850,104,398,562,0xF00A1B2B,0x8879DDEB,20);
+        text(c,"CENTRAL DE RECURSOS",874,139,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Escolha uma área",874,160,9,0xFF9CB9C8,Typeface.DEFAULT);
+        pill(c,1132,116,94,27,"FECHAR",0x553B6172,0xFFE2F3F6);
+        for(int i=0;i<MORE_NAV.length;i++) {
+            int col=i%3,row=i/3;float x=870+col*120f,y=180+row*145f;
+            boolean active=page==MORE_NAV_PAGES[i];
+            panel(c,x,y,110,124,active?0xCC176A75:0xAA193040,
+                active?0xFF59DDE6:0x44618B9B,14);
+            circle(c,x+55,y+38,19,active?0xFF1B8994:0xFF24485A,0xFF70DCE6);
+            text(c,""+(i+1),x+51,y+43,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,MORE_NAV[i],x+55,y+83,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD),Paint.Align.CENTER);
+            text(c,"ABRIR",x+55,y+103,7,0xFF9DBBC8,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        }
     }
     private void drawNavIcon(Canvas c,int i,float x,float y,boolean active){
         p.setColor(active?0xFFE9FCFF:0xFF8AA8B8);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.2f);
@@ -214,7 +237,7 @@ public final class HudOverlay extends View {
         else if(page==INVENTORY)drawInventory(c); else if(page==SETTINGS)drawSettings(c);
         else if(page==PROFILE)drawProfilePage(c); else if(page==SHOP)drawShopPage(c);
         else if(page==ROYALE)drawRoyalePage(c);
-        else if(page==ROYALE_SPIN)drawRoyaleSpinPage(c);
+        else if(page==ROYALE_CATALOG)drawRoyaleCatalogPage(c);
         else if(page==MISSIONS)drawMissionsPage(c);
         else if(page==WARDROBE)drawWardrobePage(c);
         else if(page==EVENTS)drawEventsPage(c);
@@ -521,26 +544,26 @@ public final class HudOverlay extends View {
         text(c,"XP, missões e recompensas validados pela conta online.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
-    private void drawRoyaleSpinPage(Canvas c) {
-        eyebrow(c,270,175,"ITENS ROYALE • PREÇOS FIXOS");
-        title(c,"RECOMPENSAS ROYALE",270,224);
+    private void drawRoyaleCatalogPage(Canvas c) {
+        eyebrow(c,270,175,"TROCA DIRETA • RECOMPENSAS COM PREÇO DEFINIDO");
+        title(c,"CATÁLOGO ROYALE",270,224);
         pill(c,674,184,166,32,"VOLTAR AO PASSE",0x553B6172,0xFFD7E6ED);
-        subtitle(c,"Escolha diretamente o cosmético desejado na loja.",270,252);
-        String[] items={"CAMISA NEON","BOTAS NEON","CONJUNTO AURORA","CONJUNTO ORBITAL","CONJUNTO DESERTO"};
-        String[] prices={"800 ◆","600 ◆","1800 ◆","2500 ◆","1900 ◆"};
-        int[] colors={0xFF8D42D7,0xFF2FAFC4,0xFF55B7B8,0xFF6B83C4,0xFFB87843};
-        for(int i=0;i<items.length;i++){
-            int col=i%3,row=i/3;float x=270+col*192f,y=300+row*92f;
-            panel(c,x,y,174,78,0xB51A3040,0x557AA9BC,13);
-            circle(c,x+25,y+28,15,colors[i],0xFFB5D6E1);
-            text(c,items[i],x+48,y+27,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,"PREÇO DEFINIDO",x+14,y+54,7,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-            text(c,prices[i],x+14,y+72,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        subtitle(c,"Toque no item escolhido e confirme o resgate. Sem roleta e sem sorteio.",270,252);
+        panel(c,270,264,570,43,0xA91A3040,0x557AA9BC,13);
+        text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),290,291,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        text(c,"ITENS FIXOS  •  RESGATE INDIVIDUAL",568,291,8,0xFF8FE3E7,Typeface.DEFAULT_BOLD);
+        for(int i=0;i<SHOP_NAMES.length;i++){
+            int col=i%3,row=i/3;float x=270+col*192f,y=318+row*66f;
+            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            panel(c,x,y,174,58,owned?0xB51A4650:0xA91A3040,
+                owned?0xFF4BD4C9:0x557AA9BC,12);
+            circle(c,x+22,y+25,13,SHOP_COLORS[i],0xFFB5D6E1);
+            String name=SHOP_NAMES[i].length()>17?SHOP_NAMES[i].substring(0,17):SHOP_NAMES[i];
+            text(c,name,x+42,y+22,7.8f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,owned?"JÁ ADQUIRIDO":"◆ "+SHOP_PRICES[i]+" DIAMANTES",x+42,y+42,7,owned?0xFF83DCD5:0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            pill(c,x+112,y+34,54,18,owned?"OK":"PEGAR",owned?0xFF176A75:0xFF345D79,Color.WHITE);
         }
-        panel(c,270,510,570,126,0xA91A3040,0x557AA9BC,16);
-        gradientButton(c,288,536,220,68,"ABRIR LOJA","COMPRAR ITEM ESCOLHIDO",0xFF126C72,0xFF164C70);
-        text(c,"COMPRAS DIRETAS • SALDO DA CONTA",530,562,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
-        text(c,"Cada cosmético tem seu próprio preço.",530,590,10,Color.WHITE,Typeface.DEFAULT);
+        text(c,"Cada item tem preço e resultado definidos antes do resgate.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
     private void ensureStarterWardrobe() {
         if(prefs.getBoolean("wardrobe_starter_v2_granted",false)) return;
@@ -1297,11 +1320,21 @@ public final class HudOverlay extends View {
     private void tap(float x,float y){
         if(System.currentTimeMillis()-lastTap<110)return;lastTap=System.currentTimeMillis();
         if(hapticsEnabled)performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-        if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
-        for(int i=0;i<NAV.length;i++){
-            float ny=143+i*33.2f;
-            if(hit(x,y,27,ny,196,29)){page=NAV_PAGES[i];return;}
+        if(moreMenuOpen) {
+            if(hit(x,y,1132,116,94,27)){moreMenuOpen=false;return;}
+            for(int i=0;i<MORE_NAV.length;i++){
+                int col=i%3,row=i/3;float mx=870+col*120f,my=180+row*145f;
+                if(hit(x,y,mx,my,110,124)){page=MORE_NAV_PAGES[i];moreMenuOpen=false;return;}
+            }
+            moreMenuOpen=false;return;
         }
+        if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
+        int[] primaryPages={HOME,MODES_PAGE,CHARACTERS,INVENTORY,SHOP,ROYALE};
+        for(int i=0;i<primaryPages.length;i++){
+            float ny=150+i*49f;
+            if(hit(x,y,28,ny,194,41)){page=primaryPages[i];return;}
+        }
+        if(hit(x,y,28,462,194,46)){moreMenuOpen=true;return;}
         if(page==HOME){
             if(hit(x,y,913,628,300,24)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
             if(hit(x,y,270,442,164,24)){
@@ -1391,14 +1424,13 @@ public final class HudOverlay extends View {
                 }
             }
         }else if(page==ROYALE){
-            if(hit(x,y,674,184,166,32)){page=ROYALE_SPIN;return;}
+            if(hit(x,y,674,184,166,32)){page=ROYALE_CATALOG;return;}
             if(hit(x,y,681,423,138,30)){claimDailyReward();return;}
-        }else if(page==ROYALE_SPIN){
+        }else if(page==ROYALE_CATALOG){
             if(hit(x,y,674,184,166,32)){page=ROYALE;return;}
-            if(hit(x,y,288,536,220,68)){page=SHOP;return;}
-            for(int i=0;i<ROYALE_LEVELS.length;i++){
-                float rx=270+(i%3)*192f,ry=476+(i/3)*88f;
-                if(hit(x,y,rx,ry,174,78)){claimRoyaleTier(i);return;}
+            for(int i=0;i<SHOP_NAMES.length;i++){
+                float rx=270+(i%3)*192f,ry=318+(i/3)*66f;
+                if(hit(x,y,rx,ry,174,58)){purchaseShopItem(i);return;}
             }
         }else if(page==MISSIONS){
             for(int i=0;i<MISSION_NAMES.length;i++){
