@@ -1401,11 +1401,23 @@ function ownerHeaders(){return {"Content-Type":"application/json","Authorization
 function selectedAccount(){return Number(accountSelect.value)||0}
 function restoreAccountSelection(){
  const saved=localStorage.getItem("bu_admin_selected_account")||"";
- if(saved&&[...accountSelect.options].some(o=>o.value===saved))accountSelect.value=saved;
- if(accountSelect.value)mailTarget.value=accountSelect.value;
+ if(saved&&[...accountSelect.options].some(o=>o.value===saved)){
+  accountSelect.value=saved;
+  mailTarget.value=saved;
+ }
 }
-accountSelect.onchange=()=>{localStorage.setItem("bu_admin_selected_account",accountSelect.value);mailTarget.value=accountSelect.value};
-mailTarget.onchange=()=>{if(mailTarget.value){accountSelect.value=mailTarget.value;localStorage.setItem("bu_admin_selected_account",mailTarget.value)}};
+accountSelect.onchange=()=>{
+ localStorage.setItem("bu_admin_selected_account",accountSelect.value);
+ mailTarget.value=accountSelect.value;
+};
+mailTarget.onchange=()=>{
+ if(mailTarget.value){
+  accountSelect.value=mailTarget.value;
+  localStorage.setItem("bu_admin_selected_account",mailTarget.value);
+ }else{
+  localStorage.removeItem("bu_admin_selected_account");
+ }
+};
 $("searchAccounts").onclick=async()=>{
  try{
   const q=$("accountSearch").value.trim();
