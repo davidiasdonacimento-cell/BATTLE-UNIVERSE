@@ -65,6 +65,27 @@ O instalador na primeira abertura baixa automaticamente um pacote de conteúdo e
 
 O instalador valida o SHA-256 do ZIP e os hashes individuais dos arquivos, verifica caminhos antes da extração, limita o tamanho extraído, confere espaço livre e instala em uma pasta temporária antes de ativar. Se a conexão falhar, o usuário pode tentar novamente ou abrir o jogo-base.
 
+## BATTLE AI PRO MAXX
+
+A IA do jogo oferece dois modos autenticados:
+- **Modo rápido:** utiliza o endpoint do treinador para uma resposta pontual.
+- **Modo conversa:** mantém até 50 conversas por conta no PostgreSQL, com histórico de até 100 mensagens por carregamento e retomada após reinstalação ou troca de aparelho.
+
+### Memória por conta
+- A tabela `player_ai_memories` guarda uma memória editável por jogador.
+- A memória é compartilhada entre as conversas da mesma conta.
+- O contexto recente de outros chats é filtrado pelo mesmo `player_id`; uma conta não consulta conversas de outra.
+- Mensagens usam `client_message_id` para permitir novas tentativas sem duplicar a mensagem original.
+- Limites: 4.000 caracteres por mensagem e por memória, 12 novas mensagens por minuto e 50 conversas por conta.
+
+### API
+- `GET/POST /v1/ai/conversations`
+- `GET/POST /v1/ai/conversations/{id}/messages`
+- `DELETE /v1/ai/conversations/{id}`
+- `GET/PUT /v1/ai/memory`
+
+O servidor usa as variáveis existentes `OPENROUTER_API_KEY` e, opcionalmente, `OPENROUTER_MODEL`. A chave do provedor nunca é incluída no APK. As tabelas novas são criadas pelo mecanismo de inicialização SQLAlchemy sem apagar dados existentes.
+
 ## Build e testes
 Workflow: `.github/workflows/android.yml`.
 - Configura Python, JDK 17, Android SDK, NDK 27 e CMake.
