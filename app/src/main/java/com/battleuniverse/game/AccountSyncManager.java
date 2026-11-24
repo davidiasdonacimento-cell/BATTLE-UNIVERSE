@@ -350,7 +350,9 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 } else if(msg.contains("403")) {
                     // A conta pode estar suspensa ou sem permissão. Preserve o token para
                     // não apagar o login do jogador por uma resposta de autorização.
-                    publish(false,username,"O servidor recusou esta operação para a conta: "+msg);
+                    // HTTP 403 não significa que o jogador saiu da conta.
+                    // Preserve o estado autenticado e informe a restrição sem expulsá-lo do perfil.
+                    publish(true,username,"Conta conectada, mas o servidor bloqueou esta operação: "+msg);
                 } else {
                     // Render pode estar iniciando ou a rede pode oscilar. Preserve a sessão.
                     publish(!getToken().isEmpty(),username,
