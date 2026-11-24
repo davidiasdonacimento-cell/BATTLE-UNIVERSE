@@ -104,6 +104,10 @@ public final class MainActivity extends Activity {
             if(parts.length!=2){callback.onResult(null,"Recompensa inválida.");return;}
             accountSync.claimConfiguredReward(parts[0],parts[1],callback);
         });
+        hud.setGameAccessAction((ignored,callback)->{
+            if(accountSync!=null)accountSync.checkGameAuthorization(callback);
+            else callback.onResult(null,"Sistema de contas ainda não inicializado.");
+        });
         hud.setPackAnalyzerAction(this::showContentPackOptions);
         accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
             if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
