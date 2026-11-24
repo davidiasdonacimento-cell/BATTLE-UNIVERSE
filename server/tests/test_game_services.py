@@ -42,14 +42,15 @@ class AccountIdentityTests(unittest.TestCase):
         }
         self.assertEqual({item["profile_key"] for item in main.ROYALE_PRIZES}, expected)
 
-    def test_cloud_profile_includes_progression_and_recovery_data(self):
-        expected = {
+    def test_server_owned_progression_and_recovery_data_are_not_client_writable(self):
+        server_owned = {
             "xp", "matches_played", "match_wins", "match_kills",
             "match_history", "royale_history", "mission_matches",
             "mission_claimed_0", "shop_frame_neon",
         }
-        self.assertTrue(expected.issubset(main.PROFILE_FIELDS))
-        self.assertTrue({"coins", "diamonds", "economy_ledger"}.isdisjoint(main.PROFILE_FIELDS))
+        protected_wallet = {"coins", "diamonds", "economy_ledger"}
+        self.assertTrue(server_owned.isdisjoint(main.PROFILE_FIELDS))
+        self.assertTrue(protected_wallet.isdisjoint(main.PROFILE_FIELDS))
 
 
 
