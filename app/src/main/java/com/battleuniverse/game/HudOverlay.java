@@ -20,6 +20,8 @@ import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.HapticFeedbackConstants;
+import android.os.Handler;
+import android.os.Looper;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -81,6 +83,14 @@ public final class HudOverlay extends View {
     private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction, matchResultAction, rewardClaimAction;
     private JSONArray mailMessages=new JSONArray();
     private boolean mailFetchStarted, activeMailClaimed;
+    private final Handler mailRefreshHandler=new Handler(Looper.getMainLooper());
+    private final Runnable mailRefreshRunnable=new Runnable(){
+        @Override public void run(){
+            if(page==MAIL && googleSignedIn && mailFetchAction!=null && !mailFetchStarted)
+                refreshMailInbox();
+            mailRefreshHandler.postDelayed(this,5000L);
+        }
+    };
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
     private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
@@ -868,15 +878,7 @@ public final class HudOverlay extends View {
         eyebrow(c,270,175,"CAIXA DE ENTRADA ONLINE");
         title(c,"CORREIO",270,224);
         subtitle(c,"Mensagens globais e presentes enviados pelo ADM.",270,252);
-        if(googleSignedIn && mailFetchAction!=null && !mailFetchStarted) {
-            mailFetchStarted=true;
-            mailFetchAction.run("",(result,error)->{
-                if(error!=null){mailFetchStarted=false;toast("Correio: "+error);}
-                else {mailMessages=result==null?new JSONArray():result.optJSONArray("messages");
-                    if(mailMessages==null)mailMessages=new JSONArray();
-                    postInvalidate();}
-            });
-        }
+        if(googleSignedIn && mailFetchAction!=null && !mailFetchStarted) refreshMailInbox();
         JSONObject message=mailMessages.length()>0?mailMessages.optJSONObject(mailMessages.length()-1):null;
         if(message!=null) {
             activeMailId=message.optString("id","welcome_gift_01");
@@ -1459,6 +1461,28 @@ public final class HudOverlay extends View {
                                    GameApiAction mailFetch, GameApiAction mailClaim){
         promoRedeemAction=promo;dailyRewardAction=daily;
         mailFetchAction=mailFetch;mailClaimAction=mailClaim;
+        mailRefreshHandler.removeCallbacks(mailRefreshRunnable);
+        mailRefreshHandler.postDelayed(mailRefreshRunnable,5000L);
+    }
+
+    private void refreshMailInbox(){
+        if(mailFetchStarted || !googleSignedIn || mailFetchAction==null) return;
+        mailFetchStarted=true;
+        mailFetchAction.run("",(result,error)->{
+            mailFetchStarted=false;
+            if(error==null && result!=null){
+                JSONArray incoming=result.optJSONArray("messages");
+                if(incoming!=null){
+                    mailMessages=incoming;
+                    postInvalidate();
+                }
+            }
+        });
+    }
+
+    @Override protected void onDetachedFromWindow(){
+        mailRefreshHandler.removeCallbacks(mailRefreshRunnable);
+        super.onDetachedFromWindow();
     }
     public void setShopPurchaseAction(GameApiAction action){shopPurchaseAction=action;}
     public void setMatchResultAction(GameApiAction action){matchResultAction=action;}

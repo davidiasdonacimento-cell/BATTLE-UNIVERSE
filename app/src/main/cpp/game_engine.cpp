@@ -142,7 +142,8 @@ std::array<Vec3,BOT_COUNT> gBotHomes{{
     {87,0.55f,-71},{98,0.55f,-18},{88,0.55f,48},{48,0.55f,94},
     {2,0.55f,91},{-47,0.55f,83},{-96,0.55f,42},{-101,0.55f,-22}
 }};
-struct BuildPiece { Vec3 pos; float yaw=0; int type=0; };
+struct BuildPiece { Vec3 pos; float yaw=0; int type=0; int health=100; };
+constexpr int ICE_WALL_MAX_HEALTH=100;
 std::array<BuildPiece,BUILD_CAPACITY> gBuildPieces{};
 int gBuildCount=0, gBuildType=0, gWood=120, gBuildLimit=12, gResourceCount=5;
 constexpr std::array<Vec3,32> gBuildingPositions{{
@@ -418,12 +419,53 @@ bool worldPositionBlocked(float x,float z,float radius) {
     }
     for(int i=0;i<gBuildCount;++i) {
         const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
-        if(b.type!=0)continue;
+        if(b.type!=0||b.health<=0)continue;
         const float rx=x-b.pos.x,rz=z-b.pos.z,co=std::cos(b.yaw),sn=std::sin(b.yaw);
         const float localX=co*rx-sn*rz,localZ=sn*rx+co*rz;
         if(std::fabs(localX)<1.60f+radius&&std::fabs(localZ)<0.12f+radius)return true;
     }
     return false;
+}
+bool segmentHitsIceWall(Vec3 from,Vec3 to,const BuildPiece& wall,float& hitT) {
+    const float co=std::cos(wall.yaw),sn=std::sin(wall.yaw);
+    auto local=[&](Vec3 p) {
+        const float rx=p.x-wall.pos.x,rz=p.z-wall.pos.z;
+        return Vec3{co*rx-sn*rz,p.y,sn*rx+co*rz};
+    };
+    const Vec3 a=local(from),b=local(to);
+    const float dx=b.x-a.x,dz=b.z-a.z;
+    float enter=0.0f,leave=1.0f;
+    auto clip=[&](float origin,float delta,float low,float high) {
+        if(std::fabs(delta)<0.00001f)return origin>=low&&origin<=high;
+        float t0=(low-origin)/delta,t1=(high-origin)/delta;
+        if(t0>t1)std::swap(t0,t1);
+        enter=std::max(enter,t0);leave=std::min(leave,t1);
+        return enter<=leave;
+    };
+    if(!clip(a.x,dx,-1.60f,1.60f)||!clip(a.z,dz,-0.20f,0.20f))return false;
+    if(leave<0.0f||enter>1.0f)return false;
+    hitT=std::clamp(enter,0.0f,1.0f);
+    return true;
+}
+bool damageIceWallOnPath(Vec3 from,Vec3 to,int damage,Vec3* hitPosition=nullptr) {
+    int nearest=-1;float nearestT=1.01f;
+    for(int i=0;i<gBuildCount;++i) {
+        const BuildPiece& wall=gBuildPieces[static_cast<size_t>(i)];
+        if(wall.type!=0||wall.health<=0)continue;
+        float t=0.0f;
+        if(segmentHitsIceWall(from,to,wall,t)&&t<nearestT){nearest=i;nearestT=t;}
+    }
+    if(nearest<0)return false;
+    BuildPiece& wall=gBuildPieces[static_cast<size_t>(nearest)];
+    wall.health=std::max(0,wall.health-std::max(1,damage));
+    if(hitPosition) {
+        hitPosition->x=from.x+(to.x-from.x)*nearestT;
+        hitPosition->y=from.y+(to.y-from.y)*nearestT;
+        hitPosition->z=from.z+(to.z-from.z)*nearestT;
+    }
+    if(wall.health<=0)setStatus("GELO QUEBRADO • BARREIRA DESTRUÍDA");
+    else setStatus("GELO BLOQUEOU O DISPARO • RESISTÊNCIA "+std::to_string(wall.health)+"%");
+    return true;
 }
 void moveWithCollision(Vec3& actor,float nextX,float nextZ,float radius) {
     if(!worldPositionBlocked(nextX,actor.z,radius))actor.x=nextX;
@@ -856,15 +898,38 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
     drawSphere(localPoint(p,handL.x,handL.y,handL.z,yaw),{0.075f,0.09f,0.07f},skin,yaw);
     drawSphere(localPoint(p,handR.x,handR.y,handR.z,yaw),{0.075f,0.09f,0.07f},skin,yaw);
 
-    if(bot||gWeaponType>=0) {
+    if(bot) {
         drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),
             {0.16f,0.13f,0.42f},{0.045f,0.075f,0.085f},yaw);
         drawCube(localPoint(p,0,1.40f+bob,-0.77f+recoil,yaw),
             {0.10f,0.045f,0.23f},{0.18f,0.30f,0.30f},yaw);
         drawCube(localPoint(p,0,1.31f+bob,-1.03f+recoil,yaw),
             {0.07f,0.075f,0.22f},{0.12f,0.20f,0.22f},yaw);
-        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.22f+recoil,yaw),
-            {0.13f,0.13f,0.13f},{0.45f,0.98f,1.0f},yaw);
+    } else if(gWeaponType>=0&&gWeaponType<4) {
+        const Vec3 receiver{0.075f,0.075f,0.28f};
+        const Vec3 darkMetal{0.055f,0.075f,0.085f};
+        const Vec3 accent=gWeaponType==2?Vec3{0.70f,0.72f,0.74f}:
+            (gWeaponType==3?Vec3{0.16f,0.18f,0.20f}:Vec3{0.12f,0.22f,0.25f});
+        drawCube(localPoint(p,0,1.31f+bob,-0.79f+recoil,yaw),receiver,darkMetal,yaw);
+        if(gWeaponType==0) { // XM8: corpo e coronha alongados, trilho superior.
+            drawCube(localPoint(p,0,1.31f+bob,-0.53f+recoil,yaw),{0.12f,0.09f,0.34f},accent,yaw);
+            drawCube(localPoint(p,0,1.40f+bob,-0.79f+recoil,yaw),{0.08f,0.035f,0.34f},{0.24f,0.31f,0.33f},yaw);
+            drawCube(localPoint(p,0,1.28f+bob,-1.13f+recoil,yaw),{0.055f,0.055f,0.48f},darkMetal,yaw);
+        } else if(gWeaponType==1) { // UMP: corpo compacto e carregador curvo estilizado.
+            drawCube(localPoint(p,0,1.31f+bob,-0.98f+recoil,yaw),{0.10f,0.08f,0.32f},accent,yaw);
+            drawCube(localPoint(p,0,1.17f+bob,-0.78f+recoil,yaw),{0.075f,0.22f,0.13f},darkMetal,yaw);
+            drawCube(localPoint(p,0,1.38f+bob,-0.78f+recoil,yaw),{0.075f,0.035f,0.26f},{0.30f,0.34f,0.36f},yaw);
+        } else if(gWeaponType==2) { // Carapina: cano longo e mira óptica.
+            drawCube(localPoint(p,0,1.30f+bob,-1.16f+recoil,yaw),{0.055f,0.055f,0.72f},accent,yaw);
+            drawCube(localPoint(p,0,1.43f+bob,-0.77f+recoil,yaw),{0.09f,0.10f,0.22f},darkMetal,yaw);
+            drawCylinder(localPoint(p,0,1.49f+bob,-0.83f+recoil,yaw),{0.10f,0.12f,0.22f},{0.16f,0.22f,0.27f},yaw);
+        } else { // Mini Uzi: formato curto e carregador frontal.
+            drawCube(localPoint(p,0,1.31f+bob,-0.99f+recoil,yaw),{0.12f,0.09f,0.24f},accent,yaw);
+            drawCube(localPoint(p,0,1.18f+bob,-0.91f+recoil,yaw),{0.075f,0.22f,0.10f},darkMetal,yaw);
+            drawCube(localPoint(p,0,1.31f+bob,-1.17f+recoil,yaw),{0.045f,0.045f,0.25f},darkMetal,yaw);
+        }
+        if(firing) drawSphere(localPoint(p,0,1.31f+bob,-1.34f+recoil,yaw),
+            {0.16f,0.12f,0.16f},{1.0f,0.72f,0.28f},yaw);
     }
     gCharacterPoseScale=1.0f;
 }
@@ -922,7 +987,7 @@ void drawSafeZone() {
     }
 }
 const char* weaponName() {
-    static const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI"};
+    static const char* names[]={"XM8","UMP","CARAPINA","MINI UZI"};
     if(gWeaponType<0||gWeaponType>3)return "SEM ARMA";
     return names[gWeaponType];
 }
@@ -1158,6 +1223,9 @@ void updateBots(float dt) {
             if(attackDistance>4.0f && attackDistance<58.0f
                     && gBotAttackCooldown[static_cast<size_t>(i)]<=0.0f) {
                 bot.fireFlash=0.32f;
+                Vec3 shotFrom=bot.pos,shotTo=enemy;
+                shotFrom.y+=1.28f;shotTo.y+=1.28f;
+                if(!damageIceWallOnPath(shotFrom,shotTo,8)) {
                 if(targetPlayer) {
                     applyPlayerDamage(1,"ELIMINADO • FIM DA PARTIDA");
                 } else if(targetBot>=0 && gBotActive[static_cast<size_t>(targetBot)]) {
@@ -1173,6 +1241,7 @@ void updateBots(float dt) {
                         } else { gBotActive[victim]=false;++gAiEliminations;
                             gBotRespawn[victim]=gSelectedMode==3?3.0f:0.0f; }
                     }
+                }
                 }
                 gBotAttackCooldown[static_cast<size_t>(i)]=0.95f+static_cast<float>(i%5)*0.15f;
             }
@@ -1228,13 +1297,13 @@ void placeBuildPiece() {
     for(int i=0;i<gBuildCount;++i) {
         float dx=pos.x-gBuildPieces[static_cast<size_t>(i)].pos.x;
         float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;
-        if(dx*dx+dz*dz<2.0f) {setStatus("LOCAL DE CONSTRUÇÃO BLOQUEADO");return;}
+        if(gBuildPieces[static_cast<size_t>(i)].health>0&&dx*dx+dz*dz<2.0f) {setStatus("LOCAL DE CONSTRUÇÃO BLOQUEADO");return;}
     }
     if(worldPositionBlocked(pos.x,pos.z,1.15f)) {
         setStatus("CONSTRUÇÃO BLOQUEADA • NÃO COLOQUE DENTRO DE CASAS OU BARREIRAS");return;
     }
     const int placedType=gBuildType;
-    gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,placedType};
+    gBuildPieces[static_cast<size_t>(gBuildCount)]={pos,gPlayerYaw,placedType,ICE_WALL_MAX_HEALTH};
     ++gBuildCount;gWood-=10;gBuildType=(gBuildType+1)%3;
     const char* names[]={"GELO","PLATAFORMA","RAMPA"};
     std::ostringstream out;out<<names[placedType]<<" CONSTRUÍDA  |  "<<gWood<<" MADEIRA RESTANTE";
@@ -1244,7 +1313,7 @@ void drawBuildPreview() {
     if(!gBuildPreview||gDropState!=3)return;
     const Vec3 pos=buildPreviewPosition();
     bool valid=gWood>=10&&gBuildCount<gBuildLimit&&gBuildCount<BUILD_CAPACITY&&!worldPositionBlocked(pos.x,pos.z,1.15f);
-    for(int i=0;i<gBuildCount;++i){const float dx=pos.x-gBuildPieces[static_cast<size_t>(i)].pos.x;const float dz=pos.z-gBuildPieces[static_cast<size_t>(i)].pos.z;if(dx*dx+dz*dz<2.0f)valid=false;}
+    for(int i=0;i<gBuildCount;++i){const BuildPiece& existing=gBuildPieces[static_cast<size_t>(i)];const float dx=pos.x-existing.pos.x;const float dz=pos.z-existing.pos.z;if(existing.health>0&&dx*dx+dz*dz<2.0f)valid=false;}
     glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     const Vec3 tint=valid?Vec3{0.30f,0.88f,1.0f}:Vec3{1.0f,0.22f,0.18f};
     if(gBuildType==0)drawCube({pos.x,1.85f,pos.z},{3.2f,2.25f,0.24f},tint,gPlayerYaw,0,0,0.38f);
@@ -1256,7 +1325,13 @@ void drawBuildPieces() {
     for(int i=0;i<gBuildCount;++i) {
         const BuildPiece& b=gBuildPieces[static_cast<size_t>(i)];
         if(b.type==0) {
-            drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},{0.20f,0.67f,0.82f},b.yaw);
+            if(b.health<=0)continue;
+            const float strength=static_cast<float>(b.health)/static_cast<float>(ICE_WALL_MAX_HEALTH);
+            const Vec3 iceColor{0.12f+0.08f*strength,0.42f+0.25f*strength,0.62f+0.30f*strength};
+            drawCube({b.pos.x,1.85f,b.pos.z},{3.2f,2.25f,0.24f},iceColor,b.yaw);
+            if(b.health<75)drawSegment(b.pos,b.yaw,{-0.65f,1.95f,0.15f},{-0.10f,1.35f,0.15f},0.035f,{0.035f,0.20f,0.31f});
+            if(b.health<45)drawSegment(b.pos,b.yaw,{0.55f,2.35f,0.15f},{0.02f,1.82f,0.15f},0.040f,{0.035f,0.20f,0.31f});
+            if(b.health<20)drawSegment(b.pos,b.yaw,{-0.15f,1.35f,0.15f},{0.42f,0.85f,0.15f},0.045f,{0.035f,0.20f,0.31f});
             drawCube({b.pos.x-0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.48f,0.88f,0.96f},b.yaw);
             drawCube({b.pos.x+0.9f,1.85f,b.pos.z},{0.12f,2.30f,0.32f},{0.48f,0.88f,0.96f},b.yaw);
         } else if(b.type==1) {
@@ -1280,9 +1355,9 @@ void firePulse() {
     gPlayerYaw=gCameraYaw;
     gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gCameraYaw);
     const float fx=-std::sin(gCameraYaw),fz=-std::cos(gCameraYaw);
-    const float range=gWeaponType==2?42.0f:56.0f;
-    const float tolerance=gWeaponType==1?2.7f:2.0f;
-    const int damage=gWeaponType==2?3:(gWeaponType==1?2:1);
+    const float range=gWeaponType==2?88.0f:56.0f;
+    const float tolerance=gWeaponType==2?1.25f:(gWeaponType==1?2.35f:1.85f);
+    const int damage=gWeaponType==2?4:(gWeaponType==0?2:1);
     float best=range;
     int hitTarget=-1,hitBot=-1;
     if(gSelectedMode==3) {
@@ -1307,6 +1382,15 @@ void firePulse() {
         }
     }
     gPulseHitPosition={gPlayer.x+fx*best,gPlayer.y+1.45f+gJumpHeight,gPlayer.z+fz*best};
+    Vec3 iceImpact{};
+    const bool hitIceWall=damageIceWallOnPath(
+        {gPlayer.x,gPlayer.y+1.30f+gJumpHeight,gPlayer.z},
+        {gPlayer.x+fx*best,gPlayer.y+1.30f+gJumpHeight,gPlayer.z+fz*best},
+        damage*5,&iceImpact);
+    if(hitIceWall) {
+        gPulseHitPosition=iceImpact;
+        hitTarget=-1;hitBot=-1;
+    }
     if(hitTarget>=0) {
         TrainingTarget& target=gTargets[static_cast<size_t>(hitTarget)];
         target.energy=std::max(0,target.energy-damage);
@@ -1348,7 +1432,7 @@ void firePulse() {
             else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining)); }
         }
     }
-    if(hitTarget<0&&hitBot<0) {
+    if(hitTarget<0&&hitBot<0&&!hitIceWall) {
         const char* names[]={"PULSO PLASMA","RAIO ARC","NOVA","MINI UZI"};
         std::ostringstream out;out<<names[std::clamp(gWeaponType,0,3)]<<" • MIRA DA CÂMERA • SEM ALVO NO TRAJETO";
         setStatus(out.str());
@@ -1369,11 +1453,19 @@ void drawTargets(float time) {
         }
     }
     if(gPulseFlash>0.0f) {
-        Vec3 boltColor=gWeaponType==2?Vec3{0.92f,0.46f,0.16f}:
-            (gWeaponType==1?Vec3{0.38f,0.75f,1.0f}:Vec3{0.25f,0.96f,1.0f});
-        drawSegment({0,0,0},0.0f,gPulseStartPosition,gPulseHitPosition,
-            gWeaponType==2?0.19f:0.10f,boltColor);
-        drawSphere(gPulseHitPosition,{0.33f,0.33f,0.33f},boltColor);
+        const Vec3 boltColor=gWeaponType==2?Vec3{1.0f,0.66f,0.24f}:
+            (gWeaponType==1?Vec3{0.34f,0.78f,1.0f}:
+             (gWeaponType==3?Vec3{1.0f,0.78f,0.30f}:Vec3{0.35f,0.96f,0.88f}));
+        const float progress=std::clamp(1.0f-gPulseFlash/0.18f,0.0f,1.0f);
+        const Vec3 projectile{
+            gPulseStartPosition.x+(gPulseHitPosition.x-gPulseStartPosition.x)*progress,
+            gPulseStartPosition.y+(gPulseHitPosition.y-gPulseStartPosition.y)*progress,
+            gPulseStartPosition.z+(gPulseHitPosition.z-gPulseStartPosition.z)*progress
+        };
+        // Efeito curto de projétil, clarão no cano e impacto; sem feixe/linha atravessando a tela.
+        drawSphere(gPulseStartPosition,{0.22f,0.22f,0.22f},boltColor);
+        drawSphere(projectile,{0.13f,0.13f,0.13f},boltColor);
+        drawSphere(gPulseHitPosition,{0.24f,0.24f,0.24f},boltColor);
     }
 }
 void drawTransportPlaneCabin(Vec3 pos,float time) {
@@ -1823,7 +1915,12 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     }
     // Segurar DISPARAR mantém o disparo automático; um toque rápido dispara uma vez.
     if(pulseHeld&&gDropState==3&&!gPlayerDowned&&gPulseCooldown<=0.0f) {
-        firePulse();gPulseCooldown=(gWeaponType==3?0.10f:(gWeaponType==2?0.55f:0.24f));
+        firePulse();
+        // Disparo automático contínuo enquanto o botão estiver pressionado.
+        // Cadência curta por arma, sem bloqueio longo do botão de disparo.
+        const float cadence[4]={0.12f,0.095f,0.42f,0.075f};
+        const int firedType=std::clamp(gWeaponType,0,3);
+        gPulseCooldown=cadence[firedType];
     }
 
     if(gDropState==3) {
@@ -1891,16 +1988,19 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         if(gSpectatorTarget>=0)cameraSubject=gBots[static_cast<size_t>(gSpectatorTarget)].pos;
     }
+    // Durante a queda, a câmera acompanha toda a altitude do jogador.
+    // O antigo fator 0.40 deixava a câmera muito abaixo do personagem no ar.
+    const float cameraVerticalFollow=(gDropState==2)?gJumpHeight:(gJumpHeight*0.40f);
     Vec3 eye{
         cameraSubject.x+std::sin(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)+std::cos(gCameraYaw)*shoulder,
-        cameraSubject.y+(gSpectatorMode?5.0f:cameraHeight)+gJumpHeight*0.40f,
+        cameraSubject.y+(gSpectatorMode?5.0f:cameraHeight)+cameraVerticalFollow,
         cameraSubject.z+std::cos(gCameraYaw)*(gSpectatorMode?10.0f:cameraDistance)-std::sin(gCameraYaw)*shoulder
     };
     const float lookAhead=aimHeld?28.0f:0.0f;
     const float aimVertical=aimHeld?(gCameraPitch-0.36f)*6.0f:0.0f;
     Vec3 target{
         cameraSubject.x-std::sin(gCameraYaw)*(gSpectatorMode?0.0f:lookAhead),
-        cameraSubject.y+(gSpectatorMode?1.1f:(aimHeld?1.38f+aimVertical:1.0f))+gJumpHeight*0.40f,
+        cameraSubject.y+(gSpectatorMode?1.1f:(aimHeld?1.38f+aimVertical:1.0f))+cameraVerticalFollow,
         cameraSubject.z-std::cos(gCameraYaw)*(gSpectatorMode?0.0f:lookAhead)
     };
     Mat4 view=lookAt(eye,target,{0,1,0});
