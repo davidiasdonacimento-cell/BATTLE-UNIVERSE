@@ -295,6 +295,11 @@ class OwnerTargetMailBody(BaseModel):
     recipient_player_id: int | None = Field(default=None, ge=1)
     request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
 
+class OwnerWalletRankBody(BaseModel):
+    diamonds: int | None = Field(default=None, ge=0, le=1000000000)
+    xp: int | None = Field(default=None, ge=0, le=1000000000)
+    rank: str | None = Field(default=None, min_length=1, max_length=24, pattern=r"^[A-Za-z0-9 _-]+$")
+
 class AccountEditBody(BaseModel):
     username: str | None = Field(default=None, min_length=3, max_length=18, pattern=r"^[A-Za-z0-9_]+$")
     character_name: str | None = Field(default=None, min_length=1, max_length=32)
@@ -1514,6 +1519,82 @@ def owner_send_mail(body: OwnerTargetMailBody, db: Session = Depends(db_session)
     recipients = 1 if recipient else (db.scalar(select(func.count(Player.id)).where(Player.created_at <= row.created_at)) or 0)
     return {"sent": True, "replayed": False, "message_id": row.id,
             "recipient_player_id": body.recipient_player_id, "recipients": recipients}
+
+@app.patch("/v1/owner/accounts/{player_id}/economy")
+def owner_edit_economy(player_id: int, body: OwnerWalletRankBody,
+                       db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    if body.diamonds is None and body.xp is None and body.rank is None:
+        raise HTTPException(422, "Informe ao menos um valor para alterar.")
+    changes = {}
+    if body.diamonds is not None:
+        wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player_id).with_for_update())
+        if wallet is None:
+            wallet = PlayerWallet(player_id=player_id, coins=0, diamonds=0)
+            db.add(wallet)
+        changes["diamonds"] = {"from": int(wallet.diamonds), "to": body.diamonds}
+        wallet.diamonds = body.diamonds
+    profile = dict(player.profile or {})
+    if body.xp is not None:
+        changes["xp"] = {"from": int(profile.get("xp", 0) or 0), "to": body.xp}
+        profile["xp"] = body.xp
+    if body.rank is not None:
+        changes["rank"] = {"from": str(profile.get("admin_rank_override", "")), "to": body.rank.strip()}
+        profile["admin_rank_override"] = body.rank.strip()
+    player.profile = profile
+    player.updated_at = datetime.now(timezone.utc)
+    audit(db, owner, "account_economy_update", str(player_id), changes)
+    db.add(player)
+    db.commit()
+    return {"updated": changes, "player_id": player_id}
+
+@app.get("/v1/game/mail/permissions")
+def game_mail_permissions(player: Player = Depends(current_player)):
+    return {"can_send": bool((player.profile or {}).get("mail_sender_enabled", False))}
+
+@app.post("/v1/game/mail/send", status_code=201)
+def privileged_game_mail_send(body: OwnerTargetMailBody, db: Session = Depends(db_session),
+                              player: Player = Depends(current_player)):
+    if not bool((player.profile or {}).get("mail_sender_enabled", False)):
+        raise HTTPException(403, "Esta conta não tem permissão para enviar correios.")
+    if body.recipient_player_id == player.id:
+        raise HTTPException(422, "Escolha outra conta destinatária.")
+    existing = db.scalar(select(GlobalMail).where(GlobalMail.request_id == body.request_id))
+    if existing is not None:
+        return {"sent": True, "replayed": True, "message_id": existing.id}
+    recipient = None
+    if body.recipient_player_id is not None:
+        recipient = db.get(Player, body.recipient_player_id)
+        if recipient is None:
+            raise HTTPException(404, "Conta destinatária não encontrada.")
+        control = db.get(AccountControl, recipient.id)
+        if control and control.state != "active":
+            raise HTTPException(409, "A conta destinatária não está ativa.")
+    row = GlobalMail(request_id=body.request_id, title=body.title.strip(),
+                     body=body.body.strip(), diamonds=body.diamonds,
+                     recipient_player_id=body.recipient_player_id, created_by="player:"+player.username)
+    db.add(row)
+    audit(db, "player:"+player.username, "privileged_mail_sent",
+          str(body.recipient_player_id or "all"), {"title": body.title.strip()})
+    db.commit()
+    return {"sent": True, "message_id": row.id,
+            "recipients": 1 if recipient else (db.scalar(select(func.count(Player.id))) or 0)}
+
+@app.post("/v1/owner/accounts/{player_id}/mail-permission")
+def owner_set_mail_permission(player_id: int, enabled: bool = Query(...),
+                               db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    profile = dict(player.profile or {})
+    profile["mail_sender_enabled"] = bool(enabled)
+    player.profile = profile
+    audit(db, owner, "mail_sender_permission", str(player_id), {"enabled": bool(enabled)})
+    db.add(player)
+    db.commit()
+    return {"player_id": player_id, "mail_sender_enabled": bool(enabled)}
 
 @app.get("/v1/owner/promo-codes")
 def owner_list_promo_codes(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
