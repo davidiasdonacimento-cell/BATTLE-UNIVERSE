@@ -141,7 +141,7 @@ public final class HudOverlay extends View {
         drawLobbyBackdrop(c);
         p.setColor(0xB9071421);c.drawRect(0,0,1280,96,p);
         p.setColor(0x5579DDEB);c.drawRect(0,94,1280,96,p);
-        drawBrand(c);drawProfile(c);drawSidebar(c);drawPage(c);drawTeam(c);if(moreMenuOpen)drawMoreMenu(c);
+        drawBrand(c);drawProfile(c);drawSidebar(c);drawPage(c);if(page==HOME)drawTeam(c);if(moreMenuOpen)drawMoreMenu(c);
     }
     private void drawLobbyBackdrop(Canvas c) {
         p.setShader(new LinearGradient(0,0,1280,720,
