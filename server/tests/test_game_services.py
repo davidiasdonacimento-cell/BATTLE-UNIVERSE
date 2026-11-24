@@ -54,6 +54,40 @@ class AccountIdentityTests(unittest.TestCase):
 
 
 
+class BattleAiPersistentChatTests(unittest.TestCase):
+    def test_chat_tables_are_account_scoped_and_persistent(self):
+        self.assertEqual(main.AiChatConversation.__tablename__, "ai_chat_conversations")
+        self.assertEqual(main.AiChatMessage.__tablename__, "ai_chat_messages")
+        self.assertEqual(main.PlayerAiMemory.__tablename__, "player_ai_memories")
+        self.assertEqual(main.PlayerAiMemory.__table__.primary_key.columns.keys(), ["player_id"])
+        self.assertEqual(
+            next(iter(main.AiChatConversation.__table__.c.player_id.foreign_keys)).target_fullname,
+            "players.id",
+        )
+
+    def test_chat_message_has_idempotency_constraint(self):
+        constraints = [
+            item for item in main.AiChatMessage.__table__.constraints
+            if getattr(item, "name", None) == "uq_ai_chat_client_message"
+        ]
+        self.assertEqual(len(constraints), 1)
+
+    def test_chat_message_rejects_invalid_client_request_id(self):
+        with self.assertRaises(Exception):
+            main.AiChatMessageBody(client_message_id="bad", content="Olá")
+        valid = main.AiChatMessageBody(
+            client_message_id="request-0000000001",
+            content="  Olá, BATTLE AI!  ",
+        )
+        self.assertEqual(valid.content, "Olá, BATTLE AI!")
+
+    def test_shared_memory_is_bounded(self):
+        with self.assertRaises(Exception):
+            main.AiMemoryBody(memory_text="x" * 4001)
+        memory = main.AiMemoryBody(memory_text="  Prefiro respostas objetivas.  ")
+        self.assertEqual(memory.memory_text, "Prefiro respostas objetivas.")
+
+
 class GlobalMailContractTests(unittest.TestCase):
     def test_global_mail_validates_content_and_virtual_gift(self):
         body = main.GlobalMailBody(

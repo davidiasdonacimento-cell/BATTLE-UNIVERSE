@@ -80,11 +80,13 @@ public final class HudOverlay extends View {
         void authenticate(String username, String password, boolean createAccount);
     }
     public interface AiCoachAction { void ask(String question, AccountSyncManager.CoachListener callback); }
+    public interface AiChatAction { void open(); }
     public interface GameApiAction { void run(String value, AccountSyncManager.ApiActionListener callback); }
     private boolean googleConfigured, googleSignedIn;
     private String googleEmail="", googleMessage="Crie uma conta ou entre com nome e senha.";
     private UsernameAccountAction usernameAccountAction;
     private AiCoachAction aiCoachAction;
+    private AiChatAction aiChatAction;
     private GameApiAction promoRedeemAction, dailyRewardAction, mailFetchAction, mailClaimAction, shopPurchaseAction, matchResultAction, rewardClaimAction;
     private JSONArray mailMessages=new JSONArray();
     private boolean mailFetchStarted, activeMailClaimed;
@@ -1619,6 +1621,7 @@ public final class HudOverlay extends View {
     public void setPackAnalyzerAction(Runnable action){packAnalyzerAction=action;}
     public void setOwnerControllerAction(Runnable action){ownerControllerAction=action;}
     public void setAiCoachAction(AiCoachAction action){aiCoachAction=action;}
+    public void setAiChatAction(AiChatAction action){aiChatAction=action;}
     public void setGameApiActions(GameApiAction promo, GameApiAction daily,
                                    GameApiAction mailFetch, GameApiAction mailClaim){
         promoRedeemAction=promo;dailyRewardAction=daily;
@@ -1650,6 +1653,18 @@ public final class HudOverlay extends View {
     public void setMatchResultAction(GameApiAction action){matchResultAction=action;}
     public void setRewardClaimAction(GameApiAction action){rewardClaimAction=action;}
     private void showAiCoachDialog(){
+        if(aiChatAction!=null) {
+            if(!googleSignedIn) {
+                new AlertDialog.Builder(getContext()).setTitle("ENTRE NA SUA CONTA")
+                    .setMessage("O BATTLE AI PRO MAXX salva suas conversas na nuvem da sua conta. Entre ou crie uma conta para continuar.")
+                    .setNegativeButton("CANCELAR",null)
+                    .setPositiveButton("IR PARA CONTA",(d,w)->{page=PROFILE;invalidate();showUsernameAccountDialog();})
+                    .show();
+                return;
+            }
+            aiChatAction.open();
+            return;
+        }
         if(aiCoachAction==null){
             new AlertDialog.Builder(getContext()).setTitle("IA PROFESSORA")
                 .setMessage("O serviço de ajuda ainda está inicializando. Feche esta janela e tente novamente.")

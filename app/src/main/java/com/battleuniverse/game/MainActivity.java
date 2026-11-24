@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.net.Uri;
 import android.view.View;
 import android.view.WindowManager;
@@ -74,6 +75,13 @@ public final class MainActivity extends Activity {
         hud.setAiCoachAction((question,callback)->{
             if(accountSync!=null)accountSync.askCoach(question,callback);
             else callback.onResult(null,"Sistema de contas ainda não inicializado.");
+        });
+        hud.setAiChatAction(()->{
+            if(accountSync==null || !accountSync.isSignedIn()) {
+                Toast.makeText(this,"Entre na sua conta para abrir o BATTLE AI PRO MAXX.",Toast.LENGTH_LONG).show();
+                return;
+            }
+            startActivity(new Intent(MainActivity.this,BattleAiChatActivity.class));
         });
         hud.setGameApiActions((code,callback)->{
             if(accountSync!=null)accountSync.redeemPromoCode(code,callback);
