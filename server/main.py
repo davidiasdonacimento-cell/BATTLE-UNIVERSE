@@ -512,6 +512,7 @@ def _ai_message_payload(message: AiChatMessage) -> dict[str, Any]:
         "id": message.id,
         "role": message.role,
         "content": message.content,
+        "client_message_id": message.client_message_id,
         "created_at": message.created_at.isoformat(),
     }
 
@@ -741,6 +742,8 @@ def send_ai_message(
         for item in history if item.role in ("user", "assistant")
     )
 
+    # Release the database transaction before waiting on the external model API.
+    db.commit()
     answer, model_name = _call_battle_ai(messages, player.id)
     assistant_message = AiChatMessage(
         conversation_id=conversation.id,
