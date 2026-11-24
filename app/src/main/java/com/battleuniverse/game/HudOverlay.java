@@ -68,7 +68,7 @@ public final class HudOverlay extends View {
     private int selectedShirt,selectedBoots,selectedSet;
     private boolean music=true, effects=true, forwarding, resultSpectating;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
-    private boolean onlineMode, tacticalMapVisible, gameAccessAuthorized, ownerAccessDismissed;
+    private boolean onlineMode, tacticalMapVisible, gameAccessAuthorized, ownerAccessPending;
     private GameApiAction gameAccessAction;
     private boolean gameAccessCheckRunning;
     private final Runnable gameAccessRefreshRunnable=new Runnable(){
@@ -79,8 +79,8 @@ public final class HudOverlay extends View {
                     gameAccessCheckRunning=false;
                     if(error==null && result!=null){
                         boolean allowed=result.optBoolean("authorized",false);
-                        if(allowed && !gameAccessAuthorized){ownerAccessDismissed=false;page=OWNER_ACCESS;}
-                        if(!allowed && page==OWNER_ACCESS)page=HOME;
+                        if(allowed && !gameAccessAuthorized){ownerAccessPending=true;if(page!=GAME){page=OWNER_ACCESS;ownerAccessPending=false;}}
+                        if(!allowed){ownerAccessPending=false;if(page==OWNER_ACCESS)page=HOME;}
                         gameAccessAuthorized=allowed;
                         postInvalidate();
                     }
@@ -156,6 +156,7 @@ public final class HudOverlay extends View {
     }
 
     private void drawLobby(Canvas c) {
+        if(ownerAccessPending){page=OWNER_ACCESS;ownerAccessPending=false;}
         drawLobbyBackdrop(c);
         p.setColor(0xB9071421);c.drawRect(0,0,1280,96,p);
         p.setColor(0x5579DDEB);c.drawRect(0,94,1280,96,p);
@@ -1330,7 +1331,7 @@ public final class HudOverlay extends View {
     }
     private void tap(float x,float y){
         if(page==OWNER_ACCESS){
-            if(hit(x,y,470,475,340,68)){page=HOME;ownerAccessDismissed=true;invalidate();}
+            if(hit(x,y,470,475,340,68)){page=HOME;invalidate();}
             return;
         }
         if(System.currentTimeMillis()-lastTap<110)return;lastTap=System.currentTimeMillis();
@@ -1575,7 +1576,7 @@ public final class HudOverlay extends View {
                                        String username, String message) {
         googleConfigured=configured;
         googleSignedIn=signedIn;
-        if(!signedIn){gameAccessAuthorized=false;ownerAccessDismissed=false;if(page==OWNER_ACCESS)page=HOME;}
+        if(!signedIn){gameAccessAuthorized=false;ownerAccessPending=false;if(page==OWNER_ACCESS)page=HOME;}
         googleEmail=username==null?"":username;
         googleMessage=message==null?"":message;
         invalidate();
