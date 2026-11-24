@@ -138,19 +138,6 @@ bool sameBotTeam(int a,int b) {
     if(gSelectedMode!=1&&gSelectedMode!=2) return false;
     return botTeamId(a)==botTeamId(b);
 }
-void publishMatchStats() {
-    int aliveEnemies=0;
-    for(int i=0;i<BOT_COUNT;++i) {
-        if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i)) ++aliveEnemies;
-    }
-    gCollectedSnapshot.store(gCollected,std::memory_order_relaxed);
-    gEliminationsSnapshot.store(gEliminations,std::memory_order_relaxed);
-    gDamageDealtSnapshot.store(gDamageDealt,std::memory_order_relaxed);
-    gDamageTakenSnapshot.store(gDamageTaken,std::memory_order_relaxed);
-    gAiEliminationsSnapshot.store(gAiEliminations,std::memory_order_relaxed);
-    gPlayerHealthSnapshot.store(gPlayerHealth,std::memory_order_relaxed);
-    gAliveEnemiesSnapshot.store(aliveEnemies,std::memory_order_relaxed);
-}
 std::array<BotState,BOT_COUNT> gBots{};
 std::array<float,BOT_COUNT> gBotDropHeight{},gBotDropSpeed{};
 std::array<bool,BOT_COUNT> gBotDropCanopy{};
@@ -187,6 +174,19 @@ std::array<GroundLoot,18> gGroundLoot{};
 int gPlayerHealth=100,gEliminations=0;
 int gDamageDealt=0,gDamageTaken=0,gAiEliminations=0;
 bool gMatchFinished=false,gSpectatorMode=false;
+void publishMatchStats() {
+    int aliveEnemies=0;
+    for(int i=0;i<BOT_COUNT;++i) {
+        if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i)) ++aliveEnemies;
+    }
+    gCollectedSnapshot.store(gCollected,std::memory_order_relaxed);
+    gEliminationsSnapshot.store(gEliminations,std::memory_order_relaxed);
+    gDamageDealtSnapshot.store(gDamageDealt,std::memory_order_relaxed);
+    gDamageTakenSnapshot.store(gDamageTaken,std::memory_order_relaxed);
+    gAiEliminationsSnapshot.store(gAiEliminations,std::memory_order_relaxed);
+    gPlayerHealthSnapshot.store(gPlayerHealth,std::memory_order_relaxed);
+    gAliveEnemiesSnapshot.store(aliveEnemies,std::memory_order_relaxed);
+}
 int gSpectatorTarget=-1;
 bool gPlayerDowned=false,gCrouched=false,gBuildPreview=false;
 float gDownedTimer=0.0f,gReviveProgress=0.0f;
