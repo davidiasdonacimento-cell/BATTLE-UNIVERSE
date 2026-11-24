@@ -1,6 +1,11 @@
 package com.battleuniverse.game;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.text.InputType;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
@@ -8,6 +13,7 @@ import android.util.Base64;
 import android.os.Handler;
 import android.os.Looper;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import org.json.JSONException;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -73,6 +79,137 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         this.sessionPrefs=activity.getSharedPreferences(PREFS,Activity.MODE_PRIVATE);
         this.listener=listener;
         this.username=sessionPrefs.getString("username","");
+    }
+
+
+    private String getOwnerInstallId() {
+        String id=sessionPrefs.getString("owner_install_id","");
+        if(id.matches("[A-Za-z0-9._:-]{16,64}"))return id;
+        id=java.util.UUID.randomUUID().toString();
+        if(!sessionPrefs.edit().putString("owner_install_id",id).commit())
+            throw new IllegalStateException("Não foi possível registrar este aparelho controlador.");
+        return id;
+    }
+    private void clearOwnerToken() {
+        sessionPrefs.edit().remove("owner_token_iv").remove("owner_token_cipher").commit();
+    }
+    private String getOwnerToken() {
+        try {
+            String ivText=sessionPrefs.getString("owner_token_iv","");
+            String cipherText=sessionPrefs.getString("owner_token_cipher","");
+            if(ivText.isEmpty()||cipherText.isEmpty())return "";
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE,getOrCreateKey(),new GCMParameterSpec(128,Base64.decode(ivText,Base64.NO_WRAP)));
+            return new String(cipher.doFinal(Base64.decode(cipherText,Base64.NO_WRAP)),StandardCharsets.UTF_8);
+        } catch(Exception e) { return ""; }
+    }
+    private void saveOwnerToken(String token)throws Exception {
+        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE,getOrCreateKey());
+        byte[] encrypted=cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
+        if(!sessionPrefs.edit().putString("owner_token_iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP))
+            .putString("owner_token_cipher",Base64.encodeToString(encrypted,Base64.NO_WRAP)).commit())
+            throw new Exception("Não foi possível salvar a autorização administrativa.");
+    }
+    public void openOwnerMailController() {
+        String token=getOwnerToken();
+        if(token.isEmpty()) showOwnerPairDialog(); else showOwnerAccountSearch(token);
+    }
+    private void showOwnerPairDialog() {
+        EditText code=new EditText(activity);
+        code.setSingleLine(true);code.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        code.setHint("Código de autorização do proprietário");
+        LinearLayout box=new LinearLayout(activity);box.setPadding(36,12,36,0);box.addView(code);
+        new AlertDialog.Builder(activity).setTitle("BATTLE UNIVERSE • AUTORIZAR CONTROLADOR")
+            .setMessage("Digite aqui o código configurado no Render. Ele será usado apenas para autorizar este aparelho.")
+            .setView(box).setNegativeButton("CANCELAR",null).setPositiveButton("AUTORIZAR",(d,w)->{
+                String value=code.getText().toString().trim();code.setText("");
+                if(value.length()<32){ownerMessage("Código de autorização inválido.");return;}
+                worker.execute(()->{
+                    try {
+                        JSONObject response=api("/v1/owner/pair","POST",null,new JSONObject()
+                            .put("pairing_code",value).put("install_id",getOwnerInstallId())
+                            .put("device_label","Android • BATTLE UNIVERSE"));
+                        String owner=response.optString("access_token","");
+                        if(owner.isEmpty())throw new Exception("O servidor não retornou a sessão administrativa.");
+                        saveOwnerToken(owner);
+                        main.post(()->showOwnerAccountSearch(owner));
+                    } catch(Exception e){main.post(()->ownerMessage("Autorização recusada: "+cleanError(e)));}
+                });
+            }).show();
+    }
+    private void ownerMessage(String message) {
+        if(!activity.isFinishing())new AlertDialog.Builder(activity).setTitle("CONTROLADOR DE CORREIO")
+            .setMessage(message).setPositiveButton("OK",null).show();
+    }
+    private void showOwnerAccountSearch(String token) {
+        EditText search=new EditText(activity);search.setSingleLine(true);
+        search.setHint("Nickname da conta (vazio = listar recentes)");
+        LinearLayout box=new LinearLayout(activity);box.setPadding(36,8,36,0);box.addView(search);
+        new AlertDialog.Builder(activity).setTitle("SELECIONAR CONTA")
+            .setMessage("Pesquise uma conta ou deixe vazio para carregar as contas recentes.")
+            .setView(box).setNegativeButton("CANCELAR",null).setPositiveButton("PESQUISAR",(d,w)->
+                loadOwnerAccounts(token,search.getText().toString().trim())).show();
+    }
+    private void loadOwnerAccounts(String token,String query) {
+        worker.execute(()->{
+            try {
+                String path="/v1/owner/accounts?limit=100";
+                if(query!=null&&!query.isEmpty())path+="&search="+java.net.URLEncoder.encode(query,"UTF-8");
+                JSONObject response=api(path,"GET",token,null);
+                JSONArray accounts=response.optJSONArray("accounts");
+                java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+                java.util.ArrayList<Integer> ids=new java.util.ArrayList<>();
+                labels.add("TODAS AS CONTAS • ENVIO GLOBAL");ids.add(0);
+                if(accounts!=null)for(int i=0;i<accounts.length();i++){
+                    JSONObject a=accounts.optJSONObject(i);if(a==null)continue;
+                    labels.add(a.optString("username","conta")+"  •  ID "+a.optInt("id"));
+                    ids.add(a.optInt("id"));
+                }
+                main.post(()->{
+                    if(labels.size()==1){ownerMessage("Nenhuma conta encontrada.");return;}
+                    String[] items=labels.toArray(new String[0]);
+                    new AlertDialog.Builder(activity).setTitle("DESTINATÁRIO DO CORREIO")
+                        .setItems(items,(dialog,which)->showOwnerCompose(token,ids.get(which),labels.get(which)))
+                        .setNegativeButton("VOLTAR",(dialog,which)->showOwnerAccountSearch(token))
+                        .show();
+                });
+            }catch(Exception e){
+                String message=cleanError(e);
+                main.post(()->{
+                    if(message.contains("401")||message.contains("403")){
+                        clearOwnerToken();
+                        ownerMessage("A autorização deste controlador expirou ou foi revogada. Autorize novamente.");
+                        showOwnerPairDialog();
+                    }else ownerMessage("Falha ao carregar contas: "+message);
+                });
+            }
+        });
+    }
+    private void showOwnerCompose(String token,int recipientId,String recipientLabel) {
+        LinearLayout form=new LinearLayout(activity);form.setOrientation(LinearLayout.VERTICAL);
+        int pad=(int)(16*activity.getResources().getDisplayMetrics().density);form.setPadding(pad,8,pad,0);
+        EditText title=new EditText(activity);title.setSingleLine(true);title.setHint("Título (2 a 80 caracteres)");
+        EditText body=new EditText(activity);body.setHint("Mensagem (2 a 1200 caracteres)");body.setMinLines(3);
+        EditText diamonds=new EditText(activity);diamonds.setSingleLine(true);diamonds.setInputType(InputType.TYPE_CLASS_NUMBER);diamonds.setHint("Diamantes por conta (0 a 100000)");diamonds.setText("0");
+        form.addView(title);form.addView(body);form.addView(diamonds);
+        new AlertDialog.Builder(activity).setTitle("✉ NOVO CORREIO")
+            .setMessage("Destinatário: "+recipientLabel).setView(form)
+            .setNegativeButton("CANCELAR",null).setPositiveButton("ENVIAR",(d,w)->{
+                String t=title.getText().toString().trim(),b=body.getText().toString().trim();
+                String ds=diamonds.getText().toString().trim();
+                int amount;try{amount=Integer.parseInt(ds.isEmpty()?"0":ds);}catch(Exception ex){ownerMessage("Quantidade de diamantes inválida.");return;}
+                if(t.length()<2||t.length()>80||b.length()<2||b.length()>1200||amount<0||amount>100000){ownerMessage("Confira título, mensagem e quantidade de diamantes.");return;}
+                worker.execute(()->{
+                    try {
+                        JSONObject payload=new JSONObject().put("title",t).put("body",b).put("diamonds",amount)
+                            .put("recipient_player_id",recipientId==0?JSONObject.NULL:recipientId)
+                            .put("request_id",java.util.UUID.randomUUID().toString());
+                        JSONObject result=api("/v1/owner/mail/send","POST",token,payload);
+                        main.post(()->ownerMessage("🟢 VERDE — correio enviado. Contas alcançadas: "+result.optInt("recipients",0)));
+                    }catch(Exception ex){main.post(()->ownerMessage("❌ DEU RED! "+cleanError(ex)));}
+                });
+            }).show();
     }
 
     public boolean isConfigured(){return true;}
@@ -322,7 +459,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
 
     public void signOut() {
-        sessionPrefs.edit().remove("token_cipher").remove("token_iv").remove("username").apply();
+        sessionPrefs.edit().remove("token_cipher").remove("token_iv").remove("username").commit();
         username="";
         publish(false,"","Você saiu da conta. O progresso local continua neste aparelho.");
     }
@@ -344,10 +481,20 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             } catch(Exception e) {
                 String msg=cleanError(e);
                 if(msg.contains("401")||msg.toLowerCase().contains("expirada")) {
-                    sessionPrefs.edit().remove("token_cipher").remove("token_iv").remove("username").apply();
+                    sessionPrefs.edit().remove("token_cipher").remove("token_iv").remove("username").commit();
                     username="";
-                    publish(false,"","Sua sessão expirou. Entre novamente.");
-                } else publish(false,"","Não foi possível validar a sessão: "+msg);
+                    publish(false,"","Sua sessão foi recusada pelo servidor. Entre novamente.");
+                } else if(msg.contains("403")) {
+                    // A conta pode estar suspensa ou sem permissão. Preserve o token para
+                    // não apagar o login do jogador por uma resposta de autorização.
+                    // HTTP 403 não significa que o jogador saiu da conta.
+                    // Preserve o estado autenticado e informe a restrição sem expulsá-lo do perfil.
+                    publish(true,username,"Conta conectada, mas o servidor bloqueou esta operação: "+msg);
+                } else {
+                    // Render pode estar iniciando ou a rede pode oscilar. Preserve a sessão.
+                    publish(!getToken().isEmpty(),username,
+                        "Falha temporária ao validar a sessão. Sua conta continua salva neste aparelho. "+msg);
+                }
             } finally { busy=false; }
         });
     }
@@ -444,10 +591,11 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE,getOrCreateKey());
         byte[] encrypted=cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
-        sessionPrefs.edit()
+        boolean saved=sessionPrefs.edit()
             .putString("token_iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP))
             .putString("token_cipher",Base64.encodeToString(encrypted,Base64.NO_WRAP))
-            .putString("username",name).apply();
+            .putString("username",name).commit();
+        if(!saved)throw new Exception("Não foi possível gravar a sessão no armazenamento seguro.");
     }
 
     private String getToken() {
@@ -461,7 +609,8 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             cipher.init(Cipher.DECRYPT_MODE,getOrCreateKey(),new GCMParameterSpec(128,iv));
             return new String(cipher.doFinal(encrypted),StandardCharsets.UTF_8);
         } catch(Exception e) {
-            sessionPrefs.edit().remove("token_iv").remove("token_cipher").remove("username").apply();
+            // Não apague a sessão criptografada por uma falha transitória do Android Keystore.
+            // Uma falha de leitura não deve transformar automaticamente a conta em logout.
             return "";
         }
     }

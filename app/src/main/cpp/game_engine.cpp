@@ -108,6 +108,10 @@ float gPlayerYaw=0, gCameraYaw=0, gCameraPitch=0.36f;
 float gJumpHeight=0, gJumpVelocity=0, gMatchTime=0, gZoneRadius=30;
 float gInteractCooldown=0;
 int gCollected=0, gPreviousButtons=0;
+std::atomic<int> gCollectedSnapshot{0},gEliminationsSnapshot{0};
+std::atomic<int> gDamageDealtSnapshot{0},gDamageTakenSnapshot{0};
+std::atomic<int> gAiEliminationsSnapshot{0},gPlayerHealthSnapshot{100};
+std::atomic<int> gAliveEnemiesSnapshot{0};
 std::array<bool,CRYSTAL_COUNT> gCrystalTaken{};
 struct BotState { Vec3 pos; float yaw=0; float speed=0; float phase=0; float fireFlash=0; bool aiming=false; int targetIndex=-1; bool targetPlayer=false; };
 std::array<int,BOT_COUNT> gBotHealth{};
@@ -170,6 +174,19 @@ std::array<GroundLoot,18> gGroundLoot{};
 int gPlayerHealth=100,gEliminations=0;
 int gDamageDealt=0,gDamageTaken=0,gAiEliminations=0;
 bool gMatchFinished=false,gSpectatorMode=false;
+void publishMatchStats() {
+    int aliveEnemies=0;
+    for(int i=0;i<BOT_COUNT;++i) {
+        if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i)) ++aliveEnemies;
+    }
+    gCollectedSnapshot.store(gCollected,std::memory_order_relaxed);
+    gEliminationsSnapshot.store(gEliminations,std::memory_order_relaxed);
+    gDamageDealtSnapshot.store(gDamageDealt,std::memory_order_relaxed);
+    gDamageTakenSnapshot.store(gDamageTaken,std::memory_order_relaxed);
+    gAiEliminationsSnapshot.store(gAiEliminations,std::memory_order_relaxed);
+    gPlayerHealthSnapshot.store(gPlayerHealth,std::memory_order_relaxed);
+    gAliveEnemiesSnapshot.store(aliveEnemies,std::memory_order_relaxed);
+}
 int gSpectatorTarget=-1;
 bool gPlayerDowned=false,gCrouched=false,gBuildPreview=false;
 float gDownedTimer=0.0f,gReviveProgress=0.0f;
@@ -1615,6 +1632,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gWaypointActive=false;
         setStatus("LOBBY • PRONTO PARA NOVA PARTIDA");
     }
+    publishMatchStats();
     publishFlightInfo();
 }
 extern "C" JNIEXPORT void JNICALL
@@ -1672,6 +1690,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeInit(JNIEnv*,jclass) {
     glClearColor(0.39f,0.69f,0.85f,1.0f);
     if (!initializeGraphics()) { setStatus("ERRO AO INICIAR OPENGL ES 3.0"); return; }
     updateStatus();
+    publishMatchStats();
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeResize(JNIEnv*,jclass,jint width,jint height) {
@@ -2099,6 +2118,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
 
     static float statusTimer=0;statusTimer+=dt;
     if(statusTimer>=0.85f){statusTimer=0;updateStatus();}
+    publishMatchStats();
     publishFlightInfo();
     glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
 }
@@ -2144,8 +2164,13 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeGetStatus(JNIEnv* env,jclass)
 }
 extern "C" JNIEXPORT jintArray JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetMatchStats(JNIEnv* env,jclass) {
-    jint values[5]={gDamageDealt,gDamageTaken,gAiEliminations,0,gPlayerHealth};
-    for(int i=0;i<BOT_COUNT;++i)if(gBotActive[static_cast<size_t>(i)]&&!isAllyBot(i))++values[3];
+    jint values[5]={
+        gDamageDealtSnapshot.load(std::memory_order_relaxed),
+        gDamageTakenSnapshot.load(std::memory_order_relaxed),
+        gAiEliminationsSnapshot.load(std::memory_order_relaxed),
+        gAliveEnemiesSnapshot.load(std::memory_order_relaxed),
+        gPlayerHealthSnapshot.load(std::memory_order_relaxed)
+    };
     jintArray result=env->NewIntArray(5);if(result)env->SetIntArrayRegion(result,0,5,values);return result;
 }
 extern "C" JNIEXPORT void JNICALL
@@ -2160,9 +2185,9 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetSpectator(JNIEnv*,jclass,j
 }
 extern "C" JNIEXPORT jint JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetEliminations(JNIEnv*,jclass) {
-    return static_cast<jint>(gEliminations);
+    return static_cast<jint>(gEliminationsSnapshot.load(std::memory_order_relaxed));
 }
 extern "C" JNIEXPORT jint JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetCollected(JNIEnv*,jclass) {
-    return static_cast<jint>(gCollected);
+    return static_cast<jint>(gCollectedSnapshot.load(std::memory_order_relaxed));
 }

@@ -1,6 +1,8 @@
 package com.battleuniverse.game;
 
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.content.SharedPreferences;
 import android.app.AlertDialog;
 import android.text.InputType;
@@ -28,11 +30,13 @@ import org.json.JSONObject;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17;
+        GAME=11, ROYALE_CATALOG=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
     private static final int[] NAV_PAGES={HOME,CHARACTERS,MODES_PAGE,MAPS_PAGE,INVENTORY,SETTINGS,PROFILE,SHOP,ROYALE,MISSIONS,WARDROBE,EVENTS,FRIENDS,MAIL,ACHIEVEMENTS};
+    private static final String[] MORE_NAV={"MAPAS","MISSÕES","ROUPAS","EVENTOS","EQUIPE","CORREIO","PERFIL","AJUSTES","CONQUISTAS"};
+    private static final int[] MORE_NAV_PAGES={MAPS_PAGE,MISSIONS,WARDROBE,EVENTS,FRIENDS,MAIL,PROFILE,SETTINGS,ACHIEVEMENTS};
     private static final String[] SHOP_NAMES={"MOLDURA NEON","EMBLEMA BLOOB","TÍTULO CAMPEÃO",
         "CAMISA TÁTICA","CAMISA NEON","CAMISA FROST","CAMISA DESERTO",
         "BOTAS COMBATE","BOTAS NEON","BOTAS FROST","BOTAS DOURADAS",
@@ -66,7 +70,8 @@ public final class HudOverlay extends View {
     private final RectF r=new RectF();
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private int selectedShirt,selectedBoots,selectedSet;
-    private boolean music=true, effects=true, forwarding, resultSpectating;
+    private int inventoryCategory,royaleCategory;
+    private boolean music=true, effects=true, forwarding, resultSpectating, moreMenuOpen;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
     private boolean onlineMode, tacticalMapVisible;
     private float scale=1, offsetX, offsetY;
@@ -93,7 +98,7 @@ public final class HudOverlay extends View {
     };
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
-    private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
+    private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction, ownerControllerAction;
     private long toastUntil, lastTap;
     private boolean shopPurchasePending, matchRewardPending;
     private long matchRewardRetryAfter;
@@ -136,38 +141,89 @@ public final class HudOverlay extends View {
     }
 
     private void drawLobby(Canvas c) {
+        if(page==HOME) { drawHomeLobby(c); if(moreMenuOpen)drawMoreMenu(c); return; }
         drawLobbyBackdrop(c);
-        p.setColor(0xB9071421);c.drawRect(0,0,1280,96,p);
+        p.setColor(0xE4071421);c.drawRect(0,0,1280,96,p);
         p.setColor(0x5579DDEB);c.drawRect(0,94,1280,96,p);
-        drawBrand(c);drawProfile(c);drawSidebar(c);drawPage(c);drawTeam(c);
+        drawBrand(c);drawProfile(c);drawSidebar(c);drawPage(c);
+        if(moreMenuOpen)drawMoreMenu(c);
+    }
+    private void drawHomeLobby(Canvas c) {
+        drawLobbyBackdrop(c);
+        p.setShader(new LinearGradient(0,0,0,720,new int[]{0xD908111D,0x22040B13,0x00000000,0xCC050B12},null,Shader.TileMode.CLAMP));
+        c.drawRect(0,0,1280,720,p);p.setShader(null);
+        p.setShader(new LinearGradient(0,0,440,0,new int[]{0xA805101B,0x0005101B},null,Shader.TileMode.CLAMP));
+        c.drawRect(0,96,440,720,p);p.setShader(null);
+        p.setColor(0xB805101B);c.drawRect(0,0,1280,94,p);
+        p.setColor(0x4479DDEB);c.drawRect(0,93,1280,95,p);
+        drawBrand(c);drawProfile(c);
+        String[] tabs={"PERSONAGEM","COFRE","LOJA","ROYALE","EVENTOS","MAIS"};
+        float[] xs={300,420,530,625,735,835};float[] ws={112,96,78,92,92,78};
+        for(int i=0;i<tabs.length;i++){
+            boolean active=(i==0&&page==CHARACTERS)||(i==1&&page==INVENTORY)||(i==2&&page==SHOP)
+                ||(i==3&&(page==ROYALE||page==ROYALE_CATALOG))||(i==4&&page==EVENTS)||(i==5&&moreMenuOpen);
+            panel(c,xs[i],24,ws[i],43,active?0xCC176A75:0x44243B4D,active?0xFF59DDE6:0x557AA0B2,12);
+            text(c,tabs[i],xs[i]+ws[i]*.5f-tabs[i].length()*4.1f,51,8.2f,active?Color.WHITE:0xFFE0EBF0,Typeface.create("sans-serif-black",Typeface.BOLD));
+        }
+        panel(c,30,132,284,204,0xC9081725,0x557AA0B8,18);
+        pill(c,50,151,112,23,"TEMPORADA 03",0x553A6B7C,0xFFB9E8EF);
+        text(c,"OPERAÇÃO",50,210,27,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"DOMINE O CAMPO",50,241,22,0xFFFFC66F,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Entre na partida e avance sua patente.",50,269,10,0xFFD0DEE5,Typeface.DEFAULT);
+        pill(c,50,291,154,29,"VER EVENTOS",0xFF176A75,Color.WHITE);
+        panel(c,30,350,284,112,0xB9081725,0x446D94A8,16);
+        eyebrow(c,50,378,"DESAFIOS");
+        text(c,"MISSÕES DIÁRIAS",50,408,16,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Veja objetivos e recompensas",50,431,10,0xFFB5C8D3,Typeface.DEFAULT);
+        pill(c,50,438,128,19,"ABRIR MISSÕES",0x553A6B7C,0xFFD6E8EF);
+        panel(c,354,350,586,112,0xD0091826,0xFF43C9D8,16);
+        pill(c,376,367,132,22,"ASSISTENTE IA",0x553A6B7C,0xFF9BEAF0);
+        text(c,"IA PROFESSORA",376,416,22,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Tire dúvidas sobre controles, mapas e partidas.",376,439,10,0xFFB9CDD8,Typeface.DEFAULT);
+        pill(c,758,389,158,34,"ABRIR ASSISTENTE",0xFF176A75,Color.WHITE);
+        long xp=prefs.getLong("xp",0L);
+        panel(c,970,132,280,106,0xA9081725,0x447AA0B8,16);
+        eyebrow(c,992,158,"SUA PATENTE");
+        text(c,rankForXp(xp),992,194,23,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"NÍVEL "+String.format(Locale.US,"%02d",(int)Math.min(30L,1L+xp/500L)),992,216,10,0xFFFFD17A,Typeface.DEFAULT_BOLD);
+        panel(c,970,252,280,74,0x99081725,0x336D94A8,14);
+        text(c,"OPERADOR",990,279,9,0xFF70DDE8,Typeface.DEFAULT_BOLD);
+        text(c,CHARACTER_NAMES[character],990,306,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        pill(c,1122,282,106,25,"EDITAR",0x553A6B7C,0xFFE2F2F6);
+        p.setShader(new LinearGradient(0,520,0,720,new int[]{0x00040A11,0xE8050C15},null,Shader.TileMode.CLAMP));
+        c.drawRect(0,520,1280,720,p);p.setShader(null);
+        panel(c,30,548,306,112,0xD0091826,0x557AA0B8,17);
+        eyebrow(c,52,576,"MODO DE JOGO");
+        text(c,MODE_NAMES[mode],52,611,21,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,mode==0?"30 PARTICIPANTES  •  SOLO":mode==1?"ESQUADRÃO  •  DUPLA":mode==2?"ESQUADRÃO  •  QUARTETO":"TREINAMENTO",52,638,9,0xFF9FB9C8,Typeface.DEFAULT_BOLD);
+        chevron(c,306,608);
+        panel(c,354,548,278,112,0xD0091826,0x557AA0B8,17);
+        eyebrow(c,376,576,"MAPA");
+        text(c,MAP_NAMES[map],376,611,21,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,MAP_DETAILS[map],376,638,9,0xFF9FB9C8,Typeface.DEFAULT);
+        chevron(c,602,608);
+        panel(c,650,548,230,112,0xB9081725,0x557AA0B8,17);
+        text(c,"◆ MENU ROYALE",672,582,14,0xFFFFD17A,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Resgate direto de itens",672,608,10,0xFFD4E1E8,Typeface.DEFAULT);
+        pill(c,672,624,146,25,"VER RECOMPENSAS",0xFF6B4A1F,0xFFFFE5B0);
+        gradientButton(c,904,548,346,112,"JOGAR","ENTRAR NA PARTIDA",0xFFFFB85F,0xFFEA633B);
+        text(c,"▶",929,614,25,0xFFFFF7EC,Typeface.DEFAULT_BOLD);
+        if(onlineMode)pill(c,1070,627,158,20,"ONLINE INDISPONÍVEL",0xFF7A4D25,Color.WHITE);
+        else pill(c,1070,627,158,20,"BATALHA OFFLINE",0xFF176A75,Color.WHITE);
     }
     private void drawLobbyBackdrop(Canvas c) {
-        p.setShader(new LinearGradient(0,0,1280,720,
-            new int[]{0x88071521,0x88102A3B,0x880A1825},null,Shader.TileMode.CLAMP));
+        // O cenário 3D do GameSurfaceView é o fundo real do lobby.
+        // Aqui ficam apenas vinheta e iluminação para legibilidade dos menus.
+        p.setShader(new LinearGradient(0,0,1280,720,new int[]{0x55030A13,0x00000000,0x55030A13},null,Shader.TileMode.CLAMP));
         c.drawRect(0,0,1280,720,p);p.setShader(null);
-        p.setColor(0x88102D3A);c.drawOval(680,300,1360,920,p);
-        p.setColor(0x77123A45);c.drawOval(820,390,1410,850,p);
-        p.setColor(0x66173D46);c.drawOval(920,450,1370,800,p);
-        p.setColor(0x4429BFD0);c.drawCircle(1070,250,145,p);
-        p.setColor(0x2227B7D2);c.drawCircle(1070,250,190,p);
-        Path ridge=new Path();ridge.moveTo(0,520);ridge.lineTo(190,430);ridge.lineTo(330,488);
-        ridge.lineTo(510,382);ridge.lineTo(690,470);ridge.lineTo(880,398);
-        ridge.lineTo(1040,468);ridge.lineTo(1280,350);ridge.lineTo(1280,720);
-        ridge.lineTo(0,720);ridge.close();p.setColor(0x990B2430);c.drawPath(ridge,p);
-        p.setColor(0x4439D7E8);p.setStrokeWidth(1.2f);
-        for(int i=0;i<7;i++)c.drawLine(0,570+i*22,1280,500+i*22,p);
-        for(int i=0;i<34;i++) {
-            float x=(i*173)%1280,y=170+(i*97)%380;
-            p.setColor(i%3==0?0xAA70DDE6:0x557CA7B9);c.drawCircle(x,y,i%4==0?1.8f:1.0f,p);
-        }
-        p.setColor(0x3322D7E8);c.drawRect(0,96,1280,98,p);
+        p.setShader(new LinearGradient(0,0,0,720,new int[]{0x55030A13,0x00000000,0x88030A13},null,Shader.TileMode.CLAMP));
+        c.drawRect(0,0,1280,720,p);p.setShader(null);
     }
 
     private void drawBrand(Canvas c) {
-        text(c,"BATTLE",34,47,30,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"UNIVERSE",151,47,30,0xFF49D9E8,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"MUNDO  •  SOBREVIVÊNCIA  •  AVENTURA",36,68,10,0xFF9AB7C9,Typeface.DEFAULT_BOLD);
-        pill(c,272,25,128,29,"LOBBY PRINCIPAL",0x332FD2E5,0xFF9BEAF4);
+        text(c,"BATTLE",34,48,29,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"UNIVERSE",150,48,29,0xFFFFC36A,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"BATTLE ROYALE  •  SEASON 03",36,69,9,0xFFB9C8D3,Typeface.DEFAULT_BOLD);
     }
     private void drawProfile(Canvas c) {
         long xp=prefs.getLong("xp",0L);
@@ -185,18 +241,39 @@ public final class HudOverlay extends View {
         return NumberFormat.getIntegerInstance(new Locale("pt","BR")).format(value);
     }
     private void drawSidebar(Canvas c) {
-        // Navegação vertical de lobby mobile: libera o topo e mantém as telas dentro do jogo.
         panel(c,18,104,214,562,0xD90A1B2B,0x446CA4B7,18);
-        text(c,"CENTRAL",38,130,9,0xFF79DCE7,Typeface.create("sans-serif-black",Typeface.BOLD));
-        for(int i=0;i<NAV.length;i++) {
-            float y=143+i*33.2f;boolean active=page==NAV_PAGES[i];boolean royale=NAV_PAGES[i]==ROYALE;
-            panel(c,27,y,196,29,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
-                    active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),10);
-            drawNavIcon(c,i,48,y+14.5f,active||royale);
-            text(c,NAV[i],67,y+19.5f,royale?8.2f:7.7f,active||royale?Color.WHITE:0xFFB8CBD7,
+        text(c,"NAVEGAÇÃO",38,132,9,0xFF79DCE7,Typeface.create("sans-serif-black",Typeface.BOLD));
+        String[] labels={"INÍCIO","JOGAR","PERSONAGENS","COLEÇÃO","LOJA","ROYALE"};
+        int[] pages={HOME,MODES_PAGE,CHARACTERS,INVENTORY,SHOP,ROYALE};
+        for(int i=0;i<labels.length;i++) {
+            float y=150+i*49f;boolean active=page==pages[i]||(pages[i]==ROYALE&&page==ROYALE_CATALOG);
+            boolean royale=pages[i]==ROYALE;
+            panel(c,28,y,194,41,active?(royale?0xFFE1A849:0xDD136276):(royale?0x664B3517:0x22243B4D),
+                active?(royale?0xFFFFD98A:0xFF35D6E5):(royale?0x99E6B85D:0x225A8297),12);
+            drawNavIcon(c,i,50,y+20.5f,active||royale);
+            text(c,labels[i],72,y+25,9.5f,active||royale?Color.WHITE:0xFFB8CBD7,
                 Typeface.create(active||royale?"sans-serif-black":"sans-serif-medium",Typeface.NORMAL));
         }
-        text(c,"BATTLE ROYALE",38,655,8,0xFF7895A6,Typeface.DEFAULT_BOLD);
+        panel(c,28,462,194,46,moreMenuOpen?0xFF176A75:0x33243B4D,
+            moreMenuOpen?0xFF65E5ED:0x557AA0B2,12);
+        text(c,moreMenuOpen?"FECHAR MENU":"MAIS OPÇÕES",54,490,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"Organizado por categoria",38,642,8,0xFF7895A6,Typeface.DEFAULT);
+    }
+    private void drawMoreMenu(Canvas c) {
+        panel(c,850,104,398,562,0xF00A1B2B,0x8879DDEB,20);
+        text(c,"CENTRAL DE RECURSOS",874,139,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Escolha uma área",874,160,9,0xFF9CB9C8,Typeface.DEFAULT);
+        pill(c,1132,116,94,27,"FECHAR",0x553B6172,0xFFE2F3F6);
+        for(int i=0;i<MORE_NAV.length;i++) {
+            int col=i%3,row=i/3;float x=870+col*120f,y=180+row*145f;
+            boolean active=page==MORE_NAV_PAGES[i];
+            panel(c,x,y,110,124,active?0xCC176A75:0xAA193040,
+                active?0xFF59DDE6:0x44618B9B,14);
+            circle(c,x+55,y+38,19,active?0xFF1B8994:0xFF24485A,0xFF70DCE6);
+            text(c,""+(i+1),x+51,y+43,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,MORE_NAV[i],x+12,y+83,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"ABRIR",x+12,y+103,7,0xFF9DBBC8,Typeface.DEFAULT_BOLD);
+        }
     }
     private void drawNavIcon(Canvas c,int i,float x,float y,boolean active){
         p.setColor(active?0xFFE9FCFF:0xFF8AA8B8);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.2f);
@@ -214,7 +291,7 @@ public final class HudOverlay extends View {
         else if(page==INVENTORY)drawInventory(c); else if(page==SETTINGS)drawSettings(c);
         else if(page==PROFILE)drawProfilePage(c); else if(page==SHOP)drawShopPage(c);
         else if(page==ROYALE)drawRoyalePage(c);
-        else if(page==ROYALE_SPIN)drawRoyaleSpinPage(c);
+        else if(page==ROYALE_CATALOG)drawRoyaleCatalogPage(c);
         else if(page==MISSIONS)drawMissionsPage(c);
         else if(page==WARDROBE)drawWardrobePage(c);
         else if(page==EVENTS)drawEventsPage(c);
@@ -346,19 +423,45 @@ public final class HudOverlay extends View {
                     active?0xFF176A75:0x553B6172,active?Color.WHITE:0xFFBBD0D9);
         }
     }
+    private int[] itemsForCategory(int category) {
+        if(category==1) return new int[]{3,4,5,6,7,8,9,10,11,12,13,14};
+        if(category==2) return new int[]{0,1,2};
+        return new int[]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+    }
     private void drawInventory(Canvas c){
-        eyebrow(c,270,175,"COLEÇÃO DO OPERADOR");title(c,"INVENTÁRIO",270,224);
-        subtitle(c,"Camisas, botas, conjuntos e itens de perfil já adquiridos.",270,252);
-        panel(c,270,270,570,58,0xAE193040,0x335D8495,15);
-        text(c,"◆ "+formatDiamonds(prefs.getLong("diamonds",0L))+" DIAMANTES",292,306,17,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<SHOP_NAMES.length;i++) {
-            int col=i%3,row=i/3;float x=270+col*192f,y=340+row*57f;
+        eyebrow(c,270,175,"COFRE DO OPERADOR • ITENS DA CONTA");
+        title(c,"🎒 COFRE",270,224);
+        subtitle(c,"Organize roupas, acessórios, paraquedas e coleções em categorias.",270,252);
+        panel(c,270,266,570,48,0xAE193040,0x335D8495,14);
+        text(c,"◆ "+formatDiamonds(prefs.getLong("diamonds",0L))+" DIAMANTES",290,296,15,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        String[] tabs={"✨ TODOS","👕 ROUPAS","🪂 PARAQUEDAS","🏅 COLEÇÕES","🎖 PERFIL"};
+        float[] tx={270,385,500,615,730};
+        float[] tw={108,108,108,108,110};
+        for(int i=0;i<tabs.length;i++){
+            boolean active=inventoryCategory==i;
+            panel(c,tx[i],324,tw[i],34,active?0xCC176A75:0x66304455,
+                active?0xFF59DDE6:0x445D8495,9);
+            text(c,tabs[i],tx[i]+7,346,7.2f,active?Color.WHITE:0xFFB8CBD7,Typeface.DEFAULT_BOLD);
+        }
+        if(inventoryCategory==2||inventoryCategory==3){
+            panel(c,270,374,570,178,0xAA193040,0x557AA9BC,18);
+            String heading=inventoryCategory==2?"🪂 PARAQUEDAS":"🏅 COLEÇÕES";
+            text(c,heading,296,420,22,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,inventoryCategory==2?"A categoria está reservada para os modelos de paraquedas.":
+                "A categoria está reservada para coleções e conjuntos sazonais.",296,455,11,0xFFB8CBD7,Typeface.DEFAULT);
+            pill(c,296,480,148,27,"CONTEÚDO EM PREPARAÇÃO",0x553B6172,0xFFFFD27A);
+            text(c,"Nenhum item é exibido como adquirido antes de existir no jogo.",296,526,9,0xFF8FAAB8,Typeface.DEFAULT);
+            return;
+        }
+        int[] items=itemsForCategory(inventoryCategory==4?2:inventoryCategory);
+        for(int n=0;n<items.length;n++){
+            int i=items[n],col=n%3,row=n/3;float x=270+col*192f,y=374+row*58f;
             boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
-            panel(c,x,y,174,50,owned?0xB51A4650:0x771A3040,
+            panel(c,x,y,174,51,owned?0xB51A4650:0x771A3040,
                 owned?0xFF4BD4C9:0x335D8495,12);
             circle(c,x+24,y+24,14,SHOP_COLORS[i],0xFFB5D6E1);
             text(c,SHOP_NAMES[i],x+45,y+21,8,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,owned?"DESBLOQUEADO":"BLOQUEADO",x+45,y+37,7,
+            text(c,owned?"🟢 DESBLOQUEADO":"🔒 BLOQUEADO",x+45,y+38,7,
                 owned?0xFF83DCD5:0xFF91A9B7,Typeface.DEFAULT_BOLD);
         }
     }
@@ -424,8 +527,10 @@ public final class HudOverlay extends View {
         panel(c,558,558,282,70,0xA91A3040,0x335D8495,16);
         text(c,"EDITAR NICKNAME",582,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Nome do seu perfil",582,607,10,0xFF9EB6C4,Typeface.DEFAULT);
-        panel(c,270,642,570,42,0xA91A3040,0xFF58DDE6,12);
-        text(c,"ANALISAR / REUTILIZAR PACOTE ZIP OU BUPACK",292,669,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        panel(c,270,642,270,42,0xCC176A75,0xFF58DDE6,12);
+        text(c,"✉ CONTROLADOR DE CORREIO",286,669,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        panel(c,558,642,282,42,0xA91A3040,0xFF58DDE6,12);
+        text(c,"ANALISAR PACOTE ZIP / BUPACK",572,669,9,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Use a mesma conta em APKs futuros para recuperar o progresso.",272,704,9,0xFF8FAAB8,Typeface.DEFAULT);
         if(googleSignedIn)pill(c,690,632,150,25,"SAIR DA CONTA",0x553B6172,0xFFBBD0D9);
     }
@@ -490,20 +595,20 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyalePage(Canvas c) {
-        eyebrow(c,270,175,"TEMPORADA 02 • PROGRESSÃO DA CONTA");
-        title(c,"MENU ROYALE",270,224);
-        pill(c,674,184,166,32,"ITENS FIXOS",0xFF176A75,0xFFBDF7F1);
-        subtitle(c,"Passe de temporada e cosméticos com preços definidos.",270,252);
+        eyebrow(c,270,175,"CENTRAL ROYALE • RECOMPENSAS DIRETAS");
+        title(c,"👑 MENU ROYALE",270,224);
+        pill(c,674,184,166,32,"CATÁLOGO COMPLETO",0xFF176A75,0xFFBDF7F1);
+        subtitle(c,"Passe, marcos de temporada e resgate individual de itens com preço definido.",270,252);
         long xp=prefs.getLong("xp",0L);
         int level=(int)Math.min(30L,1L+xp/500L),progress=(int)(xp%500L);
         panel(c,270,276,570,128,0xAE193040,0x557AA9BC,17);
-        eyebrow(c,292,305,"PASSE DE TEMPORADA");
+        eyebrow(c,292,305,"🎟 PASSE DE TEMPORADA 03");
         text(c,"NÍVEL "+level+" / 30",292,345,27,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,xp+" XP TOTAL  •  "+progress+" / 500 XP",292,369,10,0xFF9EB6C4,Typeface.DEFAULT_BOLD);
         p.setColor(0xFF233F4F);r.set(292,382,818,394);c.drawRoundRect(r,7,7,p);
         p.setColor(0xFF55DDE7);r.set(292,382,292+526*(progress/500f),394);c.drawRoundRect(r,7,7,p);
         panel(c,270,414,570,48,0xA91A3040,0x335D8495,13);
-        text(c,"BÔNUS DIÁRIO  •  +100 DIAMANTES",290,444,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"🎁 BÔNUS DIÁRIO  •  +100 DIAMANTES",290,444,10,Color.WHITE,Typeface.DEFAULT_BOLD);
         boolean dailyClaimed=prefs.getLong("daily_reward_day",-1L)==(System.currentTimeMillis()/86400000L);
         pill(c,681,423,138,30,dailyClaimed?"COLETADO":"RESGATAR",
             dailyClaimed?0xFF176A75:0xFF345D79,Color.WHITE);
@@ -513,35 +618,58 @@ public final class HudOverlay extends View {
             boolean unlocked=level>=ROYALE_LEVELS[i];
             panel(c,x,y,174,78,claimed?0xB51A4650:unlocked?0xB1264A55:0x771A3040,
                 claimed?0xFF4BD4C9:unlocked?0xFF51C9C4:0x335D8495,13);
-            text(c,"MARCO "+(i+1),x+12,y+20,8,0xFF71DDE5,Typeface.DEFAULT_BOLD);
+            text(c,"🏅 MARCO "+(i+1),x+12,y+20,8,0xFF71DDE5,Typeface.DEFAULT_BOLD);
             text(c,"NÍVEL "+ROYALE_LEVELS[i]+"  •  +"+ROYALE_REWARDS[i]+" ◆",x+12,y+40,9,Color.WHITE,Typeface.DEFAULT_BOLD);
             pill(c,x+12,y+48,148,23,claimed?"RESGATADO":unlocked?"RESGATAR":"BLOQUEADO",
                 claimed?0xFF176A75:unlocked?0xFF345D79:0x553B6172,Color.WHITE);
         }
-        text(c,"XP, missões e recompensas validados pela conta online.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
+        panel(c,862,276,350,370,0xB8193040,0x557AA9BC,18);
+        text(c,"🛍 LOJA DE RECOMPENSAS",886,309,15,0xFFFFD27A,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Escolha uma categoria para abrir os itens fixos.",886,332,9,0xFFB8CBD7,Typeface.DEFAULT);
+        String[] labels={"👕 ROUPAS E CAMISAS","🥾 BOTAS","🧥 CONJUNTOS","🎖 MOLDURAS E EMBLEMAS","🏆 TÍTULOS","🎁 TODOS OS ITENS"};
+        for(int i=0;i<labels.length;i++){
+            int col=i%2,row=i/2;float x=882+col*160f,y=354+row*88f;
+            panel(c,x,y,150,72,0xAA1A3545,0x446D94A8,12);
+            text(c,labels[i],x+10,y+29,8.2f,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,"VER ITENS  ›",x+10,y+52,7.5f,0xFF70DDE8,Typeface.DEFAULT_BOLD);
+        }
+        text(c,"O catálogo só libera itens aceitos pelo servidor da conta.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
-    private void drawRoyaleSpinPage(Canvas c) {
-        eyebrow(c,270,175,"ITENS ROYALE • PREÇOS FIXOS");
-        title(c,"RECOMPENSAS ROYALE",270,224);
-        pill(c,674,184,166,32,"VOLTAR AO PASSE",0x553B6172,0xFFD7E6ED);
-        subtitle(c,"Escolha diretamente o cosmético desejado na loja.",270,252);
-        String[] items={"CAMISA NEON","BOTAS NEON","CONJUNTO AURORA","CONJUNTO ORBITAL","CONJUNTO DESERTO"};
-        String[] prices={"800 ◆","600 ◆","1800 ◆","2500 ◆","1900 ◆"};
-        int[] colors={0xFF8D42D7,0xFF2FAFC4,0xFF55B7B8,0xFF6B83C4,0xFFB87843};
-        for(int i=0;i<items.length;i++){
-            int col=i%3,row=i/3;float x=270+col*192f,y=300+row*92f;
-            panel(c,x,y,174,78,0xB51A3040,0x557AA9BC,13);
-            circle(c,x+25,y+28,15,colors[i],0xFFB5D6E1);
-            text(c,items[i],x+48,y+27,8.5f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,"PREÇO DEFINIDO",x+14,y+54,7,0xFF9DB6C5,Typeface.DEFAULT_BOLD);
-            text(c,prices[i],x+14,y+72,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+    private void drawRoyaleCatalogPage(Canvas c) {
+        eyebrow(c,270,175,"TROCA DIRETA • ITENS COM PREÇO DEFINIDO");
+        title(c,"🎁 CATÁLOGO ROYALE",270,224);
+        pill(c,674,184,166,32,"VOLTAR AO ROYALE",0x553B6172,0xFFD7E6ED);
+        subtitle(c,"Escolha uma categoria e resgate o item individualmente. Sem roleta ou sorteio.",270,252);
+        panel(c,270,264,942,43,0xA91A3040,0x557AA9BC,13);
+        text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),290,291,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        String[] tabs={"TODOS","👕 ROUPAS","🥾 BOTAS","🧥 CONJUNTOS","🎖 PERFIL"};
+        float[] tx={690,790,890,990,1090};float[] tw={88,90,90,92,106};
+        for(int i=0;i<tabs.length;i++){
+            boolean active=royaleCategory==i;
+            panel(c,tx[i],270,tw[i],29,active?0xCC176A75:0x66304455,
+                active?0xFF59DDE6:0x445D8495,8);
+            text(c,tabs[i],tx[i]+8,289,7.2f,active?Color.WHITE:0xFFB8CBD7,Typeface.DEFAULT_BOLD);
         }
-        panel(c,270,510,570,126,0xA91A3040,0x557AA9BC,16);
-        gradientButton(c,288,536,220,68,"ABRIR LOJA","COMPRAR ITEM ESCOLHIDO",0xFF126C72,0xFF164C70);
-        text(c,"COMPRAS DIRETAS • SALDO DA CONTA",530,562,9,0xFF69DCE5,Typeface.DEFAULT_BOLD);
-        text(c,"Cada cosmético tem seu próprio preço.",530,590,10,Color.WHITE,Typeface.DEFAULT);
+        int[] items=royaleCategory==1?new int[]{3,4,5,6}:
+            royaleCategory==2?new int[]{7,8,9,10}:
+            royaleCategory==3?new int[]{11,12,13,14}:
+            royaleCategory==4?new int[]{0,1,2}:
+            new int[]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+        for(int n=0;n<items.length;n++){
+            int i=items[n],col=n%4,row=n/4;float x=270+col*238f,y=318+row*78f;
+            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            panel(c,x,y,220,68,owned?0xB51A4650:0xA91A3040,
+                owned?0xFF4BD4C9:0x557AA9BC,12);
+            circle(c,x+25,y+28,14,SHOP_COLORS[i],0xFFB5D6E1);
+            String name=SHOP_NAMES[i].length()>19?SHOP_NAMES[i].substring(0,19):SHOP_NAMES[i];
+            text(c,name,x+49,y+25,8.1f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,owned?"JÁ ADQUIRIDO":"◆ "+SHOP_PRICES[i]+" DIAMANTES",x+49,y+45,7.2f,owned?0xFF83DCD5:0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            pill(c,x+150,y+39,58,20,owned?"OK":"PEGAR",owned?0xFF176A75:0xFF345D79,Color.WHITE);
+        }
+        text(c,"Preços fixos • compra confirmada pela API • saldo e propriedade sincronizados.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
+
     private void ensureStarterWardrobe() {
         if(prefs.getBoolean("wardrobe_starter_v2_granted",false)) return;
         SharedPreferences.Editor editor=prefs.edit()
@@ -1297,33 +1425,49 @@ public final class HudOverlay extends View {
     private void tap(float x,float y){
         if(System.currentTimeMillis()-lastTap<110)return;lastTap=System.currentTimeMillis();
         if(hapticsEnabled)performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-        if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
-        for(int i=0;i<NAV.length;i++){
-            float ny=143+i*33.2f;
-            if(hit(x,y,27,ny,196,29)){page=NAV_PAGES[i];return;}
-        }
-        if(page==HOME){
-            if(hit(x,y,913,628,300,24)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
-            if(hit(x,y,270,442,164,24)){
-                onlineMode=false;prefs.edit().putBoolean("online_mode",false).apply();
-                toast("MODO OFFLINE SELECIONADO.");return;
-            }
-            if(hit(x,y,442,442,200,24)){
-                onlineMode=true;prefs.edit().putBoolean("online_mode",true).apply();
-                toast("ONLINE AINDA PRECISA DE UM SERVIDOR DE PARTIDAS.");return;
-            }
-            if(hit(x,y,270,328,275,112)){page=MODES_PAGE;return;}
-            if(hit(x,y,558,328,292,112)){page=MAPS_PAGE;return;}
-            if(hit(x,y,270,472,342,78)){
-                if(onlineMode){
-                    toast("ONLINE INDISPONÍVEL: SERVIDOR MULTIPLAYER AINDA NÃO CONFIGURADO. SELECIONE OFFLINE.");
+        if(moreMenuOpen) {
+            if(hit(x,y,1132,116,94,27)){moreMenuOpen=false;return;}
+            for(int i=0;i<MORE_NAV.length;i++){
+                int col=i%3,row=i/3;float mx=870+col*120f,my=180+row*145f;
+                if(hit(x,y,mx,my,110,124)){
+                    page=MORE_NAV_PAGES[i];moreMenuOpen=false;
+                    if(page==MAIL)refreshMailInbox();
                     return;
                 }
+            }
+            moreMenuOpen=false;return;
+        }
+        if(page==HOME) {
+            if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
+            if(hit(x,y,30,132,284,204)){page=EVENTS;return;}
+            if(hit(x,y,30,350,284,112)){page=MISSIONS;return;}
+            if(hit(x,y,354,350,586,112)){showAiCoachDialog();return;}
+            if(hit(x,y,300,24,112,43)){page=CHARACTERS;return;}
+            if(hit(x,y,420,24,96,43)){page=INVENTORY;return;}
+            if(hit(x,y,530,24,78,43)){page=SHOP;return;}
+            if(hit(x,y,625,24,92,43)){page=ROYALE;return;}
+            if(hit(x,y,735,24,92,43)){page=EVENTS;return;}
+            if(hit(x,y,835,24,78,43)){moreMenuOpen=true;return;}
+            if(hit(x,y,1122,282,106,25)){page=CHARACTERS;return;}
+            if(hit(x,y,30,548,306,112)){page=MODES_PAGE;return;}
+            if(hit(x,y,354,548,278,112)){page=MAPS_PAGE;return;}
+            if(hit(x,y,650,548,230,112)){page=ROYALE_CATALOG;return;}
+            if(hit(x,y,904,548,346,112)){
+                if(onlineMode){toast("ONLINE INDISPONÍVEL: SERVIDOR MULTIPLAYER AINDA NÃO CONFIGURADO. SELECIONE OFFLINE.");return;}
                 page=PREMATCH;return;
             }
-            if(hit(x,y,628,472,222,78)){page=ROYALE;return;}
-            if(hit(x,y,270,608,580,58)){showAiCoachDialog();return;}
-        }else if(page==PREMATCH){
+            if(hit(x,y,30,10,240,85)){page=HOME;return;}
+            return;
+        }
+        if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
+        if(hit(x,y,30,10,240,85)){page=HOME;return;}
+        int[] primaryPages={HOME,MODES_PAGE,CHARACTERS,INVENTORY,SHOP,ROYALE};
+        for(int i=0;i<primaryPages.length;i++){
+            float ny=150+i*49f;
+            if(hit(x,y,28,ny,194,41)){page=primaryPages[i];return;}
+        }
+        if(hit(x,y,28,462,194,46)){moreMenuOpen=true;return;}
+        if(page==PREMATCH){
             if(hit(x,y,270,636,170,34)){page=HOME;return;}
             if(hit(x,y,862,636,350,34)){beginOfflineMatch();return;}
         }else if(page==CHARACTERS){
@@ -1357,7 +1501,8 @@ public final class HudOverlay extends View {
             }
             if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
-            if(hit(x,y,270,642,570,42)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
+            if(hit(x,y,270,642,270,42)){ if(ownerControllerAction!=null)ownerControllerAction.run(); else toast("Controlador administrativo indisponível."); return; }
+            if(hit(x,y,558,642,282,42)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
         }else if(page==SHOP){
             for(int i=0;i<SHOP_NAMES.length;i++){
                 float sx=270+(i%3)*192f,sy=322+(i/3)*56f;
@@ -1390,15 +1535,31 @@ public final class HudOverlay extends View {
                     game.setWardrobe(selectedShirt,selectedBoots,selectedSet);toast("Conjunto "+new String[]{"AURORA","CAMPEÃO","ORBITAL","DESERTO"}[i]+" equipado.");return;
                 }
             }
+        }else if(page==INVENTORY){
+            if(hit(x,y,270,324,570,34)){
+                inventoryCategory=x<385?0:x<500?1:x<615?2:x<730?3:4;return;
+            }
         }else if(page==ROYALE){
-            if(hit(x,y,674,184,166,32)){page=ROYALE_SPIN;return;}
+            if(hit(x,y,674,184,166,32)){royaleCategory=0;page=ROYALE_CATALOG;return;}
             if(hit(x,y,681,423,138,30)){claimDailyReward();return;}
-        }else if(page==ROYALE_SPIN){
+            if(hit(x,y,882,354,150,72)){royaleCategory=1;page=ROYALE_CATALOG;return;}
+            if(hit(x,y,1042,354,150,72)){royaleCategory=2;page=ROYALE_CATALOG;return;}
+            if(hit(x,y,882,442,150,72)){royaleCategory=3;page=ROYALE_CATALOG;return;}
+            if(hit(x,y,1042,442,150,72)){royaleCategory=4;page=ROYALE_CATALOG;return;}
+            if(hit(x,y,882,530,310,72)){royaleCategory=0;page=ROYALE_CATALOG;return;}
+        }else if(page==ROYALE_CATALOG){
             if(hit(x,y,674,184,166,32)){page=ROYALE;return;}
-            if(hit(x,y,288,536,220,68)){page=SHOP;return;}
-            for(int i=0;i<ROYALE_LEVELS.length;i++){
-                float rx=270+(i%3)*192f,ry=476+(i/3)*88f;
-                if(hit(x,y,rx,ry,174,78)){claimRoyaleTier(i);return;}
+            if(hit(x,y,690,270,506,29)){
+                royaleCategory=x<790?0:x<890?1:x<990?2:x<1090?3:4;return;
+            }
+            int[] items=royaleCategory==1?new int[]{3,4,5,6}:
+                royaleCategory==2?new int[]{7,8,9,10}:
+                royaleCategory==3?new int[]{11,12,13,14}:
+                royaleCategory==4?new int[]{0,1,2}:
+                new int[]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+            for(int n=0;n<items.length;n++){
+                float rx=270+(n%4)*238f,ry=318+(n/4)*78f;
+                if(hit(x,y,rx,ry,220,68)){purchaseShopItem(items[n]);return;}
             }
         }else if(page==MISSIONS){
             for(int i=0;i<MISSION_NAMES.length;i++){
@@ -1456,6 +1617,7 @@ public final class HudOverlay extends View {
         accountSignOutAction=signOutAction;
     }
     public void setPackAnalyzerAction(Runnable action){packAnalyzerAction=action;}
+    public void setOwnerControllerAction(Runnable action){ownerControllerAction=action;}
     public void setAiCoachAction(AiCoachAction action){aiCoachAction=action;}
     public void setGameApiActions(GameApiAction promo, GameApiAction daily,
                                    GameApiAction mailFetch, GameApiAction mailClaim){

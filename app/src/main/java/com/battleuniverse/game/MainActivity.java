@@ -105,6 +105,7 @@ public final class MainActivity extends Activity {
             accountSync.claimConfiguredReward(parts[0],parts[1],callback);
         });
         hud.setPackAnalyzerAction(this::showContentPackOptions);
+        hud.setOwnerControllerAction(()->{if(accountSync!=null)accountSync.openOwnerMailController();});
         accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
             if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
         });

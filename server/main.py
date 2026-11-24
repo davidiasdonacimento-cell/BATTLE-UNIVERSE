@@ -78,6 +78,15 @@ class PlayerDevice(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class OwnerDevice(Base):
+    __tablename__ = "owner_devices"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    install_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    device_label: Mapped[str] = mapped_column(String(40), nullable=False, default="Android")
+    revoked: Mapped[bool] = mapped_column(nullable=False, default=False)
+    paired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class RecoveryCredential(Base):
     __tablename__ = "account_recovery_credentials"
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), primary_key=True)
@@ -180,6 +189,7 @@ class GlobalMail(Base):
     title: Mapped[str] = mapped_column(String(80), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     diamonds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    recipient_player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -240,7 +250,7 @@ class CoachBody(BaseModel):
 
 class DeviceRegisterBody(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
-    install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    install_id: str | None = Field(default=None, min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
     device_label: str = Field(default="Android", min_length=1, max_length=40)
 
 class RecoveryRotateBody(BaseModel):
@@ -285,7 +295,22 @@ class GlobalMailBody(BaseModel):
     request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
 
 class OwnerPairBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     pairing_code: str = Field(min_length=32, max_length=256)
+    install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    device_label: str = Field(default="Android", min_length=1, max_length=40)
+
+class OwnerTargetMailBody(BaseModel):
+    title: str = Field(min_length=2, max_length=80)
+    body: str = Field(min_length=2, max_length=1200)
+    diamonds: int = Field(default=0, ge=0, le=100000)
+    recipient_player_id: int | None = Field(default=None, ge=1)
+    request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+
+class OwnerWalletRankBody(BaseModel):
+    diamonds: int | None = Field(default=None, ge=0, le=1000000000)
+    xp: int | None = Field(default=None, ge=0, le=1000000000)
+    rank: str | None = Field(default=None, min_length=1, max_length=24, pattern=r"^[A-Za-z0-9 _-]+$")
 
 class AccountEditBody(BaseModel):
     username: str | None = Field(default=None, min_length=3, max_length=18, pattern=r"^[A-Za-z0-9_]+$")
@@ -294,8 +319,9 @@ class AccountEditBody(BaseModel):
     reason: str | None = Field(default=None, max_length=240)
 
 class GameSettingsBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     game_name: str = Field(min_length=2, max_length=40)
-    character_names: dict[str, str] = Field(default_factory=dict)
+    character_names: dict[str, str] = Field(default_factory=dict, max_length=64)
 
 app = FastAPI(title="BATTLE UNIVERSE Account & Admin API", version="1.2.0")
 origins = [x.strip() for x in os.environ.get("CORS_ORIGINS", "").split(",") if x.strip()]
@@ -341,6 +367,9 @@ def migrate_promo_code_schema() -> None:
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
     migrate_promo_code_schema()
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE global_mail ADD COLUMN IF NOT EXISTS recipient_player_id INTEGER NULL REFERENCES players(id) ON DELETE CASCADE"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_global_mail_recipient_player_id ON global_mail (recipient_player_id)"))
     # One-currency migration: transfer legacy coin balances into diamonds once.
     with SessionLocal() as db:
         wallets = db.scalars(select(PlayerWallet).where(PlayerWallet.coins > 0)).all()
@@ -357,10 +386,14 @@ def player_payload(player: Player) -> dict[str, Any]:
     return {"id": player.id, "username": player.username, "profile": player.profile or {},
             "created_at": player.created_at.isoformat(), "updated_at": player.updated_at.isoformat()}
 
-def issue_token(subject: str, username: str, role: str, minutes: int) -> str:
+def issue_token(subject: str, username: str, role: str, minutes: int,
+                extra_claims: dict[str, Any] | None = None) -> str:
     now = datetime.now(timezone.utc)
-    return jwt.encode({"sub": subject, "username": username, "role": role, "iss": JWT_ISSUER,
-                       "iat": now, "exp": now + timedelta(minutes=minutes)}, JWT_SECRET, algorithm="HS256")
+    claims = {"sub": subject, "username": username, "role": role, "iss": JWT_ISSUER,
+              "iat": now, "exp": now + timedelta(minutes=minutes)}
+    if extra_claims:
+        claims.update(extra_claims)
+    return jwt.encode(claims, JWT_SECRET, algorithm="HS256")
 
 def token_claims(credentials: HTTPAuthorizationCredentials | None) -> dict[str, Any]:
     if credentials is None:
@@ -387,10 +420,33 @@ def current_player(credentials: HTTPAuthorizationCredentials | None = Depends(be
         raise HTTPException(403, "Esta conta está suspensa ou encerrada.")
     return player
 
-def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> str:
+def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+                  db: Session = Depends(db_session)) -> str:
     claims = token_claims(credentials)
     if claims.get("role") != "owner" or claims.get("sub") != "owner-device":
         raise HTTPException(403, "Aparelho não autorizado para configurar o jogo.")
+    install_id = claims.get("device_install_id")
+    # Migra sessões antigas: o JWT já fica cifrado pelo Android Keystore no app.
+    # O fingerprint do token permite manter o controlador antigo sem abrir acesso a outro token.
+    if not install_id:
+        if credentials is None:
+            raise HTTPException(401, "Sessão administrativa inválida.")
+        install_id = "legacy-" + hashlib.sha256(credentials.credentials.encode("utf-8")).hexdigest()[:48]
+    device = db.get(OwnerDevice, 1)
+    if device is None:
+        device = OwnerDevice(id=1, install_id=str(install_id),
+                             device_label="Controlador legado", revoked=False)
+        db.add(device)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            device = db.get(OwnerDevice, 1)
+    if device is None or device.revoked or not secrets.compare_digest(device.install_id, str(install_id)):
+        raise HTTPException(403, "Este controlador não é o aparelho autorizado.")
+    device.last_seen_at = datetime.now(timezone.utc)
+    db.add(device)
+    db.commit()
     return "owner-device"
 
 
@@ -568,6 +624,42 @@ def player_game_settings(db: Session = Depends(db_session), player: Player = Dep
     return {"game_name": values.get("game_name", "BATTLE UNIVERSE"),
             "character_names": values.get("character_names", {}),
             "account_character_name": (player.profile or {}).get("character_display_name", "")}
+
+@app.get("/v1/owner/game/settings")
+def owner_read_game_settings(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    rows = db.scalars(select(GameSetting)).all()
+    values = {row.key: row.value for row in rows}
+    return {"game_name": values.get("game_name", "BATTLE UNIVERSE"),
+            "character_names": values.get("character_names", {}), "updated_by": owner}
+
+@app.put("/v1/owner/game/settings")
+def owner_update_game_settings(body: GameSettingsBody, db: Session = Depends(db_session),
+                               owner: str = Depends(current_owner)):
+    game_name = body.game_name.strip()
+    if len(game_name) < 2:
+        raise HTTPException(422, "O nome do jogo precisa ter ao menos 2 caracteres.")
+    clean_names: dict[str, str] = {}
+    for key, value in body.character_names.items():
+        normalized_key = str(key).strip()
+        normalized_value = str(value).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", normalized_key):
+            raise HTTPException(422, "Identificador de personagem inválido.")
+        if not normalized_value or len(normalized_value) > 32:
+            raise HTTPException(422, "Cada nome de personagem deve ter de 1 a 32 caracteres.")
+        clean_names[normalized_key] = normalized_value
+    updates = {"game_name": game_name, "character_names": clean_names}
+    now = datetime.now(timezone.utc)
+    for key, value in updates.items():
+        row = db.get(GameSetting, key)
+        if row is None:
+            row = GameSetting(key=key, value=value, updated_at=now)
+        else:
+            row.value = value
+            row.updated_at = now
+        db.add(row)
+    audit(db, owner, "game_settings_update", "global", updates)
+    db.commit()
+    return {"updated": True, **updates, "updated_at": now.isoformat()}
 
 ROYALE_PRIZES = [
     {"id": "shirt_tactical", "name": "CAMISA TÁTICA", "weight": 40, "profile_key": "wear_shirt_tactical"},
@@ -1025,13 +1117,43 @@ def royale_history(player: Player = Depends(current_player)):
     return {"enabled": False, "history": [], "message": "O histórico de giros não está disponível."}
 
 @app.post("/v1/owner/pair")
-def owner_pair(body: OwnerPairBody) -> dict[str, Any]:
+def owner_pair(body: OwnerPairBody, db: Session = Depends(db_session)) -> dict[str, Any]:
     if not OWNER_PAIRING_CODE:
         raise HTTPException(503, "Ativação do proprietário ainda não foi configurada no servidor.")
     if not secrets.compare_digest(body.pairing_code, OWNER_PAIRING_CODE):
         raise HTTPException(401, "Código de ativação inválido.")
-    return {"access_token": issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES),
-            "token_type": "bearer", "expires_in": OWNER_TOKEN_MINUTES * 60}
+    # Clientes antigos sem install_id recebem uma identidade aleatória vinculada ao JWT.
+    # O token é cifrado no Android Keystore e continua sujeito ao bloqueio de aparelho único.
+    install_id = body.install_id.strip() if body.install_id else "legacy-" + secrets.token_hex(24)
+    now = datetime.now(timezone.utc)
+    device = db.scalar(select(OwnerDevice).where(OwnerDevice.id == 1).with_for_update())
+    if device is None:
+        device = OwnerDevice(id=1, install_id=install_id,
+                             device_label=body.device_label.strip(), revoked=False,
+                             paired_at=now, last_seen_at=now)
+        db.add(device)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            device = db.get(OwnerDevice, 1)
+    if device is None:
+        raise HTTPException(503, "Não foi possível registrar o aparelho controlador.")
+    if not secrets.compare_digest(device.install_id, install_id):
+        if not device.revoked:
+            raise HTTPException(409, "Já existe outro aparelho autorizado. Revogue o controlador atual antes de parear outro.")
+        device.install_id = install_id
+        device.paired_at = now
+    device.device_label = body.device_label.strip()
+    device.revoked = False
+    device.last_seen_at = now
+    db.add(device)
+    db.commit()
+    token = issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES,
+                        {"device_install_id": install_id})
+    return {"access_token": token, "token_type": "bearer",
+            "expires_in": OWNER_TOKEN_MINUTES * 60,
+            "device": {"label": device.device_label, "paired_at": device.paired_at.isoformat()}}
 
 @app.post("/v1/promo-codes/redeem")
 def redeem_promo_code(body: PromoRedeemBody, db: Session = Depends(db_session),
@@ -1200,8 +1322,10 @@ def game_mail(db: Session = Depends(db_session), player: Player = Depends(curren
         "claimed": bool(profile.get("mail_welcome_claimed", False)),
     }]
     broadcasts = db.scalars(
-        select(GlobalMail).where(GlobalMail.created_at >= player.created_at)
-        .order_by(GlobalMail.created_at.desc()).limit(100)
+        select(GlobalMail).where(
+            GlobalMail.created_at >= player.created_at,
+            ((GlobalMail.recipient_player_id.is_(None)) | (GlobalMail.recipient_player_id == player.id))
+        ).order_by(GlobalMail.created_at.desc()).limit(100)
     ).all()
     claims = db.scalars(select(GlobalMailClaim).where(
         GlobalMailClaim.player_id == player.id
@@ -1210,7 +1334,7 @@ def game_mail(db: Session = Depends(db_session), player: Player = Depends(curren
     messages.extend([{
         "id": row.id, "title": row.title, "body": row.body,
         "diamonds": int(row.diamonds), "claimed": row.id in claimed_ids,
-        "created_at": row.created_at.isoformat(), "global": True,
+        "created_at": row.created_at.isoformat(), "global": row.recipient_player_id is None,
     } for row in reversed(broadcasts)])
     return {"messages": messages}
 
@@ -1238,7 +1362,8 @@ def claim_game_mail(message_id: str, db: Session = Depends(db_session),
         return {"claimed": True, "diamonds_awarded": 50, "diamonds_balance": wallet.diamonds}
 
     message = db.scalar(select(GlobalMail).where(
-        GlobalMail.id == message_id, GlobalMail.created_at >= player.created_at
+        GlobalMail.id == message_id, GlobalMail.created_at >= player.created_at,
+        ((GlobalMail.recipient_player_id.is_(None)) | (GlobalMail.recipient_player_id == player.id))
     ))
     if message is None:
         raise HTTPException(404, "Mensagem não encontrada.")
@@ -1323,7 +1448,7 @@ button{border:0;border-radius:10px;padding:14px 18px;background:#12a9c5;color:#0
 button:disabled{opacity:.5}.secondary{background:#25465a;color:#eaf7ff}.status{margin-top:16px;padding:12px;border-radius:10px;background:#102b3b;white-space:pre-wrap}
 small{color:#8baab9}@media(max-width:560px){.row{grid-template-columns:1fr}main{padding:18px;margin:10px auto}}
 </style></head><body><main>
-<h1>✉ Correio Global</h1><p><a href="/admin/contas" style="color:#70e3ef">Gerenciar e escolher contas</a> · <a href="/admin/monitoramento" style="color:#70e3ef">Monitoramento</a></p><p>Envie uma mensagem para todos os jogadores que já possuem conta. Você pode anexar diamantes virtuais para cada jogador resgatar uma única vez.</p>
+<h1>✉ Correio Global</h1><p>Envie uma mensagem para todos os jogadores que já possuem conta. Você pode anexar diamantes virtuais para cada jogador resgatar uma única vez.</p>
 <div class="field"><label for="pair">Código de autorização do proprietário</label><input id="pair" type="password" autocomplete="off" placeholder="Cole o código de pareamento"></div>
 <button id="connect" class="secondary">Autorizar ADM</button>
 <div id="composer" hidden>
@@ -1331,17 +1456,42 @@ small{color:#8baab9}@media(max-width:560px){.row{grid-template-columns:1fr}main{
 <div class="field"><label for="body">Mensagem para os jogadores</label><textarea id="body" maxlength="1200" placeholder="Escreva o comunicado..."></textarea></div>
 <div class="row"><div class="field"><label for="diamonds">Diamantes por jogador</label><input id="diamonds" type="number" min="0" max="100000" value="0"></div><div class="field"><label>Destinatários</label><input value="Todas as contas existentes" disabled></div></div>
 <button id="send">ENVIAR PARA TODOS</button>
-</div><div id="status" class="status" role="status">Aguardando autorização.</div>
+</div><section id="accountTools" hidden style="margin-top:24px;border-top:1px solid #28536a;padding-top:20px">
+<h2 style="color:#59d9ed">🛡️ CONTAS E PERMISSÕES</h2>
+<p>Pesquise uma conta. A seleção fica guardada neste navegador para a próxima visita.</p>
+<div class="field"><label for="accountSearch">Pesquisar nickname</label><input id="accountSearch" maxlength="40" placeholder="Digite o nickname"></div>
+<button id="searchAccounts" class="secondary">PESQUISAR CONTAS</button>
+<div class="field"><label for="accountSelect">Conta selecionada</label><select id="accountSelect" style="width:100%;padding:13px;border-radius:10px;background:#071724;color:white;border:1px solid #28536a"></select></div>
+<div class="field"><button id="toggleMailPermission" class="secondary">ATIVAR/DESATIVAR ENVIO PELO APP</button></div>
+<h3 style="color:#bceaf2">Editar conta selecionada</h3>
+<div class="row"><div class="field"><label for="editDiamonds">Diamantes (novo saldo)</label><input id="editDiamonds" type="number" min="0" max="1000000000"></div>
+<div class="field"><label for="editXp">XP (novo total)</label><input id="editXp" type="number" min="0" max="1000000000"></div></div>
+<div class="field"><label for="editRank">Patente manual (opcional)</label><input id="editRank" maxlength="24" placeholder="Ex.: Mestre"></div>
+<button id="saveEconomy">SALVAR ALTERAÇÕES DA CONTA</button>
+<h3 style="color:#bceaf2">Enviar correio</h3>
+<div class="field"><label for="mailTarget">Destinatário</label><select id="mailTarget" style="width:100%;padding:13px;border-radius:10px;background:#071724;color:white;border:1px solid #28536a"><option value="">TODAS AS CONTAS</option></select></div>
+<div class="field"><label for="targetTitle">Título</label><input id="targetTitle" maxlength="80"></div>
+<div class="field"><label for="targetBody">Mensagem</label><textarea id="targetBody" maxlength="1200"></textarea></div>
+<div class="field"><label for="targetDiamonds">Diamantes para resgate</label><input id="targetDiamonds" type="number" min="0" max="100000" value="0"></div>
+<button id="sendTargetMail">ENVIAR CORREIO ESCOLHIDO</button>
+<small>Escolha TODAS AS CONTAS ou uma conta individual. As mensagens e alterações ficam registradas no servidor.</small>
+</section>
+<div id="status" class="status" role="status">Aguardando autorização.</div>
 </main><script>
 const API=location.origin, $=id=>document.getElementById(id);
 let token="";
+let browserInstallId=localStorage.getItem("bu_owner_install_id")||"";
+if(!/^[A-Za-z0-9._:-]{16,64}$/.test(browserInstallId)){
+ browserInstallId=(crypto.randomUUID?crypto.randomUUID():("web-"+Date.now()+"-"+Math.random().toString(36).slice(2)));
+ localStorage.setItem("bu_owner_install_id",browserInstallId);
+}
 function show(s){$("status").textContent=s}
 $("connect").onclick=async()=>{
  const code=$("pair").value.trim(); if(code.length<32){show("Código de autorização inválido.");return}
  $("connect").disabled=true;
- try{const r=await fetch(API+"/v1/owner/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pairing_code:code})});
+ try{const r=await fetch(API+"/v1/owner/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pairing_code:code,install_id:browserInstallId,device_label:"Navegador administrativo"})});
  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha na autorização.");
- token=d.access_token;$("pair").value="";$("pair").disabled=true;$("connect").hidden=true;$("composer").hidden=false;show("ADM autorizado. Prepare a mensagem global.");
+ token=d.access_token;$("pair").value="";$("pair").disabled=true;$("connect").hidden=true;$("composer").hidden=false;$("accountTools").hidden=false;show("ADM autorizado. Correio e ferramentas de conta disponíveis.");
  }catch(e){show("Erro: "+e.message)}finally{$("connect").disabled=false}
 };
 $("send").onclick=async()=>{
@@ -1356,7 +1506,91 @@ $("send").onclick=async()=>{
  show("🟢 VERDE — mensagem enviada. Contas alcançadas: "+d.recipients+"; presente: "+d.diamonds_per_player+" diamantes por jogador.");
  }catch(e){show("❌ DEU RED! "+e.message)}finally{$("send").disabled=false}
 };
+
+const accountSelect=$("accountSelect"),mailTarget=$("mailTarget");
+function ownerHeaders(){return {"Content-Type":"application/json","Authorization":"Bearer "+token}}
+function selectedAccount(){return Number(accountSelect.value)||0}
+function restoreAccountSelection(){
+ const saved=localStorage.getItem("bu_admin_selected_account")||"";
+ if(saved&&[...accountSelect.options].some(o=>o.value===saved)){
+  accountSelect.value=saved;
+  mailTarget.value=saved;
+ }
+}
+accountSelect.onchange=()=>{
+ localStorage.setItem("bu_admin_selected_account",accountSelect.value);
+ mailTarget.value=accountSelect.value;
+};
+mailTarget.onchange=()=>{
+ if(mailTarget.value){
+  accountSelect.value=mailTarget.value;
+  localStorage.setItem("bu_admin_selected_account",mailTarget.value);
+ }else{
+  localStorage.removeItem("bu_admin_selected_account");
+ }
+};
+$("searchAccounts").onclick=async()=>{
+ try{
+  const q=$("accountSearch").value.trim();
+  const r=await fetch(API+"/v1/owner/accounts?search="+encodeURIComponent(q)+"&limit=100",{headers:ownerHeaders()});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha na pesquisa.");
+  accountSelect.innerHTML="";mailTarget.innerHTML='<option value="">TODAS AS CONTAS</option>';
+  for(const a of d.accounts||[]){
+   const label=a.username+" (ID "+a.id+")";
+   const o=document.createElement("option");o.value=String(a.id);o.textContent=label;accountSelect.appendChild(o);
+   const m=document.createElement("option");m.value=String(a.id);m.textContent=label;mailTarget.appendChild(m);
+  }
+  restoreAccountSelection();show("Contas encontradas: "+(d.accounts||[]).length);
+ }catch(e){show("❌ DEU RED! "+e.message)}
+};
+$("toggleMailPermission").onclick=async()=>{
+ const id=selectedAccount();if(!id){show("Selecione uma conta primeiro.");return}
+ const enabled=confirm("Ativar a permissão secreta de envio de correio para esta conta?\nOK = ativar; Cancelar = desativar.");
+ try{
+  const r=await fetch(API+"/v1/owner/accounts/"+id+"/mail-permission?enabled="+enabled,{method:"POST",headers:ownerHeaders()});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha.");
+  show((d.mail_sender_enabled?"🟢 VERDE — permissão ativada.":"Permissão de envio desativada.")+" Conta ID "+id);
+ }catch(e){show("❌ DEU RED! "+e.message)}
+};
+$("saveEconomy").onclick=async()=>{
+ const id=selectedAccount();if(!id){show("Selecione uma conta primeiro.");return}
+ const body={};
+ if($("editDiamonds").value!=="")body.diamonds=Number($("editDiamonds").value);
+ if($("editXp").value!=="")body.xp=Number($("editXp").value);
+ if($("editRank").value.trim())body.rank=$("editRank").value.trim();
+ if(!Object.keys(body).length){show("Preencha ao menos um campo.");return}
+ if(!confirm("Confirmar alteração da carteira, XP ou patente desta conta?"))return;
+ try{
+  const r=await fetch(API+"/v1/owner/accounts/"+id+"/economy",{method:"PATCH",headers:ownerHeaders(),body:JSON.stringify(body)});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha.");
+  show("🟢 VERDE — alterações salvas na conta "+id+".");
+ }catch(e){show("❌ DEU RED! "+e.message)}
+};
+$("sendTargetMail").onclick=async()=>{
+ const title=$("targetTitle").value.trim(),body=$("targetBody").value.trim(),diamonds=Number($("targetDiamonds").value);
+ const recipient=mailTarget.value?Number(mailTarget.value):null;
+ if(title.length<2||body.length<2||!Number.isInteger(diamonds)||diamonds<0||diamonds>100000){show("Confira título, mensagem e diamantes.");return}
+ if(!confirm("Enviar para "+(recipient?"a conta selecionada":"TODAS AS CONTAS")+"?"))return;
+ try{
+  const request_id=crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random().toString(36).slice(2);
+  const r=await fetch(API+"/v1/owner/mail/send",{method:"POST",headers:ownerHeaders(),body:JSON.stringify({title,body,diamonds,recipient_player_id:recipient,request_id})});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail||"Falha ao enviar.");
+  show("🟢 VERDE — correio enviado. Contas alcançadas: "+d.recipients);
+  $("targetTitle").value="";$("targetBody").value="";$("targetDiamonds").value="0";
+ }catch(e){show("❌ DEU RED! "+e.message)}
+};
 </script></body></html>""")
+
+@app.post("/v1/owner/device/revoke")
+def owner_revoke_device(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    device = db.get(OwnerDevice, 1)
+    if device is None:
+        raise HTTPException(404, "Controlador não encontrado.")
+    device.revoked = True
+    db.add(device)
+    audit(db, owner, "owner_device_revoked", device.device_label, {})
+    db.commit()
+    return {"revoked": True, "message": "Controlador revogado. Um novo pareamento exige intervenção segura no banco de dados."}
 
 @app.post("/v1/owner/mail/broadcast", status_code=201)
 def owner_broadcast_mail(body: GlobalMailBody, db: Session = Depends(db_session),
@@ -1388,6 +1622,113 @@ def owner_broadcast_mail(body: GlobalMailBody, db: Session = Depends(db_session)
         logging.getLogger("battle_universe").exception("GLOBAL_MAIL_AUDIT_FAILED")
     return {"sent": True, "replayed": False, "message_id": row.id,
             "recipients": recipients, "diamonds_per_player": int(row.diamonds)}
+
+@app.post("/v1/owner/mail/send", status_code=201)
+def owner_send_mail(body: OwnerTargetMailBody, db: Session = Depends(db_session),
+                    owner: str = Depends(current_owner)):
+    existing = db.scalar(select(GlobalMail).where(GlobalMail.request_id == body.request_id))
+    if existing is not None:
+        return {"sent": True, "replayed": True, "message_id": existing.id,
+                "recipient_player_id": existing.recipient_player_id}
+    recipient = None
+    if body.recipient_player_id is not None:
+        recipient = db.get(Player, body.recipient_player_id)
+        if recipient is None:
+            raise HTTPException(404, "Conta destinatária não encontrada.")
+        control = db.get(AccountControl, recipient.id)
+        if control and control.state != "active":
+            raise HTTPException(409, "A conta destinatária não está ativa.")
+    row = GlobalMail(request_id=body.request_id, title=body.title.strip(),
+                     body=body.body.strip(), diamonds=body.diamonds,
+                     recipient_player_id=body.recipient_player_id, created_by=owner)
+    db.add(row)
+    try:
+        audit(db, owner, "mail_sent", str(body.recipient_player_id or "all"),
+              {"title": body.title.strip(), "diamonds": body.diamonds})
+        db.commit()
+        db.refresh(row)
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Não foi possível salvar o correio.")
+    recipients = 1 if recipient else (db.scalar(select(func.count(Player.id)).where(Player.created_at <= row.created_at)) or 0)
+    return {"sent": True, "replayed": False, "message_id": row.id,
+            "recipient_player_id": body.recipient_player_id, "recipients": recipients}
+
+@app.patch("/v1/owner/accounts/{player_id}/economy")
+def owner_edit_economy(player_id: int, body: OwnerWalletRankBody,
+                       db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    if body.diamonds is None and body.xp is None and body.rank is None:
+        raise HTTPException(422, "Informe ao menos um valor para alterar.")
+    changes = {}
+    if body.diamonds is not None:
+        wallet = db.scalar(select(PlayerWallet).where(PlayerWallet.player_id == player_id).with_for_update())
+        if wallet is None:
+            wallet = PlayerWallet(player_id=player_id, coins=0, diamonds=0)
+            db.add(wallet)
+        changes["diamonds"] = {"from": int(wallet.diamonds), "to": body.diamonds}
+        wallet.diamonds = body.diamonds
+    profile = dict(player.profile or {})
+    if body.xp is not None:
+        changes["xp"] = {"from": int(profile.get("xp", 0) or 0), "to": body.xp}
+        profile["xp"] = body.xp
+    if body.rank is not None:
+        changes["rank"] = {"from": str(profile.get("admin_rank_override", "")), "to": body.rank.strip()}
+        profile["admin_rank_override"] = body.rank.strip()
+    player.profile = profile
+    player.updated_at = datetime.now(timezone.utc)
+    audit(db, owner, "account_economy_update", str(player_id), changes)
+    db.add(player)
+    db.commit()
+    return {"updated": changes, "player_id": player_id}
+
+@app.get("/v1/game/mail/permissions")
+def game_mail_permissions(player: Player = Depends(current_player)):
+    return {"can_send": bool((player.profile or {}).get("mail_sender_enabled", False))}
+
+@app.post("/v1/game/mail/send", status_code=201)
+def privileged_game_mail_send(body: OwnerTargetMailBody, db: Session = Depends(db_session),
+                              player: Player = Depends(current_player)):
+    if not bool((player.profile or {}).get("mail_sender_enabled", False)):
+        raise HTTPException(403, "Esta conta não tem permissão para enviar correios.")
+    if body.recipient_player_id == player.id:
+        raise HTTPException(422, "Escolha outra conta destinatária.")
+    existing = db.scalar(select(GlobalMail).where(GlobalMail.request_id == body.request_id))
+    if existing is not None:
+        return {"sent": True, "replayed": True, "message_id": existing.id}
+    recipient = None
+    if body.recipient_player_id is not None:
+        recipient = db.get(Player, body.recipient_player_id)
+        if recipient is None:
+            raise HTTPException(404, "Conta destinatária não encontrada.")
+        control = db.get(AccountControl, recipient.id)
+        if control and control.state != "active":
+            raise HTTPException(409, "A conta destinatária não está ativa.")
+    row = GlobalMail(request_id=body.request_id, title=body.title.strip(),
+                     body=body.body.strip(), diamonds=body.diamonds,
+                     recipient_player_id=body.recipient_player_id, created_by="player:"+player.username)
+    db.add(row)
+    audit(db, "player:"+player.username, "privileged_mail_sent",
+          str(body.recipient_player_id or "all"), {"title": body.title.strip()})
+    db.commit()
+    return {"sent": True, "message_id": row.id,
+            "recipients": 1 if recipient else (db.scalar(select(func.count(Player.id))) or 0)}
+
+@app.post("/v1/owner/accounts/{player_id}/mail-permission")
+def owner_set_mail_permission(player_id: int, enabled: bool = Query(...),
+                               db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    profile = dict(player.profile or {})
+    profile["mail_sender_enabled"] = bool(enabled)
+    player.profile = profile
+    audit(db, owner, "mail_sender_permission", str(player_id), {"enabled": bool(enabled)})
+    db.add(player)
+    db.commit()
+    return {"player_id": player_id, "mail_sender_enabled": bool(enabled)}
 
 @app.get("/v1/owner/promo-codes")
 def owner_list_promo_codes(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
