@@ -598,6 +598,11 @@ def create_ai_conversation(
     db: Session = Depends(db_session),
     player: Player = Depends(current_player),
 ):
+    existing_count = db.scalar(
+        select(func.count(AiChatConversation.id)).where(AiChatConversation.player_id == player.id)
+    ) or 0
+    if existing_count >= 50:
+        raise HTTPException(409, "Esta conta atingiu o limite de 50 conversas. Apague uma conversa antiga para criar outra.")
     title = body.title.strip() or "Nova conversa"
     conversation = AiChatConversation(player_id=player.id, title=title[:80])
     db.add(conversation)
