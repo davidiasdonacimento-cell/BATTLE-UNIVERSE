@@ -1420,7 +1420,11 @@ public final class HudOverlay extends View {
             if(hit(x,y,1132,116,94,27)){moreMenuOpen=false;return;}
             for(int i=0;i<MORE_NAV.length;i++){
                 int col=i%3,row=i/3;float mx=870+col*120f,my=180+row*145f;
-                if(hit(x,y,mx,my,110,124)){page=MORE_NAV_PAGES[i];moreMenuOpen=false;return;}
+                if(hit(x,y,mx,my,110,124)){
+                    page=MORE_NAV_PAGES[i];moreMenuOpen=false;
+                    if(page==MAIL)refreshMailInbox();
+                    return;
+                }
             }
             moreMenuOpen=false;return;
         }
