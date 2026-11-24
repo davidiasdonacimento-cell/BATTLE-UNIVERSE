@@ -423,10 +423,25 @@ def current_player(credentials: HTTPAuthorizationCredentials | None = Depends(be
 def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
                   db: Session = Depends(db_session)) -> str:
     claims = token_claims(credentials)
-    install_id = claims.get("device_install_id")
-    if claims.get("role") != "owner" or claims.get("sub") != "owner-device" or not install_id:
+    if claims.get("role") != "owner" or claims.get("sub") != "owner-device":
         raise HTTPException(403, "Aparelho não autorizado para configurar o jogo.")
+    install_id = claims.get("device_install_id")
+    # Migra sessões antigas: o JWT já fica cifrado pelo Android Keystore no app.
+    # O fingerprint do token permite manter o controlador antigo sem abrir acesso a outro token.
+    if not install_id:
+        if credentials is None:
+            raise HTTPException(401, "Sessão administrativa inválida.")
+        install_id = "legacy-" + hashlib.sha256(credentials.credentials.encode("utf-8")).hexdigest()[:48]
     device = db.get(OwnerDevice, 1)
+    if device is None:
+        device = OwnerDevice(id=1, install_id=str(install_id),
+                             device_label="Controlador legado", revoked=False)
+        db.add(device)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            device = db.get(OwnerDevice, 1)
     if device is None or device.revoked or not secrets.compare_digest(device.install_id, str(install_id)):
         raise HTTPException(403, "Este controlador não é o aparelho autorizado.")
     device.last_seen_at = datetime.now(timezone.utc)
