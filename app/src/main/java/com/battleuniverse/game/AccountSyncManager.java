@@ -690,6 +690,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     private String cleanError(Exception e) {
         String m=e.getMessage()==null?"Erro de comunicação.":e.getMessage();
         if(m.contains("Unable to resolve host")||m.contains("Failed to connect"))return "Servidor indisponível ou sem internet.";
+        if(m.contains("HTTP 404"))return "O servidor ainda não reconhece esta função do BATTLE AI PRO MAXX (HTTP 404). A atualização da API precisa ser publicada no Render.";
         return m.length()>150?m.substring(0,150):m;
     }
 
