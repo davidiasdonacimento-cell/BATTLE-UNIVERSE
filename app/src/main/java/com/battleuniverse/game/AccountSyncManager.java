@@ -82,6 +82,14 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
 
 
+    private String getOwnerInstallId() {
+        String id=sessionPrefs.getString("owner_install_id","");
+        if(id.matches("[A-Za-z0-9._:-]{16,64}"))return id;
+        id=java.util.UUID.randomUUID().toString();
+        if(!sessionPrefs.edit().putString("owner_install_id",id).commit())
+            throw new IllegalStateException("Não foi possível registrar este aparelho controlador.");
+        return id;
+    }
     private String getOwnerToken() {
         try {
             String ivText=sessionPrefs.getString("owner_token_iv","");
@@ -116,7 +124,9 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                 if(value.length()<32){ownerMessage("Código de autorização inválido.");return;}
                 worker.execute(()->{
                     try {
-                        JSONObject response=api("/v1/owner/pair","POST",null,new JSONObject().put("pairing_code",value));
+                        JSONObject response=api("/v1/owner/pair","POST",null,new JSONObject()
+                            .put("pairing_code",value).put("install_id",getOwnerInstallId())
+                            .put("device_label","Android • BATTLE UNIVERSE"));
                         String owner=response.optString("access_token","");
                         if(owner.isEmpty())throw new Exception("O servidor não retornou a sessão administrativa.");
                         saveOwnerToken(owner);
