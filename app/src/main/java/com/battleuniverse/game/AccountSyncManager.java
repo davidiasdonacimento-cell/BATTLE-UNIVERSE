@@ -90,6 +90,9 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             throw new IllegalStateException("Não foi possível registrar este aparelho controlador.");
         return id;
     }
+    private void clearOwnerToken() {
+        sessionPrefs.edit().remove("owner_token_iv").remove("owner_token_cipher").commit();
+    }
     private String getOwnerToken() {
         try {
             String ivText=sessionPrefs.getString("owner_token_iv","");
@@ -171,7 +174,16 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                         .setNegativeButton("VOLTAR",(dialog,which)->showOwnerAccountSearch(token))
                         .show();
                 });
-            }catch(Exception e){main.post(()->ownerMessage("Falha ao carregar contas: "+cleanError(e)));}
+            }catch(Exception e){
+                String message=cleanError(e);
+                main.post(()->{
+                    if(message.contains("401")||message.contains("403")){
+                        clearOwnerToken();
+                        ownerMessage("A autorização deste controlador expirou ou foi revogada. Autorize novamente.");
+                        showOwnerPairDialog();
+                    }else ownerMessage("Falha ao carregar contas: "+message);
+                });
+            }
         });
     }
     private void showOwnerCompose(String token,int recipientId,String recipientLabel) {
