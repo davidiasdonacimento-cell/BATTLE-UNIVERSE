@@ -109,23 +109,36 @@ public final class HudOverlay extends View {
         this.game=game; this.prefs=prefs;
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setClickable(true); setFocusable(true);
-        mode=prefs.getInt("mode",0); map=prefs.getInt("map",0);
-        character=prefs.getInt("character",0); quality=prefs.getInt("quality",1);
+        // Revalida também preferências antigas já gravadas neste aparelho.
+        mode=readBoundedInt(prefs,"mode",0,0,MODE_NAMES.length-1);
+        map=readBoundedInt(prefs,"map",0,0,MAP_NAMES.length-1);
+        character=readBoundedInt(prefs,"character",0,0,CHARACTER_NAMES.length-1);
+        quality=readBoundedInt(prefs,"quality",1,0,QUALITY_NAMES.length-1);
         onlineMode=prefs.getBoolean("online_mode",false);
-        map=Math.max(0,Math.min(MAP_NAMES.length-1,map));
         music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
-        lookSensitivity=prefs.getInt("look_sensitivity",1);
+        lookSensitivity=readBoundedInt(prefs,"look_sensitivity",1,0,2);
         invertCameraY=prefs.getBoolean("invert_camera_y",false);
         showMinimap=prefs.getBoolean("show_minimap",true);
         hapticsEnabled=prefs.getBoolean("haptics",true);
         ensureStarterWardrobe();
-        selectedShirt=prefs.getInt("selected_shirt",1);
-        selectedBoots=prefs.getInt("selected_boots",1);
-        selectedSet=prefs.getInt("selected_set",0);
+        selectedShirt=readBoundedInt(prefs,"selected_shirt",1,0,4);
+        selectedBoots=readBoundedInt(prefs,"selected_boots",1,0,4);
+        selectedSet=readBoundedInt(prefs,"selected_set",0,0,4);
+        prefs.edit().putInt("mode",mode).putInt("map",map).putInt("character",character)
+            .putInt("quality",quality).putInt("look_sensitivity",lookSensitivity)
+            .putInt("selected_shirt",selectedShirt).putInt("selected_boots",selectedBoots)
+            .putInt("selected_set",selectedSet).apply();
         ensureDailyMissionWindow();
         game.setInvertCameraY(invertCameraY);
         game.setCharacter(character); game.setMap(map); game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
         game.setMatchMode(mode); game.setQuality(quality); game.setLookSensitivity(lookSensitivity); game.setGameScreen(false);
+    }
+
+    private static int readBoundedInt(SharedPreferences prefs,String key,int fallback,int minimum,int maximum) {
+        int value;
+        try { value=prefs.getInt(key,fallback); }
+        catch(ClassCastException invalidStoredType) { value=fallback; }
+        return Math.max(minimum,Math.min(maximum,value));
     }
 
     @Override protected void onDraw(Canvas c) {
