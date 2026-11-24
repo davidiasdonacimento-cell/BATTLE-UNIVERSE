@@ -98,7 +98,7 @@ public final class HudOverlay extends View {
     };
     private String activeMailId="welcome_gift_01", activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE", activeMailBody="Presente de entrada: 50 diamantes virtuais.";
     private long activeMailDiamonds=50L;
-    private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction;
+    private Runnable accountSyncAction, accountSignOutAction, packAnalyzerAction, ownerControllerAction;
     private long toastUntil, lastTap;
     private boolean shopPurchasePending, matchRewardPending;
     private long matchRewardRetryAfter;
@@ -1495,13 +1495,7 @@ public final class HudOverlay extends View {
             }
             if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
-            if(hit(x,y,270,642,270,42)){
-                try {
-                    getContext().startActivity(new Intent(Intent.ACTION_VIEW,
-                        Uri.parse("https://battle-universe-accounts.onrender.com/admin/correio")));
-                } catch(Exception e) { toast("Não foi possível abrir o controlador de correio."); }
-                return;
-            }
+            if(hit(x,y,270,642,270,42)){ if(ownerControllerAction!=null)ownerControllerAction.run(); else toast("Controlador administrativo indisponível."); return; }
             if(hit(x,y,558,642,282,42)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
         }else if(page==SHOP){
             for(int i=0;i<SHOP_NAMES.length;i++){
@@ -1617,6 +1611,7 @@ public final class HudOverlay extends View {
         accountSignOutAction=signOutAction;
     }
     public void setPackAnalyzerAction(Runnable action){packAnalyzerAction=action;}
+    public void setOwnerControllerAction(Runnable action){ownerControllerAction=action;}
     public void setAiCoachAction(AiCoachAction action){aiCoachAction=action;}
     public void setGameApiActions(GameApiAction promo, GameApiAction daily,
                                    GameApiAction mailFetch, GameApiAction mailClaim){
