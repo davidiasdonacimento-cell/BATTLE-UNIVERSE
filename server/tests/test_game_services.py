@@ -61,7 +61,7 @@ class BattleAiPersistentChatTests(unittest.TestCase):
         self.assertEqual(main.PlayerAiMemory.__tablename__, "player_ai_memories")
         self.assertEqual(main.PlayerAiMemory.__table__.primary_key.columns.keys(), ["player_id"])
         self.assertEqual(
-            main.AiChatConversation.__table__.c.player_id.foreign_keys.pop().target_fullname,
+            next(iter(main.AiChatConversation.__table__.c.player_id.foreign_keys)).target_fullname,
             "players.id",
         )
 
