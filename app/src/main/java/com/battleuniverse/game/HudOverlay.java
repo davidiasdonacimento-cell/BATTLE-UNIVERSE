@@ -1,6 +1,8 @@
 package com.battleuniverse.game;
 
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.content.SharedPreferences;
 import android.app.AlertDialog;
 import android.text.InputType;
@@ -520,8 +522,10 @@ public final class HudOverlay extends View {
         panel(c,558,558,282,70,0xA91A3040,0x335D8495,16);
         text(c,"EDITAR NICKNAME",582,586,14,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Nome do seu perfil",582,607,10,0xFF9EB6C4,Typeface.DEFAULT);
-        panel(c,270,642,570,42,0xA91A3040,0xFF58DDE6,12);
-        text(c,"ANALISAR / REUTILIZAR PACOTE ZIP OU BUPACK",292,669,12,Color.WHITE,Typeface.DEFAULT_BOLD);
+        panel(c,270,642,270,42,0xCC176A75,0xFF58DDE6,12);
+        text(c,"✉ CONTROLADOR DE CORREIO",286,669,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        panel(c,558,642,282,42,0xA91A3040,0xFF58DDE6,12);
+        text(c,"ANALISAR PACOTE ZIP / BUPACK",572,669,9,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,"Use a mesma conta em APKs futuros para recuperar o progresso.",272,704,9,0xFF8FAAB8,Typeface.DEFAULT);
         if(googleSignedIn)pill(c,690,632,150,25,"SAIR DA CONTA",0x553B6172,0xFFBBD0D9);
     }
@@ -1491,7 +1495,14 @@ public final class HudOverlay extends View {
             }
             if(hit(x,y,270,558,270,70)){showRedeemDialog();return;}
             if(hit(x,y,558,558,282,70)){showNicknameDialog();return;}
-            if(hit(x,y,270,642,570,42)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
+            if(hit(x,y,270,642,270,42)){
+                try {
+                    getContext().startActivity(new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://battle-universe-accounts.onrender.com/admin/correio")));
+                } catch(Exception e) { toast("Não foi possível abrir o controlador de correio."); }
+                return;
+            }
+            if(hit(x,y,558,642,282,42)){if(packAnalyzerAction!=null)packAnalyzerAction.run();return;}
         }else if(page==SHOP){
             for(int i=0;i<SHOP_NAMES.length;i++){
                 float sx=270+(i%3)*192f,sy=322+(i/3)*56f;
