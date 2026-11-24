@@ -434,6 +434,66 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         });
     }
 
+    private void aiChatRequest(String path,String method,JSONObject body,ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()) {
+            if(callback!=null)main.post(()->callback.onResult(null,"Entre na sua conta para usar o BATTLE AI PRO MAXX."));
+            return;
+        }
+        worker.execute(()->{
+            try {
+                JSONObject result=api(path,method,token,body);
+                if(callback!=null)main.post(()->callback.onResult(result,null));
+            } catch(Exception e) {
+                String message=cleanError(e);
+                if(callback!=null)main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
+
+    public void loadAiConversations(ApiActionListener callback) {
+        aiChatRequest("/v1/ai/conversations?limit=50","GET",null,callback);
+    }
+
+    public void createAiConversation(String title,ApiActionListener callback) {
+        try {
+            aiChatRequest("/v1/ai/conversations","POST",
+                new JSONObject().put("title",title==null?"Nova conversa":title),callback);
+        } catch(JSONException e) {
+            if(callback!=null)main.post(()->callback.onResult(null,"Não foi possível criar a conversa."));
+        }
+    }
+
+    public void loadAiMessages(String conversationId,ApiActionListener callback) {
+        aiChatRequest("/v1/ai/conversations/"+conversationId+"/messages?limit=100","GET",null,callback);
+    }
+
+    public void sendAiMessage(String conversationId,String content,String requestId,ApiActionListener callback) {
+        try {
+            JSONObject body=new JSONObject().put("content",content).put("client_message_id",requestId);
+            aiChatRequest("/v1/ai/conversations/"+conversationId+"/messages","POST",body,callback);
+        } catch(JSONException e) {
+            if(callback!=null)main.post(()->callback.onResult(null,"Não foi possível preparar a mensagem."));
+        }
+    }
+
+    public void deleteAiConversation(String conversationId,ApiActionListener callback) {
+        aiChatRequest("/v1/ai/conversations/"+conversationId,"DELETE",null,callback);
+    }
+
+    public void loadAiMemory(ApiActionListener callback) {
+        aiChatRequest("/v1/ai/memory","GET",null,callback);
+    }
+
+    public void saveAiMemory(String memoryText,ApiActionListener callback) {
+        try {
+            aiChatRequest("/v1/ai/memory","PUT",
+                new JSONObject().put("memory_text",memoryText==null?"":memoryText),callback);
+        } catch(JSONException e) {
+            if(callback!=null)main.post(()->callback.onResult(null,"Não foi possível preparar a memória."));
+        }
+    }
+
     public void syncNow() {
         if(closed||busy)return;
         String token=getToken();
