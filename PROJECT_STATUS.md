@@ -165,3 +165,20 @@ Não marcar nenhuma frente do escopo 2.0 como concluída apenas porque existe um
 - O workflow Android não gera nem publica automaticamente o pacote Season 02 4K. A compilação do APK não instala dependências de imagem do pacote, não executa scripts/build_content_pack.py e não exige ZIP de conteúdo para validar o APK.
 - O pacote de conteúdo permanece uma entrega separada para download posterior; o analisador no aplicativo continua destinado ao ZIP de conteúdo, não ao ZIP do APK.
 - A câmera durante a queda/paraquedas agora acompanha 100% da altitude vertical do jogador. Antes, seguia apenas 40%, podendo ficar visualmente abaixo do personagem. Código publicado na branch de trabalho; compilação e teste no aparelho ainda pendentes.
+
+
+## Reformulação total — branch feature/battle-universe-total-overhaul
+
+### Primeira alteração técnica desta série
+- Adicionado `CrashDiagnostics`: registra localmente, no armazenamento privado do app, a exceção não tratada mais recente, com limite de 48 KiB.
+- O registrador preserva e chama o handler original do Android; não oculta falhas nem promete impedir crashes. O arquivo fica em `files/last_crash.txt` no armazenamento privado do aplicativo e é removido junto com os dados privados ao desinstalar/limpar dados.
+- `MainActivity` instala o registrador no início de `onCreate`.
+- A compilação automatizada e os testes ainda precisam validar esta alteração; não houve teste físico no Redmi 12.
+
+### Critérios de conclusão da reformulação
+- Não declarar multiplayer online funcional até existir transporte de rede, autenticação de sala, matchmaking, sincronização autoritativa e testes com dois ou mais dispositivos reais.
+- Não declarar estabilidade garantida. Exigir testes de ciclo de vida, stress de controles, memória, troca de telas, perda de rede e recuperação após falha, além de testes físicos em aparelhos suportados.
+- A reformulação visual deve manter HUD responsiva e legível em diferentes densidades, sem bloquear o render loop OpenGL.
+- Painel administrativo e envio de correio devem validar permissões no servidor, com seleção de conta individual ou todos os jogadores, auditoria e proteção contra repetição/abuso.
+- Personagens, animações, colisões, mapas, loot e modos só serão marcados como completos quando existirem dados e comportamentos reais, não apenas elementos visuais.
+- APK de produção só será considerado release após build, testes, validação de assinatura e instalação/execução em dispositivo.
