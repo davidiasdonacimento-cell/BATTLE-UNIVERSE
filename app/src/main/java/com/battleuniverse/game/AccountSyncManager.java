@@ -13,6 +13,7 @@ import android.util.Base64;
 import android.os.Handler;
 import android.os.Looper;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import org.json.JSONException;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
