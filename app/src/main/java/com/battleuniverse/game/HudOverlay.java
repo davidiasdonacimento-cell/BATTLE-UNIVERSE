@@ -68,6 +68,7 @@ public final class HudOverlay extends View {
     private final RectF r=new RectF();
     private int page=HOME, mode, map, character, quality=1, lookSensitivity=1;
     private int selectedShirt,selectedBoots,selectedSet;
+    private int inventoryCategory,royaleCategory;
     private boolean music=true, effects=true, forwarding, resultSpectating, moreMenuOpen;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
     private boolean onlineMode, tacticalMapVisible;
@@ -415,19 +416,45 @@ public final class HudOverlay extends View {
                     active?0xFF176A75:0x553B6172,active?Color.WHITE:0xFFBBD0D9);
         }
     }
+    private int[] itemsForCategory(int category) {
+        if(category==1) return new int[]{3,4,5,6,7,8,9,10,11,12,13,14};
+        if(category==2) return new int[]{0,1,2};
+        return new int[]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+    }
     private void drawInventory(Canvas c){
-        eyebrow(c,270,175,"COLEÇÃO DO OPERADOR");title(c,"INVENTÁRIO",270,224);
-        subtitle(c,"Camisas, botas, conjuntos e itens de perfil já adquiridos.",270,252);
-        panel(c,270,270,570,58,0xAE193040,0x335D8495,15);
-        text(c,"◆ "+formatDiamonds(prefs.getLong("diamonds",0L))+" DIAMANTES",292,306,17,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<SHOP_NAMES.length;i++) {
-            int col=i%3,row=i/3;float x=270+col*192f,y=340+row*57f;
+        eyebrow(c,270,175,"COFRE DO OPERADOR • ITENS DA CONTA");
+        title(c,"🎒 COFRE",270,224);
+        subtitle(c,"Organize roupas, acessórios, paraquedas e coleções em categorias.",270,252);
+        panel(c,270,266,570,48,0xAE193040,0x335D8495,14);
+        text(c,"◆ "+formatDiamonds(prefs.getLong("diamonds",0L))+" DIAMANTES",290,296,15,0xFFFFD27A,Typeface.DEFAULT_BOLD);
+        String[] tabs={"✨ TODOS","👕 ROUPAS","🪂 PARAQUEDAS","🏅 COLEÇÕES","🎖 PERFIL"};
+        float[] tx={270,385,500,615,730};
+        float[] tw={108,108,108,108,110};
+        for(int i=0;i<tabs.length;i++){
+            boolean active=inventoryCategory==i;
+            panel(c,tx[i],324,tw[i],34,active?0xCC176A75:0x66304455,
+                active?0xFF59DDE6:0x445D8495,9);
+            text(c,tabs[i],tx[i]+7,346,7.2f,active?Color.WHITE:0xFFB8CBD7,Typeface.DEFAULT_BOLD);
+        }
+        if(inventoryCategory==2||inventoryCategory==3){
+            panel(c,270,374,570,178,0xAA193040,0x557AA9BC,18);
+            String heading=inventoryCategory==2?"🪂 PARAQUEDAS":"🏅 COLEÇÕES";
+            text(c,heading,296,420,22,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,inventoryCategory==2?"A categoria está reservada para os modelos de paraquedas.":
+                "A categoria está reservada para coleções e conjuntos sazonais.",296,455,11,0xFFB8CBD7,Typeface.DEFAULT);
+            pill(c,296,480,148,27,"CONTEÚDO EM PREPARAÇÃO",0x553B6172,0xFFFFD27A);
+            text(c,"Nenhum item é exibido como adquirido antes de existir no jogo.",296,526,9,0xFF8FAAB8,Typeface.DEFAULT);
+            return;
+        }
+        int[] items=itemsForCategory(inventoryCategory==4?2:inventoryCategory);
+        for(int n=0;n<items.length;n++){
+            int i=items[n],col=n%3,row=n/3;float x=270+col*192f,y=374+row*58f;
             boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
-            panel(c,x,y,174,50,owned?0xB51A4650:0x771A3040,
+            panel(c,x,y,174,51,owned?0xB51A4650:0x771A3040,
                 owned?0xFF4BD4C9:0x335D8495,12);
             circle(c,x+24,y+24,14,SHOP_COLORS[i],0xFFB5D6E1);
             text(c,SHOP_NAMES[i],x+45,y+21,8,Color.WHITE,Typeface.DEFAULT_BOLD);
-            text(c,owned?"DESBLOQUEADO":"BLOQUEADO",x+45,y+37,7,
+            text(c,owned?"🟢 DESBLOQUEADO":"🔒 BLOQUEADO",x+45,y+38,7,
                 owned?0xFF83DCD5:0xFF91A9B7,Typeface.DEFAULT_BOLD);
         }
     }
@@ -559,20 +586,20 @@ public final class HudOverlay extends View {
     }
 
     private void drawRoyalePage(Canvas c) {
-        eyebrow(c,270,175,"TEMPORADA 02 • PROGRESSÃO DA CONTA");
-        title(c,"MENU ROYALE",270,224);
-        pill(c,674,184,166,32,"ITENS FIXOS",0xFF176A75,0xFFBDF7F1);
-        subtitle(c,"Passe de temporada e cosméticos com preços definidos.",270,252);
+        eyebrow(c,270,175,"CENTRAL ROYALE • RECOMPENSAS DIRETAS");
+        title(c,"👑 MENU ROYALE",270,224);
+        pill(c,674,184,166,32,"CATÁLOGO COMPLETO",0xFF176A75,0xFFBDF7F1);
+        subtitle(c,"Passe, marcos de temporada e resgate individual de itens com preço definido.",270,252);
         long xp=prefs.getLong("xp",0L);
         int level=(int)Math.min(30L,1L+xp/500L),progress=(int)(xp%500L);
         panel(c,270,276,570,128,0xAE193040,0x557AA9BC,17);
-        eyebrow(c,292,305,"PASSE DE TEMPORADA");
+        eyebrow(c,292,305,"🎟 PASSE DE TEMPORADA 03");
         text(c,"NÍVEL "+level+" / 30",292,345,27,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,xp+" XP TOTAL  •  "+progress+" / 500 XP",292,369,10,0xFF9EB6C4,Typeface.DEFAULT_BOLD);
         p.setColor(0xFF233F4F);r.set(292,382,818,394);c.drawRoundRect(r,7,7,p);
         p.setColor(0xFF55DDE7);r.set(292,382,292+526*(progress/500f),394);c.drawRoundRect(r,7,7,p);
         panel(c,270,414,570,48,0xA91A3040,0x335D8495,13);
-        text(c,"BÔNUS DIÁRIO  •  +100 DIAMANTES",290,444,10,Color.WHITE,Typeface.DEFAULT_BOLD);
+        text(c,"🎁 BÔNUS DIÁRIO  •  +100 DIAMANTES",290,444,10,Color.WHITE,Typeface.DEFAULT_BOLD);
         boolean dailyClaimed=prefs.getLong("daily_reward_day",-1L)==(System.currentTimeMillis()/86400000L);
         pill(c,681,423,138,30,dailyClaimed?"COLETADO":"RESGATAR",
             dailyClaimed?0xFF176A75:0xFF345D79,Color.WHITE);
@@ -582,35 +609,58 @@ public final class HudOverlay extends View {
             boolean unlocked=level>=ROYALE_LEVELS[i];
             panel(c,x,y,174,78,claimed?0xB51A4650:unlocked?0xB1264A55:0x771A3040,
                 claimed?0xFF4BD4C9:unlocked?0xFF51C9C4:0x335D8495,13);
-            text(c,"MARCO "+(i+1),x+12,y+20,8,0xFF71DDE5,Typeface.DEFAULT_BOLD);
+            text(c,"🏅 MARCO "+(i+1),x+12,y+20,8,0xFF71DDE5,Typeface.DEFAULT_BOLD);
             text(c,"NÍVEL "+ROYALE_LEVELS[i]+"  •  +"+ROYALE_REWARDS[i]+" ◆",x+12,y+40,9,Color.WHITE,Typeface.DEFAULT_BOLD);
             pill(c,x+12,y+48,148,23,claimed?"RESGATADO":unlocked?"RESGATAR":"BLOQUEADO",
                 claimed?0xFF176A75:unlocked?0xFF345D79:0x553B6172,Color.WHITE);
         }
-        text(c,"XP, missões e recompensas validados pela conta online.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
+        panel(c,862,276,350,370,0xB8193040,0x557AA9BC,18);
+        text(c,"🛍 LOJA DE RECOMPENSAS",886,309,15,0xFFFFD27A,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"Escolha uma categoria para abrir os itens fixos.",886,332,9,0xFFB8CBD7,Typeface.DEFAULT);
+        String[] labels={"👕 ROUPAS E CAMISAS","🥾 BOTAS","🧥 CONJUNTOS","🎖 MOLDURAS E EMBLEMAS","🏆 TÍTULOS","🎁 TODOS OS ITENS"};
+        for(int i=0;i<labels.length;i++){
+            int col=i%2,row=i/2;float x=882+col*160f,y=354+row*88f;
+            panel(c,x,y,150,72,0xAA1A3545,0x446D94A8,12);
+            text(c,labels[i],x+10,y+29,8.2f,Color.WHITE,Typeface.DEFAULT_BOLD);
+            text(c,"VER ITENS  ›",x+10,y+52,7.5f,0xFF70DDE8,Typeface.DEFAULT_BOLD);
+        }
+        text(c,"O catálogo só libera itens aceitos pelo servidor da conta.",272,666,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
 
     private void drawRoyaleCatalogPage(Canvas c) {
-        eyebrow(c,270,175,"TROCA DIRETA • RECOMPENSAS COM PREÇO DEFINIDO");
-        title(c,"CATÁLOGO ROYALE",270,224);
-        pill(c,674,184,166,32,"VOLTAR AO PASSE",0x553B6172,0xFFD7E6ED);
-        subtitle(c,"Toque no item escolhido e confirme o resgate. Sem roleta e sem sorteio.",270,252);
-        panel(c,270,264,570,43,0xA91A3040,0x557AA9BC,13);
+        eyebrow(c,270,175,"TROCA DIRETA • ITENS COM PREÇO DEFINIDO");
+        title(c,"🎁 CATÁLOGO ROYALE",270,224);
+        pill(c,674,184,166,32,"VOLTAR AO ROYALE",0x553B6172,0xFFD7E6ED);
+        subtitle(c,"Escolha uma categoria e resgate o item individualmente. Sem roleta ou sorteio.",270,252);
+        panel(c,270,264,942,43,0xA91A3040,0x557AA9BC,13);
         text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),290,291,13,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,"ITENS FIXOS  •  RESGATE INDIVIDUAL",568,291,8,0xFF8FE3E7,Typeface.DEFAULT_BOLD);
-        for(int i=0;i<SHOP_NAMES.length;i++){
-            int col=i%3,row=i/3;float x=270+col*192f,y=318+row*66f;
-            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
-            panel(c,x,y,174,58,owned?0xB51A4650:0xA91A3040,
-                owned?0xFF4BD4C9:0x557AA9BC,12);
-            circle(c,x+22,y+25,13,SHOP_COLORS[i],0xFFB5D6E1);
-            String name=SHOP_NAMES[i].length()>17?SHOP_NAMES[i].substring(0,17):SHOP_NAMES[i];
-            text(c,name,x+42,y+22,7.8f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-            text(c,owned?"JÁ ADQUIRIDO":"◆ "+SHOP_PRICES[i]+" DIAMANTES",x+42,y+42,7,owned?0xFF83DCD5:0xFFFFD27A,Typeface.DEFAULT_BOLD);
-            pill(c,x+112,y+34,54,18,owned?"OK":"PEGAR",owned?0xFF176A75:0xFF345D79,Color.WHITE);
+        String[] tabs={"TODOS","👕 ROUPAS","🥾 BOTAS","🧥 CONJUNTOS","🎖 PERFIL"};
+        float[] tx={690,790,890,990,1090};float[] tw={88,90,90,92,106};
+        for(int i=0;i<tabs.length;i++){
+            boolean active=royaleCategory==i;
+            panel(c,tx[i],270,tw[i],29,active?0xCC176A75:0x66304455,
+                active?0xFF59DDE6:0x445D8495,8);
+            text(c,tabs[i],tx[i]+8,289,7.2f,active?Color.WHITE:0xFFB8CBD7,Typeface.DEFAULT_BOLD);
         }
-        text(c,"Cada item tem preço e resultado definidos antes do resgate.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
+        int[] items=royaleCategory==1?new int[]{3,4,5,6}:
+            royaleCategory==2?new int[]{7,8,9,10}:
+            royaleCategory==3?new int[]{11,12,13,14}:
+            royaleCategory==4?new int[]{0,1,2}:
+            new int[]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+        for(int n=0;n<items.length;n++){
+            int i=items[n],col=n%4,row=n/4;float x=270+col*238f,y=318+row*78f;
+            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            panel(c,x,y,220,68,owned?0xB51A4650:0xA91A3040,
+                owned?0xFF4BD4C9:0x557AA9BC,12);
+            circle(c,x+25,y+28,14,SHOP_COLORS[i],0xFFB5D6E1);
+            String name=SHOP_NAMES[i].length()>19?SHOP_NAMES[i].substring(0,19):SHOP_NAMES[i];
+            text(c,name,x+49,y+25,8.1f,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,owned?"JÁ ADQUIRIDO":"◆ "+SHOP_PRICES[i]+" DIAMANTES",x+49,y+45,7.2f,owned?0xFF83DCD5:0xFFFFD27A,Typeface.DEFAULT_BOLD);
+            pill(c,x+150,y+39,58,20,owned?"OK":"PEGAR",owned?0xFF176A75:0xFF345D79,Color.WHITE);
+        }
+        text(c,"Preços fixos • compra confirmada pela API • saldo e propriedade sincronizados.",272,664,9,0xFF8FAAB8,Typeface.DEFAULT);
     }
+
     private void ensureStarterWardrobe() {
         if(prefs.getBoolean("wardrobe_starter_v2_granted",false)) return;
         SharedPreferences.Editor editor=prefs.edit()
@@ -1470,14 +1520,31 @@ public final class HudOverlay extends View {
                     game.setWardrobe(selectedShirt,selectedBoots,selectedSet);toast("Conjunto "+new String[]{"AURORA","CAMPEÃO","ORBITAL","DESERTO"}[i]+" equipado.");return;
                 }
             }
+        }else if(page==INVENTORY){
+            if(hit(x,y,270,324,570,34)){
+                inventoryCategory=x<385?0:x<500?1:x<615?2:x<730?3:4;return;
+            }
         }else if(page==ROYALE){
-            if(hit(x,y,674,184,166,32)){page=ROYALE_CATALOG;return;}
+            if(hit(x,y,674,184,166,32)){royaleCategory=0;page=ROYALE_CATALOG;return;}
             if(hit(x,y,681,423,138,30)){claimDailyReward();return;}
+            if(hit(x,y,882,354,150,72)){royaleCategory=1;page=ROYALE_CATALOG;return;}
+            if(hit(x,y,1042,354,150,72)){royaleCategory=2;page=ROYALE_CATALOG;return;}
+            if(hit(x,y,882,442,150,72)){royaleCategory=3;page=ROYALE_CATALOG;return;}
+            if(hit(x,y,1042,442,150,72)){royaleCategory=4;page=ROYALE_CATALOG;return;}
+            if(hit(x,y,882,530,310,72)){royaleCategory=0;page=ROYALE_CATALOG;return;}
         }else if(page==ROYALE_CATALOG){
             if(hit(x,y,674,184,166,32)){page=ROYALE;return;}
-            for(int i=0;i<SHOP_NAMES.length;i++){
-                float rx=270+(i%3)*192f,ry=318+(i/3)*66f;
-                if(hit(x,y,rx,ry,174,58)){purchaseShopItem(i);return;}
+            if(hit(x,y,690,270,506,29)){
+                royaleCategory=x<790?0:x<890?1:x<990?2:x<1090?3:4;return;
+            }
+            int[] items=royaleCategory==1?new int[]{3,4,5,6}:
+                royaleCategory==2?new int[]{7,8,9,10}:
+                royaleCategory==3?new int[]{11,12,13,14}:
+                royaleCategory==4?new int[]{0,1,2}:
+                new int[]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+            for(int n=0;n<items.length;n++){
+                float rx=270+(n%4)*238f,ry=318+(n/4)*78f;
+                if(hit(x,y,rx,ry,220,68)){purchaseShopItem(items[n]);return;}
             }
         }else if(page==MISSIONS){
             for(int i=0;i<MISSION_NAMES.length;i++){
