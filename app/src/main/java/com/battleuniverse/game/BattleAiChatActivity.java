@@ -41,6 +41,8 @@ public final class BattleAiChatActivity extends Activity {
     private boolean suppressSelection;
     private boolean busy;
     private String activeConversationId = "";
+    private String pendingRequestId = "";
+    private String pendingMessageContent = "";
 
     private int dp(float value) {
         return (int)(value * getResources().getDisplayMetrics().density + 0.5f);
@@ -304,6 +306,17 @@ public final class BattleAiChatActivity extends Activity {
             params.leftMargin = user ? dp(28) : 0;
             params.rightMargin = user ? 0 : dp(28);
             messageList.addView(bubble, params);
+            if (user && i == rows.length() - 1) {
+                String requestId = message.optString("client_message_id", "");
+                String pendingText = message.optString("content", "");
+                if (!requestId.isEmpty()) {
+                    Button retry = button("TENTAR GERAR RESPOSTA");
+                    retry.setOnClickListener(v -> retryPendingMessage(requestId, pendingText));
+                    LinearLayout.LayoutParams retryParams = new LinearLayout.LayoutParams(-1, dp(42));
+                    retryParams.bottomMargin = dp(8);
+                    messageList.addView(retry, retryParams);
+                }
+            }
         }
         messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
     }
@@ -316,20 +329,44 @@ public final class BattleAiChatActivity extends Activity {
             showStatus("Crie ou selecione uma conversa primeiro.");
             return;
         }
+        if (!pendingRequestId.isEmpty() && !pendingMessageContent.equals(value)) {
+            showStatus("Existe uma mensagem pendente. Reenvie o mesmo texto para evitar duplicidade.");
+            composer.setText(pendingMessageContent);
+            composer.setSelection(composer.length());
+            return;
+        }
+        if (pendingRequestId.isEmpty()) {
+            pendingRequestId = UUID.randomUUID().toString();
+            pendingMessageContent = value;
+        }
+        submitAiMessage(pendingRequestId, pendingMessageContent);
+    }
+
+    private void retryPendingMessage(String requestId, String content) {
+        if (busy || activeConversationId.isEmpty() || requestId.isEmpty()) return;
+        pendingRequestId = requestId;
+        pendingMessageContent = content;
+        submitAiMessage(requestId, content);
+    }
+
+    private void submitAiMessage(String requestId, String content) {
         busy = true;
         sendButton.setEnabled(false);
         composer.setText("");
         showStatus("BATTLE AI PRO MAXX está preparando a resposta...");
-        String requestId = UUID.randomUUID().toString();
-        account.sendAiMessage(activeConversationId, value, requestId, (result, error) -> {
+        account.sendAiMessage(activeConversationId, content, requestId, (result, error) -> {
             busy = false;
             sendButton.setEnabled(true);
             if (isFinishing()) return;
             if (error != null || result == null) {
-                showStatus(error == null ? "A mensagem ficou pendente. Tente novamente." : error);
+                showStatus(error == null ? "A mensagem ficou pendente. Use TENTAR GERAR RESPOSTA." : error);
+                composer.setText(pendingMessageContent);
+                composer.setSelection(composer.length());
                 loadMessages();
                 return;
             }
+            pendingRequestId = "";
+            pendingMessageContent = "";
             loadMessages();
             refreshConversations();
         });
