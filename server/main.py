@@ -52,7 +52,7 @@ PROFILE_FIELDS = {
     "show_minimap", "haptics", "mode", "map", "character", "selected_shirt",
     "selected_boots", "selected_set", "equipped_beard", "equipped_helmet",
     "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
-    "nickname", "profile_schema_version"
+    "nickname", "profile_schema_version", "online_mode"
 }
 
 # Valores usados como índices ou configurações enumeradas no cliente Android.
@@ -68,7 +68,7 @@ PROFILE_INT_RANGES = {
 }
 PROFILE_BOOL_DEFAULTS = {
     "music": True, "effects": True, "invert_camera_y": False,
-    "show_minimap": True, "haptics": True,
+    "show_minimap": True, "haptics": True, "online_mode": False,
 }
 PROFILE_STRING_LIMITS = {"nickname": 24, "character_display_name": 32}
 
