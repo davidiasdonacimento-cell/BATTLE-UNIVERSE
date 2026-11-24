@@ -62,7 +62,6 @@ PROFILE_INT_RANGES = {
     "character": (0, 3, 0), "selected_character": (0, 3, 0),
     "quality": (0, 2, 1),
     "look_sensitivity": (0, 2, 1),
-    "sensitivity_general": (0, 2, 1), "sensitivity_aim": (0, 2, 1),
     "selected_shirt": (0, 4, 1), "selected_boots": (0, 4, 1),
     "selected_set": (0, 4, 0),
 }
