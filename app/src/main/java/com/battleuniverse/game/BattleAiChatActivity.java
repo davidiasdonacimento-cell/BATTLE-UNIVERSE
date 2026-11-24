@@ -108,6 +108,9 @@ public final class BattleAiChatActivity extends Activity {
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1);
         titleParams.leftMargin = dp(8);
         header.addView(titleBox, titleParams);
+        Button quickMode = button("RÁPIDO");
+        quickMode.setOnClickListener(v -> showQuickModeDialog());
+        header.addView(quickMode, new LinearLayout.LayoutParams(-2, dp(46)));
         Button newChat = button("+ NOVO");
         newChat.setOnClickListener(v -> createConversation());
         header.addView(newChat, new LinearLayout.LayoutParams(-2, dp(46)));
@@ -198,6 +201,48 @@ public final class BattleAiChatActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
+    }
+
+    private void showQuickModeDialog() {
+        EditText question = new EditText(this);
+        question.setHint("Faça uma pergunta rápida...");
+        question.setMinLines(2);
+        question.setMaxLines(4);
+        question.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        LinearLayout box = new LinearLayout(this);
+        box.setPadding(dp(16), dp(8), dp(16), 0);
+        box.addView(question, new LinearLayout.LayoutParams(-1, -2));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("BATTLE AI • MODO RÁPIDO")
+            .setMessage("Resposta direta, sem criar uma conversa no histórico.")
+            .setView(box)
+            .setNegativeButton("CANCELAR", null)
+            .setPositiveButton("PERGUNTAR", null)
+            .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String text = question.getText().toString().trim();
+            if (text.length() < 2) {
+                question.setError("Digite uma pergunta.");
+                return;
+            }
+            dialog.dismiss();
+            showStatus("Modo rápido: aguardando a IA...");
+            account.askCoach(text, (answer, error) -> {
+                if (isFinishing()) return;
+                if (error != null) {
+                    showStatus(error);
+                    return;
+                }
+                showStatus("Resposta rápida recebida.");
+                new AlertDialog.Builder(this)
+                    .setTitle("BATTLE AI • RESPOSTA RÁPIDA")
+                    .setMessage(answer)
+                    .setPositiveButton("FECHAR", null)
+                    .show();
+            });
+        }));
+        dialog.show();
     }
 
     private void refreshConversations() {
