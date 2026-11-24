@@ -250,7 +250,7 @@ class CoachBody(BaseModel):
 
 class DeviceRegisterBody(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
-    install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    install_id: str | None = Field(default=None, min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
     device_label: str = Field(default="Android", min_length=1, max_length=40)
 
 class RecoveryRotateBody(BaseModel):
@@ -1122,7 +1122,9 @@ def owner_pair(body: OwnerPairBody, db: Session = Depends(db_session)) -> dict[s
         raise HTTPException(503, "Ativação do proprietário ainda não foi configurada no servidor.")
     if not secrets.compare_digest(body.pairing_code, OWNER_PAIRING_CODE):
         raise HTTPException(401, "Código de ativação inválido.")
-    install_id = body.install_id.strip()
+    # Clientes antigos sem install_id recebem uma identidade aleatória vinculada ao JWT.
+    # O token é cifrado no Android Keystore e continua sujeito ao bloqueio de aparelho único.
+    install_id = body.install_id.strip() if body.install_id else "legacy-" + secrets.token_hex(24)
     now = datetime.now(timezone.utc)
     device = db.scalar(select(OwnerDevice).where(OwnerDevice.id == 1).with_for_update())
     if device is None:
