@@ -1443,6 +1443,79 @@ def owner_create_promo_code(body: PromoCreateBody, db: Session = Depends(db_sess
             "max_uses": row.max_uses, "uses": row.uses,
             "expires_at": row.expires_at.isoformat() if row.expires_at else None}
 
+
+
+@app.get("/admin/contas", response_class=HTMLResponse)
+def owner_accounts_admin_page():
+    """Painel web protegido por pareamento do proprietário e token curto."""
+    return HTMLResponse(r"""<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>BATTLE UNIVERSE • Gerenciar contas</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#07111d;color:#eaf7ff;font:15px system-ui,Arial;padding:20px}
+main{max-width:1080px;margin:18px auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{color:#60dced;margin:0}p,.muted{color:#9eb9c9;line-height:1.5}
+.panel{background:#102638;border:1px solid #285267;border-radius:16px;padding:18px;margin:14px 0}
+input,button{font:inherit;border-radius:10px;padding:12px}input{width:100%;background:#071724;color:#fff;border:1px solid #31566b}
+button{border:0;background:#16b7ce;color:#04141b;font-weight:800;cursor:pointer}button:disabled{opacity:.5;cursor:wait}
+.secondary{background:#29475b;color:#eaf7ff}.danger{background:#8b3544;color:#fff}
+.grid{display:grid;grid-template-columns:minmax(260px, .85fr) minmax(300px,1.15fr);gap:14px}
+.list{display:grid;gap:8px;margin-top:12px}.account{display:flex;justify-content:space-between;align-items:center;text-align:left;background:#0b1d2b;color:#eaf7ff;border:1px solid #29495d;gap:12px}
+.account[aria-pressed=true]{border-color:#43d9e7;background:#12384a}.account small{color:#9eb9c9}
+.field{margin:13px 0}.field label{display:block;margin-bottom:6px;color:#bceaf2;font-weight:700}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.status{white-space:pre-wrap;background:#0b1d2b;padding:12px;border-radius:10px;margin-top:12px;overflow-wrap:anywhere}
+.hidden{display:none!important}.tag{font-size:12px;color:#7ee0c8}
+@media(max-width:720px){body{padding:12px}.grid{grid-template-columns:1fr}.panel{padding:14px}}
+</style></head><body><main>
+<div class="top"><div><h1>◈ BATTLE UNIVERSE</h1><p>Central administrativa • seleção e gerenciamento de contas</p></div>
+<div class="actions"><a href="/admin/correio" style="color:#70e3ef">Abrir correio global</a><a href="/admin/monitoramento" style="color:#70e3ef">Monitoramento</a></div></div>
+<section class="panel" id="auth">
+<h2>Autorizar administrador</h2><p>Use o código de pareamento configurado no serviço de hospedagem. O código não é salvo nesta página.</p>
+<div class="field"><label for="pair">Código de autorização</label><input id="pair" type="password" autocomplete="off" maxlength="256"></div>
+<button id="connect">Autorizar e carregar contas</button><div class="status" id="status" role="status">Aguardando autorização.</div>
+</section>
+<section id="workspace" class="hidden">
+<div class="grid">
+<section class="panel"><h2>Contas cadastradas</h2><p class="muted" id="count">Carregando...</p>
+<div class="field"><label for="search">Buscar por nickname</label><input id="search" maxlength="40" placeholder="Digite parte do nickname"></div>
+<div class="actions"><button id="find">Pesquisar</button><button class="secondary" id="refresh">Atualizar</button></div>
+<div class="list" id="accounts"></div><div class="actions" style="margin-top:12px"><button class="secondary" id="prev">Anterior</button><button class="secondary" id="next">Próxima página</button></div>
+</section>
+<section class="panel"><h2>Conta selecionada</h2><p class="muted" id="empty">Escolha uma conta na lista para visualizar e editar.</p>
+<div id="editor" class="hidden">
+<p id="selectedMeta" class="tag"></p>
+<div class="field"><label for="username">Nickname da conta</label><input id="username" maxlength="18" minlength="3"></div>
+<div class="field"><label for="character">Nome do personagem</label><input id="character" maxlength="32"></div>
+<div class="field"><label for="state">Situação da conta</label><select id="state" style="width:100%;padding:12px;background:#071724;color:white;border:1px solid #31566b;border-radius:10px"><option value="active">Ativa</option><option value="suspended">Suspensa</option></select></div>
+<div class="field"><label for="reason">Motivo (opcional)</label><input id="reason" maxlength="240"></div>
+<div class="actions"><button id="save">Salvar alterações</button><button class="secondary" id="cancel">Limpar seleção</button></div>
+</div></section></div>
+<div class="status" id="result" role="status">Painel pronto.</div>
+</section></main>
+<script>
+const $=id=>document.getElementById(id);let token="",offset=0,selected=null,accounts=[];
+const LIMIT=50;
+function message(s){$("status").textContent=s}
+function result(s){$("result").textContent=s}
+async function api(path,opts={}){const r=await fetch(path,{...opts,headers:{...(opts.headers||{}),Authorization:"Bearer "+token,...(opts.body?{"Content-Type":"application/json"}:{})},cache:"no-store"});let d={};try{d=await r.json()}catch(_){}
+if(!r.ok){if(r.status===401||r.status===403){token="";$("workspace").classList.add("hidden");$("auth").classList.remove("hidden")}throw new Error(d.detail||("Falha HTTP "+r.status))}
+return d}
+$("connect").onclick=async()=>{const code=$("pair").value.trim();if(code.length<32){message("Código inválido. Verifique o valor configurado no Render.");return}
+$("connect").disabled=true;try{const r=await fetch("/v1/owner/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pairing_code:code}),cache:"no-store"});const d=await r.json();if(!r.ok)throw new Error(d.detail||"Autorização recusada.");token=d.access_token;$("pair").value="";$("auth").classList.add("hidden");$("workspace").classList.remove("hidden");await loadAccounts();message("Administrador autorizado.")}
+catch(e){message("Não foi possível autorizar: "+e.message)}finally{$("connect").disabled=false}};
+async function loadAccounts(){try{const q=$("search").value.trim();const d=await api("/v1/owner/accounts?limit="+LIMIT+"&offset="+offset+"&search="+encodeURIComponent(q));accounts=d.accounts||[];$("count").textContent=accounts.length+" contas nesta página • página "+(Math.floor(offset/LIMIT)+1);const box=$("accounts");box.replaceChildren();
+for(const a of accounts){const b=document.createElement("button");b.className="account";b.type="button";b.setAttribute("aria-pressed",String(selected&&selected.id===a.id));const left=document.createElement("span"),name=document.createElement("strong"),meta=document.createElement("small"),state=document.createElement("span");name.textContent=a.username;meta.textContent="ID "+a.id+" • "+(a.character_name||"Sem personagem");left.append(name,document.createElement("br"),meta);state.textContent=a.state==="suspended"?"SUSPENSA":a.state==="deleted"?"ENCERRADA":"ATIVA";b.append(left,state);b.onclick=()=>choose(a);box.append(b)}
+if(!accounts.length){const p=document.createElement("p");p.className="muted";p.textContent="Nenhuma conta encontrada nesta página.";box.append(p)}
+if(selected){const fresh=accounts.find(a=>a.id===selected.id);if(fresh)choose(fresh)}
+result("Lista de contas atualizada com dados do servidor.");}catch(e){result("Erro ao carregar contas: "+e.message)}}
+function choose(a){selected=a;$("empty").classList.add("hidden");$("editor").classList.remove("hidden");$("selectedMeta").textContent="Conta #"+a.id+" • criada em "+new Date(a.created_at).toLocaleString("pt-BR");$("username").value=a.username;$("character").value=a.character_name||"";$("state").value=a.state==="suspended"?"suspended":"active";$("reason").value="";for(const b of $("accounts").children)b.setAttribute("aria-pressed",String(b.textContent.includes(a.username)&&b.textContent.includes("ID "+a.id)))}
+$("save").onclick=async()=>{if(!selected)return;const body={username:$("username").value.trim(),character_name:$("character").value.trim(),state:$("state").value,reason:$("reason").value.trim()};$("save").disabled=true;try{const d=await api("/v1/owner/accounts/"+selected.id,{method:"PATCH",body:JSON.stringify(body)});result("🟢 VERDE — alterações salvas para "+d.account.username+".");selected=d.account;await loadAccounts()}catch(e){result("❌ DEU RED! "+e.message)}finally{$("save").disabled=false}};
+$("find").onclick=()=>{offset=0;selected=null;$("editor").classList.add("hidden");$("empty").classList.remove("hidden");loadAccounts()};
+$("search").addEventListener("keydown",e=>{if(e.key==="Enter")$("find").click()});
+$("refresh").onclick=()=>loadAccounts();$("prev").onclick=()=>{offset=Math.max(0,offset-LIMIT);selected=null;loadAccounts()};$("next").onclick=()=>{if(accounts.length===LIMIT){offset+=LIMIT;selected=null;loadAccounts()}};
+$("cancel").onclick=()=>{selected=null;$("editor").classList.add("hidden");$("empty").classList.remove("hidden");for(const b of $("accounts").children)b.setAttribute("aria-pressed","false")};
+</script></body></html>""")
+
 @app.get("/v1/owner/overview")
 def admin_overview(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
     total = db.scalar(select(func.count(Player.id))) or 0
