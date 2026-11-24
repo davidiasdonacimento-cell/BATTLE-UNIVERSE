@@ -28,7 +28,7 @@ import org.json.JSONObject;
 public final class HudOverlay extends View {
     private static final int HOME=0, CHARACTERS=1, MODES_PAGE=2, MAPS_PAGE=3,
         INVENTORY=4, SETTINGS=5, PROFILE=6, SHOP=7, ROYALE=8, MISSIONS=9, WARDROBE=10,
-        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17;
+        GAME=11, ROYALE_SPIN=12, EVENTS=13, FRIENDS=14, MAIL=15, ACHIEVEMENTS=16, PREMATCH=17, OWNER_ACCESS=18;
     private static final String[] NAV={"INÍCIO","PERSONAGENS","MODOS","MAPAS",
         "INVENTÁRIO","AJUSTES","PERFIL","LOJA","ROYALE","MISSÕES","ROUPAS",
         "EVENTOS","EQUIPE","CORREIO","CONQUISTAS"};
@@ -68,7 +68,27 @@ public final class HudOverlay extends View {
     private int selectedShirt,selectedBoots,selectedSet;
     private boolean music=true, effects=true, forwarding, resultSpectating;
     private boolean invertCameraY, showMinimap=true, hapticsEnabled=true;
-    private boolean onlineMode, tacticalMapVisible;
+    private boolean onlineMode, tacticalMapVisible, gameAccessAuthorized, ownerAccessDismissed;
+    private GameApiAction gameAccessAction;
+    private boolean gameAccessCheckRunning;
+    private final Runnable gameAccessRefreshRunnable=new Runnable(){
+        @Override public void run(){
+            if(googleSignedIn && gameAccessAction!=null && !gameAccessCheckRunning){
+                gameAccessCheckRunning=true;
+                gameAccessAction.run("",(result,error)->{
+                    gameAccessCheckRunning=false;
+                    if(error==null && result!=null){
+                        boolean allowed=result.optBoolean("authorized",false);
+                        if(allowed && !gameAccessAuthorized){ownerAccessDismissed=false;page=OWNER_ACCESS;}
+                        if(!allowed && page==OWNER_ACCESS)page=HOME;
+                        gameAccessAuthorized=allowed;
+                        postInvalidate();
+                    }
+                });
+            } else if(!googleSignedIn){gameAccessAuthorized=false;if(page==OWNER_ACCESS)page=HOME;}
+            mailRefreshHandler.postDelayed(this,7000L);
+        }
+    };
     private float scale=1, offsetX, offsetY;
     private String toast="";
     public interface UsernameAccountAction {
@@ -139,6 +159,7 @@ public final class HudOverlay extends View {
         drawLobbyBackdrop(c);
         p.setColor(0xB9071421);c.drawRect(0,0,1280,96,p);
         p.setColor(0x5579DDEB);c.drawRect(0,94,1280,96,p);
+        if(page==OWNER_ACCESS){drawOwnerAccessScreen(c);return;}
         drawBrand(c);drawProfile(c);drawSidebar(c);drawPage(c);drawTeam(c);
     }
     private void drawLobbyBackdrop(Canvas c) {
@@ -208,6 +229,19 @@ public final class HudOverlay extends View {
         else{c.drawCircle(x,y,8,p);c.drawCircle(x,y,3,p);}
         p.setStyle(Paint.Style.FILL);
     }
+    private void drawOwnerAccessScreen(Canvas c){
+        p.setShader(new LinearGradient(0,0,1280,720,new int[]{0xFF061522,0xFF0B3040,0xFF071522},null,Shader.TileMode.CLAMP));
+        c.drawRect(0,0,1280,720,p);p.setShader(null);
+        for(int i=0;i<24;i++){p.setColor(i%2==0?0x223BD7E5:0x1B8C6BFF);c.drawCircle((i*197)%1280,(i*113)%720,2+i%3,p);}
+        panel(c,260,145,760,430,0xF010293A,0xFF48DCE8,28);
+        pill(c,520,185,240,30,"BATTLE UNIVERSE • ACESSO ESPECIAL",0xFF155766,0xFFB8F8FF);
+        text(c,"CONTA AUTORIZADA",640,285,38,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+        text(c,"O administrador liberou o acesso especial para esta conta.",640,330,16,0xFFB7D4E0,Typeface.DEFAULT);
+        text(c,"Conta: "+(googleEmail.isEmpty()?"JOGADOR":googleEmail),640,375,17,0xFF72E7EF,Typeface.DEFAULT_BOLD);
+        text(c,"Esta tela aparece somente enquanto a autorização estiver ativa.",640,410,12,0xFF9CB8C8,Typeface.DEFAULT);
+        gradientButton(c,470,475,340,68,"CONTINUAR","VOLTAR AO LOBBY",0xFF31D7D7,0xFF167B9A);
+    }
+
     private void drawPage(Canvas c){
         if(page==HOME)drawHome(c); else if(page==CHARACTERS)drawCharacters(c);
         else if(page==MODES_PAGE)drawModes(c); else if(page==MAPS_PAGE)drawMaps(c);
@@ -1295,6 +1329,10 @@ public final class HudOverlay extends View {
         return true;
     }
     private void tap(float x,float y){
+        if(page==OWNER_ACCESS){
+            if(hit(x,y,470,475,340,68)){page=HOME;ownerAccessDismissed=true;invalidate();}
+            return;
+        }
         if(System.currentTimeMillis()-lastTap<110)return;lastTap=System.currentTimeMillis();
         if(hapticsEnabled)performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         if(hit(x,y,1000,17,246,60)){page=PROFILE;return;}
@@ -1455,6 +1493,11 @@ public final class HudOverlay extends View {
         accountSyncAction=syncAction;
         accountSignOutAction=signOutAction;
     }
+    public void setGameAccessAction(GameApiAction action){
+        gameAccessAction=action;
+        mailRefreshHandler.removeCallbacks(gameAccessRefreshRunnable);
+        mailRefreshHandler.postDelayed(gameAccessRefreshRunnable,1500L);
+    }
     public void setPackAnalyzerAction(Runnable action){packAnalyzerAction=action;}
     public void setAiCoachAction(AiCoachAction action){aiCoachAction=action;}
     public void setGameApiActions(GameApiAction promo, GameApiAction daily,
@@ -1482,6 +1525,7 @@ public final class HudOverlay extends View {
 
     @Override protected void onDetachedFromWindow(){
         mailRefreshHandler.removeCallbacks(mailRefreshRunnable);
+        mailRefreshHandler.removeCallbacks(gameAccessRefreshRunnable);
         super.onDetachedFromWindow();
     }
     public void setShopPurchaseAction(GameApiAction action){shopPurchaseAction=action;}
@@ -1531,6 +1575,7 @@ public final class HudOverlay extends View {
                                        String username, String message) {
         googleConfigured=configured;
         googleSignedIn=signedIn;
+        if(!signedIn){gameAccessAuthorized=false;ownerAccessDismissed=false;if(page==OWNER_ACCESS)page=HOME;}
         googleEmail=username==null?"":username;
         googleMessage=message==null?"":message;
         invalidate();
