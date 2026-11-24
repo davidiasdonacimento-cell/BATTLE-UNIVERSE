@@ -155,6 +155,20 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         });
     }
 
+    public void checkGameAuthorization(ApiActionListener callback) {
+        String token=getToken();
+        if(token.isEmpty()){main.post(()->callback.onResult(new JSONObject().put("authorized",false),""));return;}
+        worker.execute(()->{
+            try {
+                JSONObject result=api("/v1/accounts/me/game-access","GET",token,null);
+                main.post(()->callback.onResult(result,null));
+            } catch(Exception e) {
+                String message=cleanError(e);
+                main.post(()->callback.onResult(null,message));
+            }
+        });
+    }
+
     public void completeMatch(String payload, ApiActionListener callback) {
         String token=getToken();
         if(token.isEmpty()){main.post(()->callback.onResult(null,"Entre na conta para sincronizar as recompensas da partida."));return;}

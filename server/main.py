@@ -207,6 +207,13 @@ class AccountControl(Base):
     reason: Mapped[str] = mapped_column(String(240), nullable=False, default="")
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class GameAccessGrant(Base):
+    __tablename__ = "game_access_grants"
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=False)
+    changed_by: Mapped[str] = mapped_column(String(64), nullable=False, default="owner-device")
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class GameSetting(Base):
     __tablename__ = "game_settings"
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
@@ -292,6 +299,9 @@ class AccountEditBody(BaseModel):
     character_name: str | None = Field(default=None, min_length=1, max_length=32)
     state: str | None = Field(default=None, pattern=r"^(active|suspended)$")
     reason: str | None = Field(default=None, max_length=240)
+
+class GameAccessBody(BaseModel):
+    enabled: bool
 
 class GameSettingsBody(BaseModel):
     game_name: str = Field(min_length=2, max_length=40)
@@ -540,6 +550,11 @@ def login(body: LoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
 def me(player: Player = Depends(current_player)) -> dict[str, Any]:
     return {"player": {"id": player.id, "username": player.username, "profile": player.profile or {},
                        "created_at": player.created_at.isoformat(), "updated_at": player.updated_at.isoformat()}}
+
+@app.get("/v1/accounts/me/game-access")
+def player_game_access(db: Session = Depends(db_session), player: Player = Depends(current_player)) -> dict[str, Any]:
+    grant = db.get(GameAccessGrant, player.id)
+    return {"authorized": bool(grant and grant.enabled), "updated_at": grant.changed_at.isoformat() if grant else None}
 
 @app.patch("/v1/accounts/me/profile")
 def update_profile(body: ProfileBody, db: Session = Depends(db_session),
@@ -1488,7 +1503,8 @@ button{border:0;background:#16b7ce;color:#04141b;font-weight:800;cursor:pointer}
 <div class="field"><label for="character">Nome do personagem</label><input id="character" maxlength="32"></div>
 <div class="field"><label for="state">Situação da conta</label><select id="state" style="width:100%;padding:12px;background:#071724;color:white;border:1px solid #31566b;border-radius:10px"><option value="active">Ativa</option><option value="suspended">Suspensa</option></select></div>
 <div class="field"><label for="reason">Motivo (opcional)</label><input id="reason" maxlength="240"></div>
-<div class="actions"><button id="save">Salvar alterações</button><button class="secondary" id="cancel">Limpar seleção</button></div>
+<div class="actions"><button id="save">Salvar alterações</button><button id="toggleAccess" class="secondary">Autorizar no jogo</button><button class="secondary" id="cancel">Limpar seleção</button></div>
+<p class="tag" id="accessStatus">Acesso ao jogo não autorizado.</p>
 </div></section></div>
 <div class="status" id="result" role="status">Painel pronto.</div>
 </section></main>
@@ -1508,8 +1524,9 @@ for(const a of accounts){const b=document.createElement("button");b.className="a
 if(!accounts.length){const p=document.createElement("p");p.className="muted";p.textContent="Nenhuma conta encontrada nesta página.";box.append(p)}
 if(selected){const fresh=accounts.find(a=>a.id===selected.id);if(fresh)choose(fresh)}
 result("Lista de contas atualizada com dados do servidor.");}catch(e){result("Erro ao carregar contas: "+e.message)}}
-function choose(a){selected=a;if(a.state==="deleted"){$("editor").classList.add("hidden");$("empty").classList.remove("hidden");$("empty").textContent="Esta conta foi encerrada. A edição está bloqueada para evitar reativação acidental.";result("Conta encerrada — somente consulta.");return}$("empty").classList.add("hidden");$("editor").classList.remove("hidden");$("selectedMeta").textContent="Conta #"+a.id+" • criada em "+new Date(a.created_at).toLocaleString("pt-BR");$("username").value=a.username;$("character").value=a.character_name||"";$("state").value=a.state==="suspended"?"suspended":"active";$("reason").value="";for(const b of $("accounts").children)b.setAttribute("aria-pressed",String(b.textContent.includes(a.username)&&b.textContent.includes("ID "+a.id)))}
+function choose(a){selected=a;if(a.state==="deleted"){$("editor").classList.add("hidden");$("empty").classList.remove("hidden");$("empty").textContent="Esta conta foi encerrada. A edição está bloqueada para evitar reativação acidental.";result("Conta encerrada — somente consulta.");return}$("empty").classList.add("hidden");$("editor").classList.remove("hidden");$("selectedMeta").textContent="Conta #"+a.id+" • criada em "+new Date(a.created_at).toLocaleString("pt-BR");$("username").value=a.username;$("character").value=a.character_name||"";$("state").value=a.state==="suspended"?"suspended":"active";$("reason").value="";$("toggleAccess").textContent=a.game_authorized?"Revogar autorização no jogo":"Autorizar no jogo";$("accessStatus").textContent=a.game_authorized?"🟢 Esta conta está autorizada a abrir a tela especial no jogo.":"Esta conta ainda não está autorizada.";for(const b of $("accounts").children)b.setAttribute("aria-pressed",String(b.textContent.includes(a.username)&&b.textContent.includes("ID "+a.id)))}
 $("save").onclick=async()=>{if(!selected)return;const body={username:$("username").value.trim(),character_name:$("character").value.trim(),state:$("state").value,reason:$("reason").value.trim()};$("save").disabled=true;try{const d=await api("/v1/owner/accounts/"+selected.id,{method:"PATCH",body:JSON.stringify(body)});result("🟢 VERDE — alterações salvas para "+d.account.username+".");selected=d.account;await loadAccounts()}catch(e){result("❌ DEU RED! "+e.message)}finally{$("save").disabled=false}};
+$("toggleAccess").onclick=async()=>{if(!selected)return;const enabled=!selected.game_authorized;$("toggleAccess").disabled=true;try{const d=await api("/v1/owner/accounts/"+selected.id+"/game-access",{method:"PATCH",body:JSON.stringify({enabled})});selected.game_authorized=d.game_authorized;$("toggleAccess").textContent=enabled?"Revogar autorização no jogo":"Autorizar no jogo";$("accessStatus").textContent=enabled?"🟢 VERDE — autorização ativa para "+selected.username+".":"Autorização revogada para "+selected.username+".";result($("accessStatus").textContent);await loadAccounts()}catch(e){result("❌ DEU RED! "+e.message)}finally{$("toggleAccess").disabled=false}};
 $("find").onclick=()=>{offset=0;selected=null;$("editor").classList.add("hidden");$("empty").classList.remove("hidden");loadAccounts()};
 $("search").addEventListener("keydown",e=>{if(e.key==="Enter")$("find").click()});
 $("refresh").onclick=()=>loadAccounts();$("prev").onclick=()=>{offset=Math.max(0,offset-LIMIT);selected=null;loadAccounts()};$("next").onclick=()=>{if(accounts.length===LIMIT){offset+=LIMIT;selected=null;loadAccounts()}};
@@ -1535,9 +1552,31 @@ def admin_accounts(search: str = Query(default="", max_length=40), limit: int = 
     rows = []
     for p in players:
         ctl = db.get(AccountControl, p.id)
+        grant = db.get(GameAccessGrant, p.id)
         rows.append({"id": p.id, "username": p.username, "character_name": (p.profile or {}).get("character_display_name", ""),
-                     "state": ctl.state if ctl else "active", "created_at": p.created_at.isoformat()})
+                     "state": ctl.state if ctl else "active", "game_authorized": bool(grant and grant.enabled),
+                     "created_at": p.created_at.isoformat()})
     return {"accounts": rows, "limit": limit, "offset": offset}
+
+@app.patch("/v1/owner/accounts/{player_id}/game-access")
+def owner_set_game_access(player_id: int, body: GameAccessBody, db: Session = Depends(db_session),
+                          owner: str = Depends(current_owner)) -> dict[str, Any]:
+    player = db.get(Player, player_id)
+    if player is None:
+        raise HTTPException(404, "Conta não encontrada.")
+    control = db.get(AccountControl, player_id)
+    if control and control.state != "active":
+        raise HTTPException(409, "Só é possível autorizar uma conta ativa.")
+    grant = db.get(GameAccessGrant, player_id) or GameAccessGrant(player_id=player_id)
+    grant.enabled = body.enabled
+    grant.changed_by = owner
+    grant.changed_at = datetime.now(timezone.utc)
+    db.add(grant)
+    audit(db, owner, "game_access_enabled" if body.enabled else "game_access_revoked",
+          str(player_id), {"username": player.username, "enabled": body.enabled})
+    db.commit()
+    return {"player_id": player_id, "username": player.username, "game_authorized": grant.enabled,
+            "changed_at": grant.changed_at.isoformat()}
 
 @app.patch("/v1/owner/accounts/{player_id}")
 def admin_edit_account(player_id: int, body: AccountEditBody, db: Session = Depends(db_session),
