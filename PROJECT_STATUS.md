@@ -182,3 +182,9 @@ Não marcar nenhuma frente do escopo 2.0 como concluída apenas porque existe um
 - Painel administrativo e envio de correio devem validar permissões no servidor, com seleção de conta individual ou todos os jogadores, auditoria e proteção contra repetição/abuso.
 - Personagens, animações, colisões, mapas, loot e modos só serão marcados como completos quando existirem dados e comportamentos reais, não apenas elementos visuais.
 - APK de produção só será considerado release após build, testes, validação de assinatura e instalação/execução em dispositivo.
+
+### Proteção dos controles durante interrupções do Android
+
+- `GameSurfaceView.releaseAllInput()` zera movimento, câmera, mira, botões e ponteiros ativos quando a Activity perde o foco.
+- `MainActivity.onPause()` chama a liberação dos controles antes de pausar a superfície OpenGL, evitando que DISPARAR, correr ou outros controles multitouch permaneçam pressionados após uma interrupção do Android.
+- Alteração publicada na branch de reformulação; ainda precisa de CI e teste físico com interrupção durante a partida.
