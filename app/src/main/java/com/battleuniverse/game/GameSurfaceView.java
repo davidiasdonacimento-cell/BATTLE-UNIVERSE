@@ -29,6 +29,15 @@ public final class GameSurfaceView extends GLSurfaceView {
         Arrays.fill(buttonPointers,-1);
     }
 
+    /** Libera todos os controles quando a Activity perde o foco ou é interrompida. */
+    public void releaseAllInput() {
+        moveX=moveY=lookDX=lookDY=0f;
+        aimToggled=false;
+        buttons=0;
+        movePointer=lookPointer=-1;
+        Arrays.fill(buttonPointers,-1);
+    }
+
     public void returnToLobby() {
         screenMode=0;
         moveX=moveY=lookDX=lookDY=0;
