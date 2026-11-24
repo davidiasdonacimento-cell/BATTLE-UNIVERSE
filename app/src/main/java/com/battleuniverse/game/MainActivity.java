@@ -181,7 +181,7 @@ public final class MainActivity extends Activity {
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);if(hasFocus)enterImmersiveMode();
     }
-    @Override protected void onPause(){if(gameSurface!=null)gameSurface.onPause();super.onPause();}
+    @Override protected void onPause(){if(gameSurface!=null){gameSurface.releaseAllInput();gameSurface.onPause();}super.onPause();}
     @Override protected void onResume(){super.onResume();if(gameSurface!=null)gameSurface.onResume();enterImmersiveMode();if(hud!=null)hud.invalidate();}
     @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
