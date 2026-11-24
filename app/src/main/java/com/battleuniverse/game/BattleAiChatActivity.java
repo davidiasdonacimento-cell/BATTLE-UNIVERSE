@@ -75,6 +75,8 @@ public final class BattleAiChatActivity extends Activity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        getWindow().setStatusBarColor(Color.rgb(7, 15, 27));
+        getWindow().setNavigationBarColor(Color.rgb(7, 15, 27));
         account = new AccountSyncManager(this,
             getSharedPreferences("battle_universe_profile", MODE_PRIVATE), null);
         if (!account.isSignedIn()) {
@@ -188,6 +190,7 @@ public final class BattleAiChatActivity extends Activity {
         composerRow.addView(sendButton, new LinearLayout.LayoutParams(-2, dp(54)));
         root.addView(composerRow);
         setContentView(root);
+        enterImmersiveMode();
 
         conversationSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
@@ -464,6 +467,27 @@ public final class BattleAiChatActivity extends Activity {
 
     private void showStatus(String value) {
         if (statusView != null) statusView.setText(value == null ? "" : value);
+    }
+
+    private void enterImmersiveMode() {
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        );
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) enterImmersiveMode();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        enterImmersiveMode();
     }
 
     @Override protected void onDestroy() {
