@@ -78,6 +78,15 @@ class PlayerDevice(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class OwnerDevice(Base):
+    __tablename__ = "owner_devices"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    install_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    device_label: Mapped[str] = mapped_column(String(40), nullable=False, default="Android")
+    revoked: Mapped[bool] = mapped_column(nullable=False, default=False)
+    paired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 class RecoveryCredential(Base):
     __tablename__ = "account_recovery_credentials"
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), primary_key=True)
@@ -286,7 +295,10 @@ class GlobalMailBody(BaseModel):
     request_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
 
 class OwnerPairBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     pairing_code: str = Field(min_length=32, max_length=256)
+    install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    device_label: str = Field(default="Android", min_length=1, max_length=40)
 
 class OwnerTargetMailBody(BaseModel):
     title: str = Field(min_length=2, max_length=80)
@@ -307,8 +319,9 @@ class AccountEditBody(BaseModel):
     reason: str | None = Field(default=None, max_length=240)
 
 class GameSettingsBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     game_name: str = Field(min_length=2, max_length=40)
-    character_names: dict[str, str] = Field(default_factory=dict)
+    character_names: dict[str, str] = Field(default_factory=dict, max_length=64)
 
 app = FastAPI(title="BATTLE UNIVERSE Account & Admin API", version="1.2.0")
 origins = [x.strip() for x in os.environ.get("CORS_ORIGINS", "").split(",") if x.strip()]
@@ -373,10 +386,14 @@ def player_payload(player: Player) -> dict[str, Any]:
     return {"id": player.id, "username": player.username, "profile": player.profile or {},
             "created_at": player.created_at.isoformat(), "updated_at": player.updated_at.isoformat()}
 
-def issue_token(subject: str, username: str, role: str, minutes: int) -> str:
+def issue_token(subject: str, username: str, role: str, minutes: int,
+                extra_claims: dict[str, Any] | None = None) -> str:
     now = datetime.now(timezone.utc)
-    return jwt.encode({"sub": subject, "username": username, "role": role, "iss": JWT_ISSUER,
-                       "iat": now, "exp": now + timedelta(minutes=minutes)}, JWT_SECRET, algorithm="HS256")
+    claims = {"sub": subject, "username": username, "role": role, "iss": JWT_ISSUER,
+              "iat": now, "exp": now + timedelta(minutes=minutes)}
+    if extra_claims:
+        claims.update(extra_claims)
+    return jwt.encode(claims, JWT_SECRET, algorithm="HS256")
 
 def token_claims(credentials: HTTPAuthorizationCredentials | None) -> dict[str, Any]:
     if credentials is None:
@@ -403,10 +420,17 @@ def current_player(credentials: HTTPAuthorizationCredentials | None = Depends(be
         raise HTTPException(403, "Esta conta está suspensa ou encerrada.")
     return player
 
-def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> str:
+def current_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+                  db: Session = Depends(db_session)) -> str:
     claims = token_claims(credentials)
-    if claims.get("role") != "owner" or claims.get("sub") != "owner-device":
+    install_id = claims.get("device_install_id")
+    if claims.get("role") != "owner" or claims.get("sub") != "owner-device" or not install_id:
         raise HTTPException(403, "Aparelho não autorizado para configurar o jogo.")
+    device = db.get(OwnerDevice, 1)
+    if device is None or device.revoked or not secrets.compare_digest(device.install_id, str(install_id)):
+        raise HTTPException(403, "Este controlador não é o aparelho autorizado.")
+    device.last_seen_at = datetime.now(timezone.utc)
+    db.add(device)
     return "owner-device"
 
 
@@ -584,6 +608,42 @@ def player_game_settings(db: Session = Depends(db_session), player: Player = Dep
     return {"game_name": values.get("game_name", "BATTLE UNIVERSE"),
             "character_names": values.get("character_names", {}),
             "account_character_name": (player.profile or {}).get("character_display_name", "")}
+
+@app.get("/v1/owner/game/settings")
+def owner_read_game_settings(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    rows = db.scalars(select(GameSetting)).all()
+    values = {row.key: row.value for row in rows}
+    return {"game_name": values.get("game_name", "BATTLE UNIVERSE"),
+            "character_names": values.get("character_names", {}), "updated_by": owner}
+
+@app.put("/v1/owner/game/settings")
+def owner_update_game_settings(body: GameSettingsBody, db: Session = Depends(db_session),
+                               owner: str = Depends(current_owner)):
+    game_name = body.game_name.strip()
+    if len(game_name) < 2:
+        raise HTTPException(422, "O nome do jogo precisa ter ao menos 2 caracteres.")
+    clean_names: dict[str, str] = {}
+    for key, value in body.character_names.items():
+        normalized_key = str(key).strip()
+        normalized_value = str(value).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", normalized_key):
+            raise HTTPException(422, "Identificador de personagem inválido.")
+        if not normalized_value or len(normalized_value) > 32:
+            raise HTTPException(422, "Cada nome de personagem deve ter de 1 a 32 caracteres.")
+        clean_names[normalized_key] = normalized_value
+    updates = {"game_name": game_name, "character_names": clean_names}
+    now = datetime.now(timezone.utc)
+    for key, value in updates.items():
+        row = db.get(GameSetting, key)
+        if row is None:
+            row = GameSetting(key=key, value=value, updated_at=now)
+        else:
+            row.value = value
+            row.updated_at = now
+        db.add(row)
+    audit(db, owner, "game_settings_update", "global", updates)
+    db.commit()
+    return {"updated": True, **updates, "updated_at": now.isoformat()}
 
 ROYALE_PRIZES = [
     {"id": "shirt_tactical", "name": "CAMISA TÁTICA", "weight": 40, "profile_key": "wear_shirt_tactical"},
@@ -1041,13 +1101,38 @@ def royale_history(player: Player = Depends(current_player)):
     return {"enabled": False, "history": [], "message": "O histórico de giros não está disponível."}
 
 @app.post("/v1/owner/pair")
-def owner_pair(body: OwnerPairBody) -> dict[str, Any]:
+def owner_pair(body: OwnerPairBody, db: Session = Depends(db_session)) -> dict[str, Any]:
     if not OWNER_PAIRING_CODE:
         raise HTTPException(503, "Ativação do proprietário ainda não foi configurada no servidor.")
     if not secrets.compare_digest(body.pairing_code, OWNER_PAIRING_CODE):
         raise HTTPException(401, "Código de ativação inválido.")
-    return {"access_token": issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES),
-            "token_type": "bearer", "expires_in": OWNER_TOKEN_MINUTES * 60}
+    install_id = body.install_id.strip()
+    now = datetime.now(timezone.utc)
+    device = db.scalar(select(OwnerDevice).where(OwnerDevice.id == 1).with_for_update())
+    if device is None:
+        device = OwnerDevice(id=1, install_id=install_id,
+                             device_label=body.device_label.strip(), revoked=False,
+                             paired_at=now, last_seen_at=now)
+        db.add(device)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            device = db.get(OwnerDevice, 1)
+    if device is None:
+        raise HTTPException(503, "Não foi possível registrar o aparelho controlador.")
+    if not secrets.compare_digest(device.install_id, install_id):
+        raise HTTPException(409, "Já existe outro aparelho autorizado. Revogue o controlador atual antes de parear outro.")
+    device.device_label = body.device_label.strip()
+    device.revoked = False
+    device.last_seen_at = now
+    db.add(device)
+    db.commit()
+    token = issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES,
+                        {"device_install_id": install_id})
+    return {"access_token": token, "token_type": "bearer",
+            "expires_in": OWNER_TOKEN_MINUTES * 60,
+            "device": {"label": device.device_label, "paired_at": device.paired_at.isoformat()}}
 
 @app.post("/v1/promo-codes/redeem")
 def redeem_promo_code(body: PromoRedeemBody, db: Session = Depends(db_session),
@@ -1469,6 +1554,17 @@ $("sendTargetMail").onclick=async()=>{
  }catch(e){show("❌ DEU RED! "+e.message)}
 };
 </script></body></html>""")
+
+@app.post("/v1/owner/device/revoke")
+def owner_revoke_device(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
+    device = db.get(OwnerDevice, 1)
+    if device is None:
+        raise HTTPException(404, "Controlador não encontrado.")
+    device.revoked = True
+    db.add(device)
+    audit(db, owner, "owner_device_revoked", device.device_label, {})
+    db.commit()
+    return {"revoked": True, "message": "Controlador revogado. Um novo pareamento exige intervenção segura no banco de dados."}
 
 @app.post("/v1/owner/mail/broadcast", status_code=201)
 def owner_broadcast_mail(body: GlobalMailBody, db: Session = Depends(db_session),
