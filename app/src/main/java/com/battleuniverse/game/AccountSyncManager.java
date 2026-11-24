@@ -322,7 +322,7 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
 
     public void signOut() {
-        sessionPrefs.edit().remove("token_cipher").remove("token_iv").remove("username").apply();
+        sessionPrefs.edit().remove("token_cipher").remove("token_iv").remove("username").commit();
         username="";
         publish(false,"","Você saiu da conta. O progresso local continua neste aparelho.");
     }
@@ -344,10 +344,18 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             } catch(Exception e) {
                 String msg=cleanError(e);
                 if(msg.contains("401")||msg.toLowerCase().contains("expirada")) {
-                    sessionPrefs.edit().remove("token_cipher").remove("token_iv").remove("username").apply();
+                    sessionPrefs.edit().remove("token_cipher").remove("token_iv").remove("username").commit();
                     username="";
-                    publish(false,"","Sua sessão expirou. Entre novamente.");
-                } else publish(false,"","Não foi possível validar a sessão: "+msg);
+                    publish(false,"","Sua sessão foi recusada pelo servidor. Entre novamente.");
+                } else if(msg.contains("403")) {
+                    // A conta pode estar suspensa ou sem permissão. Preserve o token para
+                    // não apagar o login do jogador por uma resposta de autorização.
+                    publish(false,username,"O servidor recusou esta operação para a conta: "+msg);
+                } else {
+                    // Render pode estar iniciando ou a rede pode oscilar. Preserve a sessão.
+                    publish(!getToken().isEmpty(),username,
+                        "Falha temporária ao validar a sessão. Sua conta continua salva neste aparelho. "+msg);
+                }
             } finally { busy=false; }
         });
     }
@@ -444,10 +452,11 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE,getOrCreateKey());
         byte[] encrypted=cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
-        sessionPrefs.edit()
+        boolean saved=sessionPrefs.edit()
             .putString("token_iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP))
             .putString("token_cipher",Base64.encodeToString(encrypted,Base64.NO_WRAP))
-            .putString("username",name).apply();
+            .putString("username",name).commit();
+        if(!saved)throw new Exception("Não foi possível gravar a sessão no armazenamento seguro.");
     }
 
     private String getToken() {
@@ -461,7 +470,8 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             cipher.init(Cipher.DECRYPT_MODE,getOrCreateKey(),new GCMParameterSpec(128,iv));
             return new String(cipher.doFinal(encrypted),StandardCharsets.UTF_8);
         } catch(Exception e) {
-            sessionPrefs.edit().remove("token_iv").remove("token_cipher").remove("username").apply();
+            // Não apague a sessão criptografada por uma falha transitória do Android Keystore.
+            // Uma falha de leitura não deve transformar automaticamente a conta em logout.
             return "";
         }
     }
