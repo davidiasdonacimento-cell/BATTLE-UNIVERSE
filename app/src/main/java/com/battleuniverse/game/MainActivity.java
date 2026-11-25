@@ -22,6 +22,12 @@ public final class MainActivity extends Activity {
     private SharedPreferences profilePrefs;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private static final int REQUEST_PACK_FILE=4201;
+    private final Handler traceHandler=new Handler(Looper.getMainLooper());
+    private final Runnable traceSampler=new Runnable(){@Override public void run(){
+        if(gameSurface!=null){int stage=gameSurface.getDiagnosticStage();
+            if(stage>=0)getSharedPreferences("bu_crash_trace",MODE_PRIVATE).edit().putInt("last_stage",stage).apply();}
+        if(!isFinishing())traceHandler.postDelayed(this,180);
+    }};
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -30,7 +36,13 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
         // O pacote 4K é opcional. A ausência dele nunca pode bloquear a inicialização
         // nem iniciar um download de centenas de MB automaticamente.
+        int previousStage=getSharedPreferences("bu_crash_trace",MODE_PRIVATE).getInt("last_stage",-1);
         launchGame(ContentPackInstaller.isInstalled(this));
+        if(previousStage>0) new android.app.AlertDialog.Builder(this)
+            .setTitle("DIAGNÓSTICO DE ESTABILIDADE")
+            .setMessage("Última etapa registrada antes do encerramento anterior: "+diagnosticStageName(previousStage)+".\n\nEsse registro é uma pista técnica, não uma confirmação isolada da causa.")
+            .setPositiveButton("OK",null).show();
+        traceHandler.post(traceSampler);
     }
 
     private void startContentSetup() {
@@ -181,6 +193,10 @@ public final class MainActivity extends Activity {
         packAnalyzer.analyze(uri);
     }
 
+    private String diagnosticStageName(int stage) {
+        switch(stage){case 1:return "inicialização do renderizador";case 2:return "início do quadro";case 20:return "desenho do mundo";case 30:return "alvos e efeitos do disparo";case 50:return "início do disparo da arma";case 51:return "disparo processado";case 70:return "desenho do personagem";case 80:return "montagem do personagem com Carapina";case 81:return "início do desenho da Carapina";case 82:return "desenho da mira óptica da Carapina";case 83:return "fim do desenho do personagem com Carapina";case 90:return "fim do quadro";default:return "etapa "+stage;}
+    }
+
     private void enterImmersiveMode() {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             |View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -208,6 +224,8 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onDestroy(){
+        getSharedPreferences("bu_crash_trace",MODE_PRIVATE).edit().putInt("last_stage",0).apply();
+        traceHandler.removeCallbacks(traceSampler);
         if(installer!=null)installer.shutdown();
         if(packAnalyzer!=null)packAnalyzer.close();
         if(accountSync!=null)accountSync.close();
