@@ -1426,24 +1426,28 @@ void firePulse() {
             setStatus("ALVO DE TREINO DESATIVADO  •  +100 PONTOS");
         }
     } else if(hitBot>=0) {
-        if(gWeaponType==2){gCrashTraceStage.store(100,std::memory_order_relaxed);gLastEliminationStage.store(100,std::memory_order_relaxed);}
+        // Faixas de diagnóstico independentes por arma:
+        // Carapina mantém 100-105; XM8/UMP/Uzi usam 200-237.
+        const int traceBase=(gWeaponType==2)?100:(200+gWeaponType*10);
+        gCrashTraceStage.store(traceBase,std::memory_order_relaxed);
+        gLastEliminationStage.store(traceBase,std::memory_order_relaxed);
         gBotHealth[static_cast<size_t>(hitBot)]=std::max(0,gBotHealth[static_cast<size_t>(hitBot)]-damage);
         gDamageDealt+=damage;
         const int healthAfterHit=gBotHealth[static_cast<size_t>(hitBot)];
         gBotDamageAmount[static_cast<size_t>(hitBot)]=damage;
         gBotDamageTimer[static_cast<size_t>(hitBot)]=1.20f;
         gBotDamagePosition[static_cast<size_t>(hitBot)]=gBots[static_cast<size_t>(hitBot)].pos;
-        if(gWeaponType==2){gCrashTraceStage.store(101,std::memory_order_relaxed);gLastEliminationStage.store(101,std::memory_order_relaxed);}
+        gCrashTraceStage.store(traceBase+1,std::memory_order_relaxed);gLastEliminationStage.store(traceBase+1,std::memory_order_relaxed);
         { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/"<<BOT_MAX_HEALTH; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
-            if(gWeaponType==2){gCrashTraceStage.store(102,std::memory_order_relaxed);gLastEliminationStage.store(102,std::memory_order_relaxed);}
+            gCrashTraceStage.store(traceBase+2,std::memory_order_relaxed);gLastEliminationStage.store(traceBase+2,std::memory_order_relaxed);
             if((gSelectedMode==1||gSelectedMode==2)&&!gBotDowned[static_cast<size_t>(hitBot)]) {
                 gBotDowned[static_cast<size_t>(hitBot)]=true;gBotDownedTimer[static_cast<size_t>(hitBot)]=25.0f;
                 gBotReviveProgress[static_cast<size_t>(hitBot)]=0.0f;
                 setStatus("ALIADO DERRUBADO • APROXIME-SE E TOQUE USAR PARA REVIVER");
             } else {
-            if(gWeaponType==2){gCrashTraceStage.store(103,std::memory_order_relaxed);gLastEliminationStage.store(103,std::memory_order_relaxed);}
+            gCrashTraceStage.store(traceBase+3,std::memory_order_relaxed);gLastEliminationStage.store(traceBase+3,std::memory_order_relaxed);
             gBotActive[static_cast<size_t>(hitBot)]=false;
             gBotDamageTimer[static_cast<size_t>(hitBot)]=0.0f;
             gBotDamageAmount[static_cast<size_t>(hitBot)]=0;
@@ -1455,7 +1459,7 @@ void firePulse() {
                 ++gEliminations;
             }
             gWood=std::min(250,gWood+10);
-            if(gWeaponType==2){gCrashTraceStage.store(104,std::memory_order_relaxed);gLastEliminationStage.store(104,std::memory_order_relaxed);}
+            gCrashTraceStage.store(traceBase+4,std::memory_order_relaxed);gLastEliminationStage.store(traceBase+4,std::memory_order_relaxed);
             int remaining=0;
             for(int i=0;i<BOT_COUNT;++i)
                 if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])++remaining;
@@ -1464,7 +1468,7 @@ void firePulse() {
                 setStatus("VITÓRIA • TODOS OS OPONENTES ELIMINADOS");
             } else if(gSelectedMode==3) setStatus("ALVO BOT DESATIVADO • +150 PONTOS");
             else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining));
-            if(gWeaponType==2){gCrashTraceStage.store(105,std::memory_order_relaxed);gLastEliminationStage.store(105,std::memory_order_relaxed);} }
+            gCrashTraceStage.store(traceBase+5,std::memory_order_relaxed);gLastEliminationStage.store(traceBase+5,std::memory_order_relaxed); }
         }
     }
     if(hitTarget<0&&hitBot<0&&!hitIceWall) {
@@ -1653,7 +1657,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
     }
     publishMatchStats();
     publishFlightInfo();
-    if(gWeaponType==2)gCrashTraceStage.store(120,std::memory_order_relaxed);
+    // Não sobrescrever o último estágio: ele precisa sobreviver entre quadros
+    // para que o diagnóstico indique a operação imediatamente anterior ao crash.
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,jint id) {
