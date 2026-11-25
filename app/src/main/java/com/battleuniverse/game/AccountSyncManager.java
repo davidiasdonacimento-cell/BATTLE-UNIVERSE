@@ -576,26 +576,75 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         if(profile==null)return;
         SharedPreferences.Editor edit=profilePrefs.edit();
         applyingProfile=true;
-        Iterator<String> keys=profile.keys();
-        while(keys.hasNext()) {
-            String key=keys.next();
-            if(!allowed(key))continue;
-            Object value=profile.opt(key);
-            if(value instanceof String)edit.putString(key,(String)value);
-            else if(value instanceof Boolean)edit.putBoolean(key,(Boolean)value);
-            else if(value instanceof Number) {
-                if(isIntegerPreference(key))edit.putInt(key,((Number)value).intValue());
-                else edit.putLong(key,((Number)value).longValue());
+        try {
+            Iterator<String> keys=profile.keys();
+            while(keys.hasNext()) {
+                String key=keys.next();
+                if(!allowed(key))continue;
+                Object value=profile.opt(key);
+                if(isIntegerPreference(key)) {
+                    if(value instanceof Number)edit.putInt(key,normalizeProfileInt(key,(Number)value));
+                    else edit.putInt(key,defaultProfileInt(key));
+                } else if(isBooleanPreference(key)) {
+                    if(value instanceof Boolean)edit.putBoolean(key,(Boolean)value);
+                    else edit.putBoolean(key,defaultProfileBoolean(key));
+                } else if(isStringPreference(key)) {
+                    if(value instanceof String)edit.putString(key,(String)value);
+                    else edit.putString(key,"");
+                } else if(value instanceof String)edit.putString(key,(String)value);
+                else if(value instanceof Boolean)edit.putBoolean(key,(Boolean)value);
+                else if(value instanceof Number)edit.putLong(key,((Number)value).longValue());
             }
+            edit.commit();
+        } finally {
+            applyingProfile=false;
         }
-        edit.commit();
-        applyingProfile=false;
     }
 
     private boolean isIntegerPreference(String key) {
+        return isBoundedGamePreference(key)
+            ||"matches_played".equals(key)||"match_wins".equals(key)||"match_kills".equals(key)
+            ||"match_damage".equals(key)||"match_resources".equals(key)
+            ||"last_match_kills".equals(key)||"last_match_damage".equals(key)
+            ||"last_match_resources".equals(key)||"mission_matches".equals(key)
+            ||"mission_eliminations".equals(key)||"mission_crystals".equals(key);
+    }
+
+    private boolean isBoundedGamePreference(String key) {
         return "mode".equals(key)||"map".equals(key)||"character".equals(key)||"quality".equals(key)
             ||"look_sensitivity".equals(key)||"selected_shirt".equals(key)||"selected_boots".equals(key)
             ||"selected_set".equals(key);
+    }
+
+    private int normalizeProfileInt(String key,Number number) {
+        double raw=number.doubleValue();
+        if(Double.isNaN(raw)||Double.isInfinite(raw)||raw!=Math.rint(raw))return defaultProfileInt(key);
+        if(!isBoundedGamePreference(key))
+            return (int)Math.max(0d,Math.min((double)Integer.MAX_VALUE,raw));
+        int maximum=0;
+        if("mode".equals(key)||"character".equals(key)){maximum=3;}
+        else if("map".equals(key)){maximum=7;}
+        else if("quality".equals(key)||"look_sensitivity".equals(key)){maximum=2;}
+        else if("selected_shirt".equals(key)||"selected_boots".equals(key)||"selected_set".equals(key)){maximum=4;}
+        return (int)Math.max(0d,Math.min((double)maximum,raw));
+    }
+
+    private int defaultProfileInt(String key) {
+        return "quality".equals(key)||"look_sensitivity".equals(key)
+            ||"selected_shirt".equals(key)||"selected_boots".equals(key)?1:0;
+    }
+
+    private boolean isBooleanPreference(String key) {
+        return "music".equals(key)||"effects".equals(key)||"invert_camera_y".equals(key)
+            ||"show_minimap".equals(key)||"haptics".equals(key)||"online_mode".equals(key);
+    }
+
+    private boolean defaultProfileBoolean(String key) {
+        return "music".equals(key)||"effects".equals(key)||"show_minimap".equals(key)||"haptics".equals(key);
+    }
+
+    private boolean isStringPreference(String key) {
+        return "nickname".equals(key)||"character_display_name".equals(key);
     }
 
     private void registerProfileListener() {

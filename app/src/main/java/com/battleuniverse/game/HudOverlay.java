@@ -111,23 +111,50 @@ public final class HudOverlay extends View {
         this.game=game; this.prefs=prefs;
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setClickable(true); setFocusable(true);
-        mode=prefs.getInt("mode",0); map=prefs.getInt("map",0);
-        character=prefs.getInt("character",0); quality=prefs.getInt("quality",1);
-        onlineMode=prefs.getBoolean("online_mode",false);
-        map=Math.max(0,Math.min(MAP_NAMES.length-1,map));
-        music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
-        lookSensitivity=prefs.getInt("look_sensitivity",1);
-        invertCameraY=prefs.getBoolean("invert_camera_y",false);
-        showMinimap=prefs.getBoolean("show_minimap",true);
-        hapticsEnabled=prefs.getBoolean("haptics",true);
+        // Revalida também preferências antigas já gravadas neste aparelho.
+        mode=readBoundedInt(prefs,"mode",0,0,MODE_NAMES.length-1);
+        map=readBoundedInt(prefs,"map",0,0,MAP_NAMES.length-1);
+        character=readBoundedInt(prefs,"character",0,0,CHARACTER_NAMES.length-1);
+        quality=readBoundedInt(prefs,"quality",1,0,QUALITY_NAMES.length-1);
+        onlineMode=readBoolean(prefs,"online_mode",false);
+        music=readBoolean(prefs,"music",true); effects=readBoolean(prefs,"effects",true);
+        lookSensitivity=readBoundedInt(prefs,"look_sensitivity",1,0,2);
+        invertCameraY=readBoolean(prefs,"invert_camera_y",false);
+        showMinimap=readBoolean(prefs,"show_minimap",true);
+        hapticsEnabled=readBoolean(prefs,"haptics",true);
         ensureStarterWardrobe();
-        selectedShirt=prefs.getInt("selected_shirt",1);
-        selectedBoots=prefs.getInt("selected_boots",1);
-        selectedSet=prefs.getInt("selected_set",0);
+        selectedShirt=readBoundedInt(prefs,"selected_shirt",1,0,4);
+        selectedBoots=readBoundedInt(prefs,"selected_boots",1,0,4);
+        selectedSet=readBoundedInt(prefs,"selected_set",0,0,4);
+        prefs.edit().putInt("mode",mode).putInt("map",map).putInt("character",character)
+            .putInt("quality",quality).putInt("look_sensitivity",lookSensitivity)
+            .putInt("selected_shirt",selectedShirt).putInt("selected_boots",selectedBoots)
+            .putInt("selected_set",selectedSet).apply();
         ensureDailyMissionWindow();
         game.setInvertCameraY(invertCameraY);
         game.setCharacter(character); game.setMap(map); game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
         game.setMatchMode(mode); game.setQuality(quality); game.setLookSensitivity(lookSensitivity); game.setGameScreen(false);
+    }
+
+    private static int readInt(SharedPreferences prefs,String key,int fallback) {
+        try { return prefs.getInt(key,fallback); }
+        catch(ClassCastException invalidStoredType) { return fallback; }
+    }
+
+    private static boolean readBoolean(SharedPreferences prefs,String key,boolean fallback) {
+        try { return prefs.getBoolean(key,fallback); }
+        catch(ClassCastException invalidStoredType) { return fallback; }
+    }
+
+    private static String readString(SharedPreferences prefs,String key,String fallback) {
+        try {
+            String value=prefs.getString(key,fallback);
+            return value==null?fallback:value;
+        } catch(ClassCastException invalidStoredType) { return fallback; }
+    }
+
+    private static int readBoundedInt(SharedPreferences prefs,String key,int fallback,int minimum,int maximum) {
+        return Math.max(minimum,Math.min(maximum,readInt(prefs,key,fallback)));
     }
 
     @Override protected void onDraw(Canvas c) {
@@ -231,10 +258,10 @@ public final class HudOverlay extends View {
         long xp=prefs.getLong("xp",0L);
         long diamonds=prefs.getLong("diamonds",0L);
         int level=(int)Math.min(30L,1L+xp/500L);
-        String nickname=prefs.getString("nickname","JOGADOR");
+        String nickname=readString(prefs,"nickname","JOGADOR");
         panel(c,1000,17,246,60,0xC5152938,0x557AA0B8,15);
         circle(c,1032,47,18,0xFF1F7584,
-            prefs.getBoolean("shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
+            readBoolean(prefs,"shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
         text(c,nickname.length()>11?nickname.substring(0,11):nickname,1060,42,12,Color.WHITE,Typeface.DEFAULT_BOLD);
         text(c,rankForXp(xp)+"  •  NÍVEL "+String.format(Locale.US,"%02d",level),1060,60,9,0xFF9BB6C6,Typeface.DEFAULT);
         text(c,"◆ "+formatDiamonds(diamonds),1176,51,11,0xFFFFC76B,Typeface.DEFAULT_BOLD);
@@ -458,7 +485,7 @@ public final class HudOverlay extends View {
         int[] items=itemsForCategory(inventoryCategory==4?2:inventoryCategory);
         for(int n=0;n<items.length;n++){
             int i=items[n],col=n%3,row=n/3;float x=270+col*192f,y=374+row*58f;
-            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            boolean owned=readBoolean(prefs,SHOP_KEYS[i],false);
             panel(c,x,y,174,51,owned?0xB51A4650:0x771A3040,
                 owned?0xFF4BD4C9:0x335D8495,12);
             circle(c,x+24,y+24,14,SHOP_COLORS[i],0xFFB5D6E1);
@@ -507,12 +534,12 @@ public final class HudOverlay extends View {
         int level=(int)Math.min(30L,1L+xp/500L);
         panel(c,270,286,570,196,0xAE193040,0x557AA9BC,18);
         circle(c,326,365,38,0xFF1F7584,
-            prefs.getBoolean("shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
-        text(c,prefs.getString("nickname","JOGADOR"),382,346,23,Color.WHITE,
+            readBoolean(prefs,"shop_frame_neon",false)?0xFFB978FF:0xFF65DCE7);
+        text(c,readString(prefs,"nickname","JOGADOR"),382,346,23,Color.WHITE,
             Typeface.create("sans-serif-black",Typeface.BOLD));
         text(c,"PATENTE "+rankForXp(xp)+"  •  NÍVEL "+level,382,374,13,0xFF9FC0CF,Typeface.DEFAULT_BOLD);
         text(c,"◆ "+formatDiamonds(diamonds)+" DIAMANTES",382,411,17,0xFFFFD27A,Typeface.DEFAULT_BOLD);
-        text(c,prefs.getBoolean("code_100k_redeemed",false)
+        text(c,readBoolean(prefs,"code_100k_redeemed",false)
             ?"CÓDIGO 100K JÁ RESGATADO NESTE PERFIL"
             :"CÓDIGO SECRETO 100K DISPONÍVEL",292,458,10,0xFF83DCD5,Typeface.DEFAULT_BOLD);
         panel(c,270,486,570,58,googleSignedIn?0xCC176A75:0xA91A3040,
@@ -544,7 +571,7 @@ public final class HudOverlay extends View {
         text(c,"SALDO  ◆ "+formatDiamonds(prefs.getLong("diamonds",0L)),292,297,16,0xFFFFD27A,Typeface.DEFAULT_BOLD);
         for(int i=0;i<SHOP_NAMES.length;i++) {
             int col=i%3,row=i/3;float x=270+col*192f,y=322+row*56f;
-            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            boolean owned=readBoolean(prefs,SHOP_KEYS[i],false);
             panel(c,x,y,174,50,owned?0xB51A4650:0xA91A3040,
                 owned?0xFF4BD4C9:0x335D8495,12);
             circle(c,x+24,y+24,14,SHOP_COLORS[i],0xFFB5D6E1);
@@ -560,7 +587,7 @@ public final class HudOverlay extends View {
         text(c,"CAMISAS",270,300,10,0xFF69DCE5,Typeface.DEFAULT_BOLD);
         String[] shirts={"TÁTICA","NEON","FROST","DESERTO"};
         for(int i=0;i<4;i++) {
-            float x=270+i*146f;boolean owned=prefs.getBoolean(SHOP_KEYS[3+i],false);
+            float x=270+i*146f;boolean owned=readBoolean(prefs,SHOP_KEYS[3+i],false);
             boolean active=selectedShirt==i+1&&selectedSet==0;
             panel(c,x,312,132,72,active?0xB51A5B69:0xA91A3040,
                 active?0xFF48D7E1:0x335D8495,12);
@@ -572,7 +599,7 @@ public final class HudOverlay extends View {
         text(c,"BOTAS",270,420,10,0xFF69DCE5,Typeface.DEFAULT_BOLD);
         String[] boots={"COMBATE","NEON","FROST","DOURADAS"};
         for(int i=0;i<4;i++) {
-            float x=270+i*146f;boolean owned=prefs.getBoolean(SHOP_KEYS[7+i],false);
+            float x=270+i*146f;boolean owned=readBoolean(prefs,SHOP_KEYS[7+i],false);
             boolean active=selectedBoots==i+1&&selectedSet==0;
             panel(c,x,432,132,72,active?0xB51A5B69:0xA91A3040,
                 active?0xFF48D7E1:0x335D8495,12);
@@ -584,7 +611,7 @@ public final class HudOverlay extends View {
         text(c,"CONJUNTOS COMPLETOS",270,540,10,0xFF69DCE5,Typeface.DEFAULT_BOLD);
         String[] sets={"AURORA","CAMPEÃO","ORBITAL","DESERTO"};
         for(int i=0;i<4;i++) {
-            float x=270+i*146f;boolean owned=prefs.getBoolean(SHOP_KEYS[11+i],false);
+            float x=270+i*146f;boolean owned=readBoolean(prefs,SHOP_KEYS[11+i],false);
             boolean active=selectedSet==i+1;
             panel(c,x,552,132,72,active?0xB51A5B69:0xA91A3040,
                 active?0xFF48D7E1:0x335D8495,12);
@@ -616,7 +643,7 @@ public final class HudOverlay extends View {
             dailyClaimed?0xFF176A75:0xFF345D79,Color.WHITE);
         for(int i=0;i<ROYALE_LEVELS.length;i++) {
             int col=i%3,row=i/3;float x=270+col*192f,y=476+row*88f;
-            boolean claimed=prefs.getBoolean("royale_tier_claimed_"+i,false);
+            boolean claimed=readBoolean(prefs,"royale_tier_claimed_"+i,false);
             boolean unlocked=level>=ROYALE_LEVELS[i];
             panel(c,x,y,174,78,claimed?0xB51A4650:unlocked?0xB1264A55:0x771A3040,
                 claimed?0xFF4BD4C9:unlocked?0xFF51C9C4:0x335D8495,13);
@@ -660,7 +687,7 @@ public final class HudOverlay extends View {
             new int[]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
         for(int n=0;n<items.length;n++){
             int i=items[n],col=n%4,row=n/4;float x=270+col*238f,y=318+row*78f;
-            boolean owned=prefs.getBoolean(SHOP_KEYS[i],false);
+            boolean owned=readBoolean(prefs,SHOP_KEYS[i],false);
             panel(c,x,y,220,68,owned?0xB51A4650:0xA91A3040,
                 owned?0xFF4BD4C9:0x557AA9BC,12);
             circle(c,x+25,y+28,14,SHOP_COLORS[i],0xFFB5D6E1);
@@ -673,12 +700,12 @@ public final class HudOverlay extends View {
     }
 
     private void ensureStarterWardrobe() {
-        if(prefs.getBoolean("wardrobe_starter_v2_granted",false)) return;
+        if(readBoolean(prefs,"wardrobe_starter_v2_granted",false)) return;
         SharedPreferences.Editor editor=prefs.edit()
             .putBoolean(SHOP_KEYS[3],true)
             .putBoolean(SHOP_KEYS[7],true);
-        if(prefs.getInt("selected_shirt",0)==0) editor.putInt("selected_shirt",1);
-        if(prefs.getInt("selected_boots",0)==0) editor.putInt("selected_boots",1);
+        if(readInt(prefs,"selected_shirt",0)==0) editor.putInt("selected_shirt",1);
+        if(readInt(prefs,"selected_boots",0)==0) editor.putInt("selected_boots",1);
         editor.putBoolean("wardrobe_starter_v2_granted",true).apply();
     }
 
@@ -694,13 +721,13 @@ public final class HudOverlay extends View {
         }
     }
     private int missionProgress(int index) {
-        if(index==0)return prefs.getInt("mission_matches",0);
-        if(index==1)return prefs.getInt("mission_eliminations",0);
-        if(index==2)return prefs.getInt("mission_crystals",0);
+        if(index==0)return readInt(prefs,"mission_matches",0);
+        if(index==1)return readInt(prefs,"mission_eliminations",0);
+        if(index==2)return readInt(prefs,"mission_crystals",0);
         return 0;
     }
     private boolean missionClaimed(int index) {
-        return prefs.getBoolean("mission_claimed_"+index,false);
+        return readBoolean(prefs,"mission_claimed_"+index,false);
     }
     private boolean isMatchOver() {
         String status=game.getGameStatus();
@@ -723,17 +750,17 @@ public final class HudOverlay extends View {
         postInvalidateOnAnimation();
     }
     private void applyMatchRewards(boolean victory) {
-        if(prefs.getBoolean("match_reward_recorded",false)||matchRewardPending)return;
+        if(readBoolean(prefs,"match_reward_recorded",false)||matchRewardPending)return;
         long now=System.currentTimeMillis();
         if(now<matchRewardRetryAfter)return;
         if(!googleSignedIn||matchResultAction==null) {
-            if(!prefs.getBoolean("match_reward_attempted",false)) {
+            if(!readBoolean(prefs,"match_reward_attempted",false)) {
                 prefs.edit().putBoolean("match_reward_attempted",true).apply();
                 toast("Partida concluída. Entre na conta para receber recompensas sincronizadas.");
             }
             return;
         }
-        if(activeMatchRequestId.isEmpty())activeMatchRequestId=prefs.getString("active_match_request_id","");
+        if(activeMatchRequestId.isEmpty())activeMatchRequestId=readString(prefs,"active_match_request_id","");
         if(activeMatchRequestId.isEmpty()) {
             activeMatchRequestId=java.util.UUID.randomUUID().toString();
             prefs.edit().putString("active_match_request_id",activeMatchRequestId).apply();
@@ -765,11 +792,11 @@ public final class HudOverlay extends View {
                 JSONObject profile=result.optJSONObject("profile");
                 if(profile!=null) {
                     prefs.edit().putLong("xp",profile.optLong("xp",prefs.getLong("xp",0L)))
-                        .putInt("matches_played",profile.optInt("matches_played",prefs.getInt("matches_played",0)))
-                        .putInt("match_wins",profile.optInt("match_wins",prefs.getInt("match_wins",0)))
-                        .putInt("match_kills",profile.optInt("match_kills",prefs.getInt("match_kills",0)))
-                        .putInt("match_damage",profile.optInt("match_damage",prefs.getInt("match_damage",0)))
-                        .putInt("match_resources",profile.optInt("match_resources",prefs.getInt("match_resources",0))).apply();
+                        .putInt("matches_played",profile.optInt("matches_played",readInt(prefs,"matches_played",0)))
+                        .putInt("match_wins",profile.optInt("match_wins",readInt(prefs,"match_wins",0)))
+                        .putInt("match_kills",profile.optInt("match_kills",readInt(prefs,"match_kills",0)))
+                        .putInt("match_damage",profile.optInt("match_damage",readInt(prefs,"match_damage",0)))
+                        .putInt("match_resources",profile.optInt("match_resources",readInt(prefs,"match_resources",0))).apply();
                 }
                 toast("🟢 Recompensas confirmadas pela conta online!");
                 postInvalidate();
@@ -785,10 +812,10 @@ public final class HudOverlay extends View {
         panel(c,225,76,830,570,0xF20B1C2A,0xFF4BCDD5,25);
         eyebrow(c,275,116,"BATTLE UNIVERSE  •  RELATÓRIO DA PARTIDA");
         title(c,victory?"VITÓRIA ROYALE":"VOCÊ FOI ELIMINADO",275,164);
-        String rewardStatus=prefs.getBoolean("match_reward_recorded",false)
+        String rewardStatus=readBoolean(prefs,"match_reward_recorded",false)
             ?"Recompensas confirmadas pela conta online."
             :"Partida offline: aguardando conexão para confirmar as recompensas.";
-        subtitle(c,(victory?"1º LUGAR • VITÓRIA. ":"POSIÇÃO "+prefs.getInt("last_match_placement",30)+"º. ")+rewardStatus,275,190);
+        subtitle(c,(victory?"1º LUGAR • VITÓRIA. ":"POSIÇÃO "+readInt(prefs,"last_match_placement",30)+"º. ")+rewardStatus,275,190);
         panel(c,275,220,330,104,0xCC123B39,0xFF45D6AE,16);
         text(c,"RECOMPENSAS RECEBIDAS",296,247,10,0xFFB7EBDD,Typeface.DEFAULT_BOLD);
         text(c,"+"+prefs.getLong("last_match_reward_diamonds",0L)+" DIAMANTES",296,278,19,0xFFFFD36D,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -818,15 +845,15 @@ public final class HudOverlay extends View {
     }
     private void recordMissionProgressFromMatch() {
         ensureDailyMissionWindow();
-        if(prefs.getBoolean("match_recorded_for_missions",false))return;
+        if(readBoolean(prefs,"match_recorded_for_missions",false))return;
         String status=game.getGameStatus();
         if(!(status.startsWith("VIDA ")||status.startsWith("VITÓRIA")||status.startsWith("ELIMINADO")))return;
         int eliminations=Math.max(0,game.getEliminations());
         int crystals=Math.max(0,game.getCollectedResources());
         prefs.edit()
-            .putInt("mission_matches",prefs.getInt("mission_matches",0)+1)
-            .putInt("mission_eliminations",Math.min(999,prefs.getInt("mission_eliminations",0)+eliminations))
-            .putInt("mission_crystals",Math.min(999,prefs.getInt("mission_crystals",0)+crystals))
+            .putInt("mission_matches",readInt(prefs,"mission_matches",0)+1)
+            .putInt("mission_eliminations",Math.min(999,readInt(prefs,"mission_eliminations",0)+eliminations))
+            .putInt("mission_crystals",Math.min(999,readInt(prefs,"mission_crystals",0)+crystals))
             .putBoolean("match_recorded_for_missions",true).apply();
         toast("Progresso das missões diárias atualizado.");
     }
@@ -867,7 +894,7 @@ public final class HudOverlay extends View {
     private void claimRoyaleTier(int index) {
         if(index<0||index>=ROYALE_LEVELS.length)return;
         int level=(int)Math.min(30L,1L+prefs.getLong("xp",0L)/500L);
-        if(prefs.getBoolean("royale_tier_claimed_"+index,false)){toast("Esta recompensa já foi resgatada.");return;}
+        if(readBoolean(prefs,"royale_tier_claimed_"+index,false)){toast("Esta recompensa já foi resgatada.");return;}
         if(level<ROYALE_LEVELS[index]){toast("Alcance o nível "+ROYALE_LEVELS[index]+" do passe.");return;}
         claimServerReward("royale_tier",String.valueOf(index),"Recompensa Royale confirmada!");
     }
@@ -919,7 +946,7 @@ public final class HudOverlay extends View {
     private void showNicknameDialog() {
         EditText input=new EditText(getContext());
         input.setSingleLine(true); input.setHint("Seu nickname");
-        input.setText(prefs.getString("nickname","JOGADOR"));
+        input.setText(readString(prefs,"nickname","JOGADOR"));
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         new AlertDialog.Builder(getContext()).setTitle("Editar nickname").setView(input)
             .setNegativeButton("CANCELAR",null)
@@ -933,7 +960,7 @@ public final class HudOverlay extends View {
     }
     private void purchaseShopItem(int index) {
         if(index<0||index>=SHOP_NAMES.length)return;
-        if(prefs.getBoolean(SHOP_KEYS[index],false)) {
+        if(readBoolean(prefs,SHOP_KEYS[index],false)) {
             toast("Este item já está no seu inventário.");return;
         }
         if(!googleSignedIn) {
@@ -975,7 +1002,7 @@ public final class HudOverlay extends View {
         eyebrow(c,270,175,"EVENTOS DA TEMPORADA • RECOMPENSAS LOCAIS");
         title(c,"CENTRAL DE EVENTOS",270,224);
         subtitle(c,"Participe dos desafios ativos e acompanhe as recompensas disponíveis.",270,252);
-        boolean claimed=prefs.getBoolean("event_season_claimed",false);
+        boolean claimed=readBoolean(prefs,"event_season_claimed",false);
         panel(c,270,286,570,146,claimed?0xA91A4650:0xAE193040,claimed?0xFF4BD4C9:0x557AA9BC,18);
         pill(c,292,306,112,24,"TEMPORADA 03",0x553A6B7C,0xFFB9E8EF);
         text(c,"DESAFIO DE BOAS-VINDAS",292,365,20,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -991,7 +1018,7 @@ public final class HudOverlay extends View {
         eyebrow(c,270,175,"GRUPO E CONTATOS");
         title(c,"AMIGOS E EQUIPE",270,224);
         subtitle(c,"Gerencie nomes salvos neste aparelho. Convites online dependem do servidor.",270,252);
-        String friend=prefs.getString("local_friend_1","");
+        String friend=readString(prefs,"local_friend_1","");
         panel(c,270,286,570,102,0xAE193040,0x557AA9BC,16);
         circle(c,318,337,25,0xFF1F7584,0xFF65DCE7);
         text(c,friend.isEmpty()?"?":friend.substring(0,1).toUpperCase(Locale.ROOT),311,344,18,Color.WHITE,Typeface.DEFAULT_BOLD);
@@ -1021,7 +1048,7 @@ public final class HudOverlay extends View {
             activeMailTitle="BOAS-VINDAS AO BATTLE UNIVERSE";
             activeMailBody="Presente de entrada: 50 diamantes virtuais.";
             activeMailDiamonds=50L;
-            activeMailClaimed=prefs.getBoolean("mail_welcome_claimed",false);
+            activeMailClaimed=readBoolean(prefs,"mail_welcome_claimed",false);
         }
         panel(c,270,286,570,112,activeMailClaimed?0xA91A4650:0xAE193040,
             activeMailClaimed?0xFF4BD4C9:0x557AA9BC,16);
@@ -1048,7 +1075,7 @@ public final class HudOverlay extends View {
         String[] names={"PRIMEIROS PASSOS","OPERADOR DEDICADO","LENDÁRIO"};
         String[] keys={"achievement_500","achievement_1500","achievement_3000"};
         for(int i=0;i<3;i++) {
-            float x=270+i*192f;boolean ready=xp>=goals[i],claimed=prefs.getBoolean(keys[i],false);
+            float x=270+i*192f;boolean ready=xp>=goals[i],claimed=readBoolean(prefs,keys[i],false);
             panel(c,x,292,174,190,claimed?0xA91A4650:0xAE193040,claimed?0xFF4BD4C9:ready?0xFF51C9C4:0x335D8495,16);
             pill(c,x+13,308,78,22,"MARCO XP",0x553A6B7C,0xFFB9E8EF);
             text(c,names[i],x+13,362,9,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -1063,7 +1090,7 @@ public final class HudOverlay extends View {
 
     private void showLocalFriendDialog() {
         EditText input=new EditText(getContext());input.setSingleLine(true);
-        input.setHint("Nome do contato");input.setText(prefs.getString("local_friend_1",""));
+        input.setHint("Nome do contato");input.setText(readString(prefs,"local_friend_1",""));
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         new AlertDialog.Builder(getContext()).setTitle("Contato local").setView(input)
             .setNegativeButton("CANCELAR",null).setPositiveButton("SALVAR",(dialog,which)->{
@@ -1074,7 +1101,7 @@ public final class HudOverlay extends View {
     }
 
     private void claimEventReward() {
-        if(prefs.getBoolean("event_season_claimed",false)){toast("Recompensa do evento já coletada.");return;}
+        if(readBoolean(prefs,"event_season_claimed",false)){toast("Recompensa do evento já coletada.");return;}
         claimServerReward("event","season03_welcome","Evento concluído: recompensa recebida!");
     }
     private void claimMailReward() {
@@ -1112,7 +1139,7 @@ public final class HudOverlay extends View {
         int[] goals={500,1500,3000};long[] rewards={50,100,200};
         String[] keys={"achievement_500","achievement_1500","achievement_3000"};
         if(index<0||index>=goals.length)return;
-        if(prefs.getBoolean(keys[index],false)){toast("Conquista já resgatada.");return;}
+        if(readBoolean(prefs,keys[index],false)){toast("Conquista já resgatada.");return;}
         if(prefs.getLong("xp",0L)<goals[index]){toast("Ainda faltam pontos de experiência.");return;}
         claimServerReward("achievement",String.valueOf(goals[index]),"Conquista resgatada!");
     }
@@ -1519,19 +1546,19 @@ public final class HudOverlay extends View {
             for(int i=0;i<4;i++) {
                 float sx=270+i*146f;
                 if(hit(x,y,sx,312,132,72)) {
-                    if(!prefs.getBoolean(SHOP_KEYS[3+i],false)){toast("Compre esta camisa na loja primeiro.");return;}
+                    if(!readBoolean(prefs,SHOP_KEYS[3+i],false)){toast("Compre esta camisa na loja primeiro.");return;}
                     selectedShirt=i+1;selectedSet=0;
                     prefs.edit().putInt("selected_shirt",selectedShirt).putInt("selected_set",0).apply();
                     game.setWardrobe(selectedShirt,selectedBoots,0);toast("Camisa "+new String[]{"TÁTICA","NEON","FROST","DESERTO"}[i]+" equipada.");return;
                 }
                 if(hit(x,y,sx,432,132,72)) {
-                    if(!prefs.getBoolean(SHOP_KEYS[7+i],false)){toast("Compre estas botas na loja primeiro.");return;}
+                    if(!readBoolean(prefs,SHOP_KEYS[7+i],false)){toast("Compre estas botas na loja primeiro.");return;}
                     selectedBoots=i+1;selectedSet=0;
                     prefs.edit().putInt("selected_boots",selectedBoots).putInt("selected_set",0).apply();
                     game.setWardrobe(selectedShirt,selectedBoots,0);toast("Botas equipadas.");return;
                 }
                 if(hit(x,y,sx,552,132,72)) {
-                    if(!prefs.getBoolean(SHOP_KEYS[11+i],false)){toast("Compre este conjunto na loja primeiro.");return;}
+                    if(!readBoolean(prefs,SHOP_KEYS[11+i],false)){toast("Compre este conjunto na loja primeiro.");return;}
                     selectedSet=i+1;
                     prefs.edit().putInt("selected_set",selectedSet).apply();
                     game.setWardrobe(selectedShirt,selectedBoots,selectedSet);toast("Conjunto "+new String[]{"AURORA","CAMPEÃO","ORBITAL","DESERTO"}[i]+" equipado.");return;

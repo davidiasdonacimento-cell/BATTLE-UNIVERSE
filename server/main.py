@@ -52,8 +52,75 @@ PROFILE_FIELDS = {
     "show_minimap", "haptics", "mode", "map", "character", "selected_shirt",
     "selected_boots", "selected_set", "equipped_beard", "equipped_helmet",
     "equipped_backpack", "equipped_vest", "selected_pants", "character_display_name",
-    "nickname", "profile_schema_version"
+    "nickname", "profile_schema_version", "online_mode"
 }
+
+# Valores usados como índices ou configurações enumeradas no cliente Android.
+PROFILE_INT_RANGES = {
+    "mode": (0, 3, 0), "selected_mode": (0, 3, 0),
+    "map": (0, 7, 0), "selected_map": (0, 7, 0),
+    "character": (0, 3, 0), "selected_character": (0, 3, 0),
+    "quality": (0, 2, 1),
+    "look_sensitivity": (0, 2, 1),
+    "selected_shirt": (0, 4, 1), "selected_boots": (0, 4, 1),
+    "selected_set": (0, 4, 0),
+}
+PROFILE_BOOL_DEFAULTS = {
+    "music": True, "effects": True, "invert_camera_y": False,
+    "show_minimap": True, "haptics": True, "online_mode": False,
+}
+PROFILE_STRING_LIMITS = {"nickname": 24, "character_display_name": 32}
+
+def sanitize_profile_for_client(profile: dict[str, Any] | None) -> dict[str, Any]:
+    """Return a safe copy of legacy profile data before exposing it to the game client."""
+    safe = dict(profile or {})
+    for key, (minimum, maximum, default) in PROFILE_INT_RANGES.items():
+        if key not in safe:
+            continue
+        value = safe[key]
+        if isinstance(value, bool) or not isinstance(value, int):
+            safe[key] = default
+        else:
+            safe[key] = max(minimum, min(maximum, value))
+    for key, default in PROFILE_BOOL_DEFAULTS.items():
+        if key in safe and not isinstance(safe[key], bool):
+            safe[key] = default
+    for key, maximum in PROFILE_STRING_LIMITS.items():
+        if key in safe and not isinstance(safe[key], str):
+            safe[key] = ""
+        elif key in safe:
+            safe[key] = safe[key][:maximum]
+    return safe
+
+def validate_profile_updates(profile: dict[str, Any]) -> dict[str, Any]:
+    """Validate client-controlled settings before persisting them."""
+    if len(profile) > 80:
+        raise HTTPException(413, "Perfil excede o limite de campos.")
+    if {"coins", "diamonds", "economy_ledger", "last_match_reward_diamonds",
+        "last_match_reward_coins", "match_reward_recorded"}.intersection(profile):
+        raise HTTPException(403, "Carteira e recompensas são controladas exclusivamente pelo servidor.")
+    clean: dict[str, Any] = {}
+    for key, value in profile.items():
+        if key not in PROFILE_FIELDS:
+            continue
+        if key in PROFILE_INT_RANGES:
+            minimum, maximum, _default = PROFILE_INT_RANGES[key]
+            if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+                raise HTTPException(422, f"Valor inválido para {key}.")
+            clean[key] = value
+        elif key in PROFILE_BOOL_DEFAULTS:
+            if not isinstance(value, bool):
+                raise HTTPException(422, f"Tipo inválido para {key}.")
+            clean[key] = value
+        elif key in PROFILE_STRING_LIMITS:
+            if not isinstance(value, str):
+                raise HTTPException(422, f"Tipo inválido para {key}.")
+            if len(value) > PROFILE_STRING_LIMITS[key]:
+                raise HTTPException(422, f"Valor muito longo: {key}")
+            clean[key] = value
+        elif isinstance(value, (str, bool, int, float)) or value is None:
+            clean[key] = value
+    return clean
 
 class Base(DeclarativeBase):
     pass
@@ -430,7 +497,8 @@ def startup() -> None:
         raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
 
 def player_payload(player: Player) -> dict[str, Any]:
-    return {"id": player.id, "username": player.username, "profile": player.profile or {},
+    return {"id": player.id, "username": player.username,
+            "profile": sanitize_profile_for_client(player.profile),
             "created_at": player.created_at.isoformat(), "updated_at": player.updated_at.isoformat()}
 
 def issue_token(subject: str, username: str, role: str, minutes: int,
@@ -960,28 +1028,16 @@ def login(body: LoginBody, db: Session = Depends(db_session)) -> dict[str, Any]:
 
 @app.get("/v1/accounts/me")
 def me(player: Player = Depends(current_player)) -> dict[str, Any]:
-    return {"player": {"id": player.id, "username": player.username, "profile": player.profile or {},
-                       "created_at": player.created_at.isoformat(), "updated_at": player.updated_at.isoformat()}}
+    return {"player": player_payload(player)}
 
 @app.patch("/v1/accounts/me/profile")
 def update_profile(body: ProfileBody, db: Session = Depends(db_session),
                    player: Player = Depends(current_player)) -> dict[str, Any]:
-    if len(body.profile) > 80:
-        raise HTTPException(413, "Perfil excede o limite de campos.")
-    if {"coins", "diamonds", "economy_ledger", "last_match_reward_diamonds",
-        "last_match_reward_coins", "match_reward_recorded"}.intersection(body.profile):
-        raise HTTPException(403, "Carteira e recompensas são controladas exclusivamente pelo servidor.")
-    clean: dict[str, Any] = {}
-    for key, value in body.profile.items():
-        if key in PROFILE_FIELDS and (isinstance(value, (str, bool, int, float)) or value is None):
-            max_length = 8192 if key == "economy_ledger" else (4096 if key in {"match_history", "royale_history"} else 256)
-            if isinstance(value, str) and len(value) > max_length:
-                raise HTTPException(422, f"Valor muito longo: {key}")
-            clean[key] = value
+    clean = validate_profile_updates(body.profile)
     player.profile = {**(player.profile or {}), **clean}
     player.updated_at = datetime.now(timezone.utc)
     db.add(player); db.commit(); db.refresh(player)
-    return {"player": {"id": player.id, "username": player.username, "profile": player.profile}}
+    return {"player": player_payload(player)}
 
 @app.get("/v1/game/settings")
 def player_game_settings(db: Session = Depends(db_session), player: Player = Depends(current_player)):

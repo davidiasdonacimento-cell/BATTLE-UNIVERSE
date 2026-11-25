@@ -42,14 +42,15 @@ class AccountIdentityTests(unittest.TestCase):
         }
         self.assertEqual({item["profile_key"] for item in main.ROYALE_PRIZES}, expected)
 
-    def test_cloud_profile_includes_progression_and_recovery_data(self):
-        expected = {
+    def test_server_owned_progression_and_recovery_data_are_not_client_writable(self):
+        server_owned = {
             "xp", "matches_played", "match_wins", "match_kills",
             "match_history", "royale_history", "mission_matches",
             "mission_claimed_0", "shop_frame_neon",
         }
-        self.assertTrue(expected.issubset(main.PROFILE_FIELDS))
-        self.assertTrue({"coins", "diamonds", "economy_ledger"}.isdisjoint(main.PROFILE_FIELDS))
+        protected_wallet = {"coins", "diamonds", "economy_ledger"}
+        self.assertTrue(server_owned.isdisjoint(main.PROFILE_FIELDS))
+        self.assertTrue(protected_wallet.isdisjoint(main.PROFILE_FIELDS))
 
 
 
@@ -136,6 +137,54 @@ class PromoCodeContractTests(unittest.TestCase):
         self.assertEqual(main.PromoCode.__table__.c.id.type.python_type, str)
         self.assertEqual(main.PromoRedemption.__table__.c.promo_id.type.python_type, str)
         self.assertEqual(main.PromoCode.__table__.c.id.type.length, main.PromoRedemption.__table__.c.promo_id.type.length)
+
+
+class ProfileValidationTests(unittest.TestCase):
+    def test_legacy_profile_is_sanitized_before_client_delivery(self):
+        profile = main.sanitize_profile_for_client({
+            "mode": 99,
+            "map": "invalid",
+            "character": -5,
+            "quality": True,
+            "look_sensitivity": 2,
+            "selected_shirt": 9,
+            "music": "yes",
+            "nickname": 123,
+        })
+        self.assertEqual(profile["mode"], 3)
+        self.assertEqual(profile["map"], 0)
+        self.assertEqual(profile["character"], 0)
+        self.assertEqual(profile["quality"], 1)
+        self.assertEqual(profile["look_sensitivity"], 2)
+        self.assertEqual(profile["selected_shirt"], 4)
+        self.assertIs(profile["music"], True)
+        self.assertEqual(profile["nickname"], "")
+
+    def test_profile_update_accepts_valid_game_setting_boundaries(self):
+        clean = main.validate_profile_updates({
+            "mode": 3, "map": 7, "character": 3, "quality": 2,
+            "look_sensitivity": 0, "selected_shirt": 4, "selected_boots": 0,
+            "selected_set": 4, "music": False, "nickname": "Player_01",
+        })
+        self.assertEqual(clean["mode"], 3)
+        self.assertEqual(clean["map"], 7)
+        self.assertEqual(clean["selected_set"], 4)
+        self.assertIs(clean["music"], False)
+
+    def test_profile_update_rejects_out_of_range_and_wrong_types(self):
+        invalid_profiles = (
+            {"mode": 4},
+            {"map": -1},
+            {"character": True},
+            {"quality": "high"},
+            {"selected_shirt": 5},
+            {"music": "true"},
+            {"nickname": 42},
+        )
+        for profile in invalid_profiles:
+            with self.subTest(profile=profile):
+                with self.assertRaises(main.HTTPException):
+                    main.validate_profile_updates(profile)
 
 
 if __name__ == "__main__":
