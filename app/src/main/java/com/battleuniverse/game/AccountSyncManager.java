@@ -701,10 +701,22 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             InputStream stream=code>=200&&code<300?c.getInputStream():c.getErrorStream();
             ByteArrayOutputStream out=new ByteArrayOutputStream();
             if(stream!=null)try(InputStream in=stream){byte[] b=new byte[4096];int n,total=0;while((n=in.read(b))!=-1){total+=n;if(total>1024*1024)throw new Exception("Resposta do servidor excedeu o limite.");out.write(b,0,n);}}
-            String text=new String(out.toByteArray(),StandardCharsets.UTF_8);
-            JSONObject json=text.isEmpty()?new JSONObject():new JSONObject(text);
+            String responseText=new String(out.toByteArray(),StandardCharsets.UTF_8).trim();
+            JSONObject json;
+            try {
+                json=responseText.isEmpty()?new JSONObject():new JSONObject(responseText);
+            } catch(JSONException parseError) {
+                String detail=responseText.replaceAll("\\s+"," ");
+                if(detail.length()>240)detail=detail.substring(0,240)+"…";
+                if(code<200||code>=300) {
+                    throw new Exception((detail.isEmpty()?"Resposta HTTP sem JSON":detail)+" (HTTP "+code+")");
+                }
+                throw new Exception("O servidor retornou uma resposta inválida (HTTP "+code+")"
+                    +(detail.isEmpty()?".":": "+detail));
+            }
             if(code<200||code>=300) {
-                String detail=json.optString("detail","HTTP "+code);
+                String detail=json.optString("detail","");
+                if(detail.isEmpty())detail="HTTP "+code;
                 throw new Exception(detail+" (HTTP "+code+")");
             }
             return json;
