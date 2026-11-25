@@ -12,6 +12,18 @@ import main
 
 
 class AccountIdentityTests(unittest.TestCase):
+    def test_owner_recovery_code_ignores_copy_paste_whitespace(self):
+        code = "A1B2C3D4-E5F60718-192A3B4C-5D6E7F80"
+        spaced = "  A1B2C3D4-\n E5F60718-192A3B4C-5D6E7F80  "
+        self.assertEqual(
+            main.normalize_owner_recovery_code(spaced),
+            main.normalize_owner_recovery_code(code),
+        )
+        self.assertNotEqual(
+            main.normalize_owner_recovery_code(code),
+            main.normalize_owner_recovery_code(code.lower()),
+        )
+
     def test_owner_recovery_body_requires_strong_format_and_install_id(self):
         body = main.OwnerRecoveryBody(
             recovery_code="R" * 40,
