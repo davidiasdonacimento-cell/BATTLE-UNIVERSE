@@ -126,9 +126,9 @@ public final class ContentPackInstaller {
                             archive.delete();
                             appContext.getContentResolver().delete(savedArchive,null,null);
                         }
-                    } catch(Exception invalidSavedCopy) {
+                    } catch(Exception unreadableSavedCopy) {
+                        // Preserve the public ZIP if a transient read error occurs; try a fresh download.
                         archive.delete();
-                        appContext.getContentResolver().delete(savedArchive,null,null);
                     }
                 }
                 if(!reusedSavedArchive) {
@@ -177,8 +177,7 @@ public final class ContentPackInstaller {
     }
 
     private Uri findSavedArchive() throws Exception {
-        if(Build.VERSION.SDK_INT<29)
-            throw new Exception("O salvamento permanente automático do ZIP requer Android 10 ou superior.");
+        if(Build.VERSION.SDK_INT<29)return null;
         String[] columns={MediaStore.MediaColumns._ID};
         String selection=MediaStore.MediaColumns.DISPLAY_NAME+"=? AND "+
             MediaStore.MediaColumns.RELATIVE_PATH+"=?";
@@ -205,8 +204,7 @@ public final class ContentPackInstaller {
     }
 
     private void saveArchiveToDownloads(File source) throws Exception {
-        if(Build.VERSION.SDK_INT<29)
-            throw new Exception("O salvamento permanente automático do ZIP requer Android 10 ou superior.");
+        if(Build.VERSION.SDK_INT<29)return;
         ContentValues values=new ContentValues();
         values.put(MediaStore.MediaColumns.DISPLAY_NAME,SAVED_ARCHIVE_NAME);
         values.put(MediaStore.MediaColumns.MIME_TYPE,"application/zip");
