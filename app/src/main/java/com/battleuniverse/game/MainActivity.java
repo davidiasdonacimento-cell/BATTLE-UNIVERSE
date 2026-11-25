@@ -25,7 +25,11 @@ public final class MainActivity extends Activity {
     private final Handler traceHandler=new Handler(Looper.getMainLooper());
     private final Runnable traceSampler=new Runnable(){@Override public void run(){
         if(gameSurface!=null){int stage=gameSurface.getDiagnosticStage();
-            if(stage>=0)getSharedPreferences("bu_crash_trace",MODE_PRIVATE).edit().putInt("last_stage",stage).apply();}
+            int elimination=gameSurface.getLastEliminationStage();
+            android.content.SharedPreferences.Editor trace=getSharedPreferences("bu_crash_trace",MODE_PRIVATE).edit();
+            if(stage>=0)trace.putInt("last_stage",stage);
+            if(elimination>=0)trace.putInt("last_elimination_stage",elimination);
+            trace.apply();}
         if(!isFinishing())traceHandler.postDelayed(this,180);
     }};
 
@@ -36,11 +40,15 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
         // O pacote 4K é opcional. A ausência dele nunca pode bloquear a inicialização
         // nem iniciar um download de centenas de MB automaticamente.
-        int previousStage=getSharedPreferences("bu_crash_trace",MODE_PRIVATE).getInt("last_stage",-1);
+        android.content.SharedPreferences tracePrefs=getSharedPreferences("bu_crash_trace",MODE_PRIVATE);
+        int previousStage=tracePrefs.getInt("last_stage",-1);
+        int previousElimination=tracePrefs.getInt("last_elimination_stage",-1);
         launchGame(ContentPackInstaller.isInstalled(this));
-        if(previousStage>0) new android.app.AlertDialog.Builder(this)
+        if(previousStage>0||previousElimination>0) new android.app.AlertDialog.Builder(this)
             .setTitle("DIAGNÓSTICO DE ESTABILIDADE")
-            .setMessage("Última etapa registrada antes do encerramento anterior: "+diagnosticStageName(previousStage)+".\n\nEsse registro é uma pista técnica, não uma confirmação isolada da causa.")
+            .setMessage("Última etapa registrada: "+diagnosticStageName(previousStage)+"."
+                +(previousElimination>0?"\nÚltima etapa da eliminação: "+diagnosticStageName(previousElimination)+".":"")
+                +"\n\nRegistro técnico, não confirmação isolada da causa.")
             .setPositiveButton("OK",null).show();
         traceHandler.post(traceSampler);
     }
