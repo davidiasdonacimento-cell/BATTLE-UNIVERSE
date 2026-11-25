@@ -131,14 +131,22 @@ public final class MainActivity extends Activity {
         });
         hud.setGoogleAccountStatus(true,accountSync.isSignedIn(),accountSync.getUsername(),
             "Crie uma conta ou entre com nickname e senha.");
-        accountSync.restoreExistingSession();
-
+        // Primeiro anexe a HUD e a superfície OpenGL à Activity. Restaurar a conta
+        // antes de setContentView podia aplicar o perfil enquanto a tela ainda estava
+        // sendo construída, disparando atualizações de preferências durante a inicialização.
         root.addView(gameSurface,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
         root.addView(hud,new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
 
         setContentView(root);
+
+        // A restauração de rede começa somente depois que a hierarquia da tela foi anexada.
+        root.post(() -> {
+            if (!isFinishing() && !isDestroyed() && accountSync != null) {
+                accountSync.restoreExistingSession();
+            }
+        });
     }
 
     private void showContentPackOptions() {
