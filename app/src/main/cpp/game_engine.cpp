@@ -1430,14 +1430,13 @@ void firePulse() {
         // Carapina mantém 100-105; XM8/UMP/Uzi usam 200-237.
         const int traceBase=(gWeaponType==2)?100:(200+gWeaponType*10);
         gCrashTraceStage.store(traceBase,std::memory_order_relaxed);
-        gLastEliminationStage.store(traceBase,std::memory_order_relaxed);
         gBotHealth[static_cast<size_t>(hitBot)]=std::max(0,gBotHealth[static_cast<size_t>(hitBot)]-damage);
         gDamageDealt+=damage;
         const int healthAfterHit=gBotHealth[static_cast<size_t>(hitBot)];
         gBotDamageAmount[static_cast<size_t>(hitBot)]=damage;
         gBotDamageTimer[static_cast<size_t>(hitBot)]=1.20f;
         gBotDamagePosition[static_cast<size_t>(hitBot)]=gBots[static_cast<size_t>(hitBot)].pos;
-        gCrashTraceStage.store(traceBase+1,std::memory_order_relaxed);gLastEliminationStage.store(traceBase+1,std::memory_order_relaxed);
+        gCrashTraceStage.store(traceBase+1,std::memory_order_relaxed);
         { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/"<<BOT_MAX_HEALTH; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
