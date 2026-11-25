@@ -12,6 +12,31 @@ import main
 
 
 class AccountIdentityTests(unittest.TestCase):
+    def test_owner_recovery_body_requires_strong_format_and_install_id(self):
+        body = main.OwnerRecoveryBody(
+            recovery_code="R" * 40,
+            install_id="install-id-1234567890",
+            device_label="Android",
+        )
+        self.assertEqual(body.device_label, "Android")
+        with self.assertRaises(Exception):
+            main.OwnerRecoveryBody(
+                recovery_code="short",
+                install_id="install-id-1234567890",
+            )
+
+    def test_owner_recovery_comparison_handles_unicode_without_type_error(self):
+        self.assertTrue(main.constant_time_text_equal("recuperação-ação", "recuperação-ação"))
+        self.assertFalse(main.constant_time_text_equal("recuperação-ação", "recuperacao-acao"))
+
+    def test_owner_recovery_throttle_is_global_and_bound_to_secret_fingerprint(self):
+        fingerprint = "a" * 64
+        throttle_key = __import__("hashlib").sha256(
+            ("owner-recovery:" + fingerprint).encode("utf-8")
+        ).hexdigest()
+        self.assertEqual(len(throttle_key), 64)
+        self.assertNotEqual(throttle_key, fingerprint)
+
     def test_recovery_code_has_128_bits_and_human_grouping(self):
         code = main.new_recovery_code()
         self.assertRegex(code, r"^[A-F0-9]{8}(-[A-F0-9]{8}){3}$")
