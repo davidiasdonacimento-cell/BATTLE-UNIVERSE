@@ -584,12 +584,22 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             if(value instanceof String)edit.putString(key,(String)value);
             else if(value instanceof Boolean)edit.putBoolean(key,(Boolean)value);
             else if(value instanceof Number) {
-                if(isIntegerPreference(key))edit.putInt(key,((Number)value).intValue());
+                if(isIntegerPreference(key))edit.putInt(key,normalizeProfileInteger(key,((Number)value).longValue()));
                 else edit.putLong(key,((Number)value).longValue());
             }
         }
         edit.commit();
         applyingProfile=false;
+    }
+
+    private int normalizeProfileInteger(String key,long value) {
+        long min=0L,max=Integer.MAX_VALUE;
+        if("mode".equals(key))max=3L;
+        else if("map".equals(key))max=7L;
+        else if("character".equals(key))max=3L;
+        else if("quality".equals(key)||"look_sensitivity".equals(key))max=2L;
+        else if("selected_shirt".equals(key)||"selected_boots".equals(key)||"selected_set".equals(key))max=4L;
+        return (int)Math.max(min,Math.min(max,value));
     }
 
     private boolean isIntegerPreference(String key) {
