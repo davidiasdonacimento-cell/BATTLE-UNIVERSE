@@ -81,6 +81,11 @@ public final class MainActivity extends Activity {
                 launchGame(ContentPackInstaller.isInstalled(this));
             }
         });
+        // After reinstall, automatically restore a previously saved ZIP instead of asking the player to select it.
+        if(!ContentPackInstaller.isInstalled(this)&&ContentPackInstaller.hasSavedArchive(this)) {
+            startContentSetup();
+            return;
+        }
         ensureAccountSync();
         loadingView.setAccountStatus(accountSync.isSignedIn(),accountSync.getUsername(),
             "Entre na sua conta ou continue offline.");
