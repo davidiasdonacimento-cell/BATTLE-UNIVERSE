@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <array>
 #include <cmath>
 #include <mutex>
@@ -89,6 +90,7 @@ Mat4 lookAt(Vec3 eye,Vec3 center,Vec3 up) {
     return r;
 }
 
+std::atomic<int> gCrashTraceStage{0};
 GLuint gProgram=0, gCubeVbo=0, gSphereVbo=0, gCylinderVbo=0, gConeVbo=0;
 GLsizei gSphereCount=0, gCylinderCount=0, gConeCount=0;
 GLint gMvpLocation=-1, gModelLocation=-1, gColorLocation=-1;
@@ -751,6 +753,7 @@ void drawSegment(Vec3 base,float yaw,Vec3 a,Vec3 b,float radius,Vec3 color) {
 }
 void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movement=0.0f,
                    bool aiming=false,bool firing=false,bool sprinting=false) {
+    if(!bot&&gWeaponType==2)gCrashTraceStage.store(80,std::memory_order_relaxed);
     gCharacterPoseScale=(!bot&&(gCrouched||gPlayerDowned))?0.62f:1.0f;
     if(!bot&&gPlayerDowned) {
         drawCube({p.x,p.y+0.30f,p.z},{0.92f,0.34f,0.62f},color,yaw,0.0f,0.0f);
@@ -937,6 +940,7 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
             drawCube(localPoint(p,0,1.17f+bob,-0.78f+recoil,yaw),{0.075f,0.22f,0.13f},darkMetal,yaw);
             drawCube(localPoint(p,0,1.38f+bob,-0.78f+recoil,yaw),{0.075f,0.035f,0.26f},{0.30f,0.34f,0.36f},yaw);
         } else if(gWeaponType==2) { // Carapina: cano longo e mira óptica.
+            gCrashTraceStage.store(81,std::memory_order_relaxed);
             drawCube(localPoint(p,0,1.30f+bob,-1.16f+recoil,yaw),{0.055f,0.055f,0.72f},accent,yaw);
             drawCube(localPoint(p,0,1.43f+bob,-0.77f+recoil,yaw),{0.09f,0.10f,0.22f},darkMetal,yaw);
             drawCylinder(localPoint(p,0,1.49f+bob,-0.83f+recoil,yaw),{0.10f,0.12f,0.22f},{0.16f,0.22f,0.27f},yaw);
@@ -1361,6 +1365,7 @@ void drawBuildPieces() {
     }
 }
 void firePulse() {
+    gCrashTraceStage.store(gWeaponType==2?50:10,std::memory_order_relaxed);
     if(gWeaponType<0||gWeaponType>3||!gWeaponOwned[static_cast<size_t>(gWeaponType)]) {
         setStatus("SEM ARMA • PROCURE UM EQUIPAMENTO NO CHÃO");return;
     }
@@ -1369,6 +1374,7 @@ void firePulse() {
     if(!infiniteTrainingAmmo&&ammo<=0){setStatus("SEM MUNIÇÃO • PEGUE CAIXAS DE CARGA");return;}
     if(!infiniteTrainingAmmo)--ammo;
     gPulseFlash=0.18f;
+    if(gWeaponType==2)gCrashTraceStage.store(51,std::memory_order_relaxed);
     gPlayerYaw=gCameraYaw;
     gPulseStartPosition=localPoint(gPlayer,0.49f,1.22f,-0.42f,gCameraYaw);
     const float fx=-std::sin(gCameraYaw),fz=-std::cos(gCameraYaw);
@@ -1632,6 +1638,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gWaypointActive=false;
         setStatus("LOBBY • PRONTO PARA NOVA PARTIDA");
     }
+    gCrashTraceStage.store(90,std::memory_order_relaxed);
     publishMatchStats();
     publishFlightInfo();
 }
@@ -1700,7 +1707,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeResize(JNIEnv*,jclass,jint wi
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     jfloat deltaSeconds,jfloat moveX,jfloat moveY,jfloat lookDX,jfloat lookDY,jint buttons) {
-    if(!gProgram||!gCubeVbo){glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);return;}
+    if(!gProgram||!gCubeVbo){gCrashTraceStage.store(1,std::memory_order_relaxed);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);return;}
+    gCrashTraceStage.store(2,std::memory_order_relaxed);
     const float dt=std::clamp(static_cast<float>(deltaSeconds),0.001f,0.05f);
     gMatchTime+=dt;
     for(float& timer:gBotDamageTimer) timer=std::max(0.0f,timer-dt);
@@ -1733,7 +1741,8 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         Mat4 view=lookAt(eye,target,{0,1,0});
         gProjection=multiply(perspective(0.86f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
         glClearColor(0.24f,0.47f,0.58f,1.0f);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
-        drawWorld(gMatchTime);
+        gCrashTraceStage.store(20,std::memory_order_relaxed);
+    drawWorld(gMatchTime);
         const std::array<Vec3,4> lobbyOutfits{{
             {0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
             {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}
@@ -2030,6 +2039,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     for(int i=0;i<gResourceCount;++i)
         if(!gCrystalTaken[static_cast<size_t>(i)])
             drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
+    gCrashTraceStage.store(30,std::memory_order_relaxed);
     drawTargets(gMatchTime);drawBuildPieces();drawBuildPreview();drawGroundLoot(gMatchTime);
     if(gWaypointActive&&gDropState==3) {
         drawCylinder({gWaypoint.x,0.72f,gWaypoint.z},{0.32f,0.65f,0.32f},{0.10f,0.90f,0.82f});
@@ -2110,6 +2120,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         glEnable(GL_DEPTH_TEST);
     }
+    gCrashTraceStage.store(70,std::memory_order_relaxed);
     Vec3 playerDraw=gPlayer;playerDraw.y+=gJumpHeight;
     if(!gSpectatorMode) drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
         false,gMatchTime,moving?std::min(1.0f,moveLength):0.0f,
@@ -2182,6 +2193,10 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetSpectator(JNIEnv*,jclass,j
         gMatchFinished=false;
         setStatus(gSpectatorTarget>=0?"MODO ESPECTADOR • ACOMPANHANDO IA":"MODO ESPECTADOR • PARTIDA ENCERRADA");
     }
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetDiagnosticStage(JNIEnv*,jclass) {
+    return static_cast<jint>(gCrashTraceStage.load(std::memory_order_relaxed));
 }
 extern "C" JNIEXPORT jint JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetEliminations(JNIEnv*,jclass) {
