@@ -56,6 +56,18 @@ public final class ContentPackInstaller {
         this.listener=listener;
     }
 
+    public static boolean hasSavedArchive(Context context) {
+        if(Build.VERSION.SDK_INT<29)return false;
+        String[] columns={MediaStore.MediaColumns._ID};
+        String selection=MediaStore.MediaColumns.DISPLAY_NAME+"=? AND "+
+            MediaStore.MediaColumns.RELATIVE_PATH+"=?";
+        try(Cursor cursor=context.getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,columns,selection,
+                new String[]{SAVED_ARCHIVE_NAME,SAVED_ARCHIVE_PATH},null)) {
+            return cursor!=null&&cursor.moveToFirst();
+        } catch(Exception ignored) { return false; }
+    }
+
     public static boolean isInstalled(Context context) {
         File root=new File(context.getFilesDir(),"battle-content");
         File marker=new File(root,"installed.json");
