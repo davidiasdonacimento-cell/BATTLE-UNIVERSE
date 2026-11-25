@@ -12,6 +12,31 @@ import main
 
 
 class AccountIdentityTests(unittest.TestCase):
+    def test_owner_recovery_body_requires_strong_format_and_install_id(self):
+        body = main.OwnerRecoveryBody(
+            recovery_code="R" * 40,
+            install_id="install-id-1234567890",
+            device_label="Android",
+        )
+        self.assertEqual(body.device_label, "Android")
+        with self.assertRaises(Exception):
+            main.OwnerRecoveryBody(
+                recovery_code="short",
+                install_id="install-id-1234567890",
+            )
+
+    def test_owner_recovery_comparison_handles_unicode_without_type_error(self):
+        self.assertTrue(main.constant_time_text_equal("recuperação-ação", "recuperação-ação"))
+        self.assertFalse(main.constant_time_text_equal("recuperação-ação", "recuperacao-acao"))
+
+    def test_owner_recovery_throttle_is_global_and_bound_to_secret_fingerprint(self):
+        fingerprint = "a" * 64
+        throttle_key = __import__("hashlib").sha256(
+            ("owner-recovery:" + fingerprint).encode("utf-8")
+        ).hexdigest()
+        self.assertEqual(len(throttle_key), 64)
+        self.assertNotEqual(throttle_key, fingerprint)
+
     def test_recovery_code_has_128_bits_and_human_grouping(self):
         code = main.new_recovery_code()
         self.assertRegex(code, r"^[A-F0-9]{8}(-[A-F0-9]{8}){3}$")
@@ -42,14 +67,18 @@ class AccountIdentityTests(unittest.TestCase):
         }
         self.assertEqual({item["profile_key"] for item in main.ROYALE_PRIZES}, expected)
 
-    def test_cloud_profile_includes_progression_and_recovery_data(self):
-        expected = {
+    def test_client_profile_whitelist_excludes_server_owned_progression_and_wallet(self):
+        expected_client_settings = {
+            "selected_mode", "selected_map", "selected_character", "nickname",
+        }
+        self.assertTrue(expected_client_settings.issubset(main.PROFILE_FIELDS))
+        server_owned = {
             "xp", "matches_played", "match_wins", "match_kills",
             "match_history", "royale_history", "mission_matches",
-            "mission_claimed_0", "shop_frame_neon",
+            "mission_claimed_0", "shop_frame_neon", "coins", "diamonds",
+            "economy_ledger",
         }
-        self.assertTrue(expected.issubset(main.PROFILE_FIELDS))
-        self.assertTrue({"coins", "diamonds", "economy_ledger"}.isdisjoint(main.PROFILE_FIELDS))
+        self.assertTrue(server_owned.isdisjoint(main.PROFILE_FIELDS))
 
 
 

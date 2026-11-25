@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -29,6 +29,7 @@ JWT_ISSUER = os.environ.get("JWT_ISSUER", "battle-universe-accounts")
 ACCESS_TOKEN_MINUTES = max(15, min(43200, int(os.environ.get("ACCESS_TOKEN_MINUTES", "43200"))))
 ADMIN_TOKEN_MINUTES = max(10, min(720, int(os.environ.get("ADMIN_TOKEN_MINUTES", "120"))))
 OWNER_PAIRING_CODE = os.environ.get("OWNER_PAIRING_CODE", "").strip()
+OWNER_RECOVERY_CODE = os.environ.get("OWNER_RECOVERY_CODE", "").strip()
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "openrouter/auto").strip() or "openrouter/auto"
 OWNER_TOKEN_MINUTES = 43200
@@ -90,6 +91,18 @@ class OwnerDevice(Base):
     revoked: Mapped[bool] = mapped_column(nullable=False, default=False)
     paired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class OwnerRecoveryState(Base):
+    __tablename__ = "owner_recovery_state"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+class OwnerRecoveryAttempt(Base):
+    __tablename__ = "owner_recovery_attempts"
+    ip_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class RecoveryCredential(Base):
     __tablename__ = "account_recovery_credentials"
@@ -351,6 +364,12 @@ class OwnerPairBody(BaseModel):
     install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
     device_label: str = Field(default="Android", min_length=1, max_length=40)
 
+class OwnerRecoveryBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    recovery_code: str = Field(min_length=32, max_length=256)
+    install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    device_label: str = Field(default="Android", min_length=1, max_length=40)
+
 class OwnerTargetMailBody(BaseModel):
     title: str = Field(min_length=2, max_length=80)
     body: str = Field(min_length=2, max_length=1200)
@@ -432,6 +451,21 @@ def startup() -> None:
     # Owner pairing code stays in the hosting environment and is never embedded in the APK.
     if OWNER_PAIRING_CODE and len(OWNER_PAIRING_CODE) < 32:
         raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
+    if OWNER_RECOVERY_CODE and len(OWNER_RECOVERY_CODE) < 32:
+        raise RuntimeError("OWNER_RECOVERY_CODE must contain at least 32 characters")
+    # Keep only a SHA-256 fingerprint in the database. Changing the Render
+    # environment secret rotates the recovery credential and re-arms its use.
+    if OWNER_RECOVERY_CODE:
+        configured_hash = hashlib.sha256(OWNER_RECOVERY_CODE.encode("utf-8")).hexdigest()
+        with SessionLocal() as db:
+            state = db.get(OwnerRecoveryState, 1)
+            if state is None:
+                db.add(OwnerRecoveryState(id=1, code_hash=configured_hash))
+            elif not secrets.compare_digest(state.code_hash, configured_hash):
+                state.code_hash = configured_hash
+                state.consumed_at = None
+                db.execute(text("DELETE FROM owner_recovery_attempts"))
+            db.commit()
 
 def player_payload(player: Player) -> dict[str, Any]:
     return {"id": player.id, "username": player.username, "profile": player.profile or {},
@@ -1950,6 +1984,74 @@ $("sendTargetMail").onclick=async()=>{
  }catch(e){show("❌ DEU RED! "+e.message)}
 };
 </script></body></html>""")
+
+@app.post("/v1/owner/device/recover")
+def owner_recover_device(body: OwnerRecoveryBody, request: Request,
+                         db: Session = Depends(db_session)) -> dict[str, Any]:
+    """Recover the owner controller with a one-use secret and persistent throttling."""
+    if not OWNER_RECOVERY_CODE:
+        raise HTTPException(503, "Recuperação do controlador não foi configurada no servidor.")
+
+    now = datetime.now(timezone.utc)
+    configured_hash = hashlib.sha256(OWNER_RECOVERY_CODE.encode("utf-8")).hexdigest()
+
+    # Serialize every recovery attempt at the database level. This also closes
+    # the first-row race in the throttle table and prevents two simultaneous
+    # requests from consuming the same one-use credential.
+    db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": 731904261})
+    state = db.scalar(select(OwnerRecoveryState).where(OwnerRecoveryState.id == 1).with_for_update())
+    if state is None or not secrets.compare_digest(state.code_hash, configured_hash):
+        raise HTTPException(503, "Estado de recuperação indisponível. Reinicie o serviço e tente novamente.")
+    if state.consumed_at is not None:
+        raise HTTPException(409, "Código de recuperação já utilizado. Gere outro no Render para rearmar.")
+
+    # The recovery credential has a single global throttle, not an IP-only
+    # throttle that could be bypassed by changing networks or proxy addresses.
+    throttle_key = hashlib.sha256(("owner-recovery:" + state.code_hash).encode("utf-8")).hexdigest()
+    attempt = db.scalar(select(OwnerRecoveryAttempt).where(
+        OwnerRecoveryAttempt.ip_hash == throttle_key).with_for_update())
+    if attempt is None:
+        attempt = OwnerRecoveryAttempt(ip_hash=ip_hash, failed_attempts=0)
+        db.add(attempt)
+        db.flush()
+    if attempt.locked_until and attempt.locked_until > now:
+        raise HTTPException(429, "Muitas tentativas. Aguarde 30 minutos antes de tentar novamente.")
+
+    supplied_hash = hashlib.sha256(body.recovery_code.encode("utf-8")).hexdigest()
+    if not secrets.compare_digest(supplied_hash, state.code_hash):
+        attempt.failed_attempts += 1
+        if attempt.failed_attempts >= 5:
+            attempt.failed_attempts = 0
+            attempt.locked_until = now + timedelta(minutes=30)
+            db.commit()
+            raise HTTPException(429, "Limite de tentativas atingido. Aguarde 30 minutos.")
+        db.commit()
+        raise HTTPException(401, "Credencial de recuperação inválida.")
+
+    state.consumed_at = now
+    attempt.failed_attempts = 0
+    attempt.locked_until = None
+    device = db.scalar(select(OwnerDevice).where(OwnerDevice.id == 1).with_for_update())
+    if device is None:
+        device = OwnerDevice(id=1, install_id=body.install_id,
+                             device_label=body.device_label.strip(), revoked=False,
+                             paired_at=now, last_seen_at=now)
+        db.add(device)
+    else:
+        # Replacing install_id invalidates every token issued to the previous controller.
+        device.install_id = body.install_id
+        device.device_label = body.device_label.strip()
+        device.revoked = False
+        device.paired_at = now
+        device.last_seen_at = now
+    db.commit()
+    token = issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES,
+                        {"device_install_id": body.install_id})
+    return {"access_token": token, "token_type": "bearer",
+            "expires_in": OWNER_TOKEN_MINUTES * 60,
+            "device": {"label": device.device_label, "paired_at": device.paired_at.isoformat()},
+            "message": "Controlador anterior invalidado; novo aparelho autorizado. Código de recuperação consumido."}
+
 
 @app.post("/v1/owner/device/revoke")
 def owner_revoke_device(db: Session = Depends(db_session), owner: str = Depends(current_owner)):

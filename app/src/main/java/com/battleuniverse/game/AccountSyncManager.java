@@ -117,14 +117,25 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
     }
     private void showOwnerPairDialog() {
         EditText code=new EditText(activity);
-        code.setSingleLine(true);code.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        code.setSingleLine(true);
+        code.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         code.setHint("Código de autorização do proprietário");
-        LinearLayout box=new LinearLayout(activity);box.setPadding(36,12,36,0);box.addView(code);
-        new AlertDialog.Builder(activity).setTitle("BATTLE UNIVERSE • AUTORIZAR CONTROLADOR")
-            .setMessage("Digite aqui o código configurado no Render. Ele será usado apenas para autorizar este aparelho.")
-            .setView(box).setNegativeButton("CANCELAR",null).setPositiveButton("AUTORIZAR",(d,w)->{
-                String value=code.getText().toString().trim();code.setText("");
+        LinearLayout box=new LinearLayout(activity);
+        box.setPadding(36,12,36,0);
+        box.addView(code);
+        AlertDialog dialog=new AlertDialog.Builder(activity)
+            .setTitle("BATTLE UNIVERSE • AUTORIZAR CONTROLADOR")
+            .setMessage("Use o código de ativação normal. Se perdeu o aparelho anterior, escolha recuperar controlador.")
+            .setView(box)
+            .setNegativeButton("CANCELAR",null)
+            .setNeutralButton("RECUPERAR CONTROLADOR",null)
+            .setPositiveButton("AUTORIZAR",null)
+            .create();
+        dialog.setOnShowListener(ignored->{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=code.getText().toString().trim();
                 if(value.length()<32){ownerMessage("Código de autorização inválido.");return;}
+                dialog.dismiss();
                 worker.execute(()->{
                     try {
                         JSONObject response=api("/v1/owner/pair","POST",null,new JSONObject()
@@ -136,8 +147,49 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
                         main.post(()->showOwnerAccountSearch(owner));
                     } catch(Exception e){main.post(()->ownerMessage("Autorização recusada: "+cleanError(e)));}
                 });
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
+                dialog.dismiss();
+                showOwnerRecoveryDialog();
+            });
+        });
+        dialog.show();
+    }
+
+    private void showOwnerRecoveryDialog() {
+        EditText recovery=new EditText(activity);
+        recovery.setSingleLine(true);
+        recovery.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        recovery.setHint("Credencial de recuperação");
+        LinearLayout box=new LinearLayout(activity);
+        box.setPadding(36,12,36,0);
+        box.addView(recovery);
+        new AlertDialog.Builder(activity)
+            .setTitle("RECUPERAR CONTROLADOR")
+            .setMessage("A credencial OWNER_RECOVERY_CODE deve estar configurada no servidor. A recuperação substitui o controlador anterior.")
+            .setView(box)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("RECUPERAR", (d,w)->{
+                String value=recovery.getText().toString().trim();
+                recovery.setText("");
+                if(value.length()<32){ownerMessage("Credencial de recuperação inválida.");return;}
+                worker.execute(()->{
+                    try {
+                        JSONObject response=api("/v1/owner/device/recover","POST",null,new JSONObject()
+                            .put("recovery_code",value).put("install_id",getOwnerInstallId())
+                            .put("device_label","Android • BATTLE UNIVERSE"));
+                        String owner=response.optString("access_token","");
+                        if(owner.isEmpty())throw new Exception("O servidor não retornou a nova sessão administrativa.");
+                        saveOwnerToken(owner);
+                        main.post(()->{
+                            ownerMessage("Controlador anterior invalidado. Este aparelho foi autorizado.");
+                            showOwnerAccountSearch(owner);
+                        });
+                    } catch(Exception e){main.post(()->ownerMessage("Recuperação recusada: "+cleanError(e)));}
+                });
             }).show();
     }
+
     private void ownerMessage(String message) {
         if(!activity.isFinishing())new AlertDialog.Builder(activity).setTitle("CONTROLADOR DE CORREIO")
             .setMessage(message).setPositiveButton("OK",null).show();
@@ -147,8 +199,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         search.setHint("Nickname da conta (vazio = listar recentes)");
         LinearLayout box=new LinearLayout(activity);box.setPadding(36,8,36,0);box.addView(search);
         new AlertDialog.Builder(activity).setTitle("SELECIONAR CONTA")
-            .setMessage("Pesquise uma conta ou deixe vazio para carregar as contas recentes.")
-            .setView(box).setNegativeButton("CANCELAR",null).setPositiveButton("PESQUISAR",(d,w)->
+            .setMessage("Pesquise uma conta ou deixe vazio para carregar as contas recentes. Se este controlador foi bloqueado, use recuperar.")
+            .setView(box).setNegativeButton("CANCELAR",null)
+            .setNeutralButton("RECUPERAR CONTROLADOR",(d,w)->showOwnerRecoveryDialog())
+            .setPositiveButton("PESQUISAR",(d,w)->
                 loadOwnerAccounts(token,search.getText().toString().trim())).show();
     }
     private void loadOwnerAccounts(String token,String query) {
@@ -584,12 +638,22 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
             if(value instanceof String)edit.putString(key,(String)value);
             else if(value instanceof Boolean)edit.putBoolean(key,(Boolean)value);
             else if(value instanceof Number) {
-                if(isIntegerPreference(key))edit.putInt(key,((Number)value).intValue());
+                if(isIntegerPreference(key))edit.putInt(key,normalizeProfileInteger(key,((Number)value).longValue()));
                 else edit.putLong(key,((Number)value).longValue());
             }
         }
         edit.commit();
         applyingProfile=false;
+    }
+
+    private int normalizeProfileInteger(String key,long value) {
+        long min=0L,max=Integer.MAX_VALUE;
+        if("mode".equals(key))max=3L;
+        else if("map".equals(key))max=7L;
+        else if("character".equals(key))max=3L;
+        else if("quality".equals(key)||"look_sensitivity".equals(key))max=2L;
+        else if("selected_shirt".equals(key)||"selected_boots".equals(key)||"selected_set".equals(key))max=4L;
+        return (int)Math.max(min,Math.min(max,value));
     }
 
     private boolean isIntegerPreference(String key) {
