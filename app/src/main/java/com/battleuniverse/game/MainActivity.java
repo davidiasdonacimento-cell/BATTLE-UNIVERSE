@@ -38,7 +38,7 @@ public final class MainActivity extends Activity {
         // nem iniciar um download de centenas de MB automaticamente.
         int previousStage=getSharedPreferences("bu_crash_trace",MODE_PRIVATE).getInt("last_stage",-1);
         launchGame(ContentPackInstaller.isInstalled(this));
-        if(previousStage>=0) new android.app.AlertDialog.Builder(this)
+        if(previousStage>0) new android.app.AlertDialog.Builder(this)
             .setTitle("DIAGNÓSTICO DE ESTABILIDADE")
             .setMessage("Última etapa registrada antes do encerramento anterior: "+diagnosticStageName(previousStage)+".\n\nEsse registro é uma pista técnica, não uma confirmação isolada da causa.")
             .setPositiveButton("OK",null).show();
@@ -194,7 +194,7 @@ public final class MainActivity extends Activity {
     }
 
     private String diagnosticStageName(int stage) {
-        switch(stage){case 1:return "inicialização do renderizador";case 2:return "início do quadro";case 20:return "desenho do mundo";case 30:return "alvos e efeitos do disparo";case 50:return "início do disparo da arma";case 51:return "disparo processado";case 70:return "desenho do personagem";case 80:return "montagem do personagem com Carapina";case 81:return "desenho da mira óptica da Carapina";case 90:return "fim do quadro";default:return "etapa "+stage;}
+        switch(stage){case 1:return "inicialização do renderizador";case 2:return "início do quadro";case 20:return "desenho do mundo";case 30:return "alvos e efeitos do disparo";case 50:return "início do disparo da arma";case 51:return "disparo processado";case 70:return "desenho do personagem";case 80:return "montagem do personagem com Carapina";case 81:return "início do desenho da Carapina";case 82:return "desenho da mira óptica da Carapina";case 83:return "fim do desenho do personagem com Carapina";case 90:return "fim do quadro";default:return "etapa "+stage;}
     }
 
     private void enterImmersiveMode() {
@@ -224,6 +224,7 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onDestroy(){
+        getSharedPreferences("bu_crash_trace",MODE_PRIVATE).edit().putInt("last_stage",0).apply();
         traceHandler.removeCallbacks(traceSampler);
         if(installer!=null)installer.shutdown();
         if(packAnalyzer!=null)packAnalyzer.close();
