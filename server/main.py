@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -87,6 +87,18 @@ class OwnerDevice(Base):
     revoked: Mapped[bool] = mapped_column(nullable=False, default=False)
     paired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class OwnerRecoveryState(Base):
+    __tablename__ = "owner_recovery_state"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+class OwnerRecoveryAttempt(Base):
+    __tablename__ = "owner_recovery_attempts"
+    ip_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class RecoveryCredential(Base):
     __tablename__ = "account_recovery_credentials"
@@ -437,6 +449,19 @@ def startup() -> None:
         raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
     if OWNER_RECOVERY_CODE and len(OWNER_RECOVERY_CODE) < 32:
         raise RuntimeError("OWNER_RECOVERY_CODE must contain at least 32 characters")
+    # Keep only a SHA-256 fingerprint in the database. Changing the Render
+    # environment secret rotates the recovery credential and re-arms its use.
+    if OWNER_RECOVERY_CODE:
+        configured_hash = hashlib.sha256(OWNER_RECOVERY_CODE.encode("utf-8")).hexdigest()
+        with SessionLocal() as db:
+            state = db.get(OwnerRecoveryState, 1)
+            if state is None:
+                db.add(OwnerRecoveryState(id=1, code_hash=configured_hash))
+            elif not secrets.compare_digest(state.code_hash, configured_hash):
+                state.code_hash = configured_hash
+                state.consumed_at = None
+                db.execute(text("DELETE FROM owner_recovery_attempts"))
+            db.commit()
 
 def player_payload(player: Player) -> dict[str, Any]:
     return {"id": player.id, "username": player.username, "profile": player.profile or {},
@@ -1957,13 +1982,46 @@ $("sendTargetMail").onclick=async()=>{
 </script></body></html>""")
 
 @app.post("/v1/owner/device/recover")
-def owner_recover_device(body: OwnerRecoveryBody, db: Session = Depends(db_session)) -> dict[str, Any]:
-    """Recover the single owner controller using a separate server-side secret."""
+def owner_recover_device(body: OwnerRecoveryBody, request: Request,
+                         db: Session = Depends(db_session)) -> dict[str, Any]:
+    """Recover the owner controller with a one-use secret and persistent throttling."""
     if not OWNER_RECOVERY_CODE:
         raise HTTPException(503, "Recuperação do controlador não foi configurada no servidor.")
-    if not secrets.compare_digest(body.recovery_code, OWNER_RECOVERY_CODE):
-        raise HTTPException(401, "Credencial de recuperação inválida.")
+
     now = datetime.now(timezone.utc)
+    configured_hash = hashlib.sha256(OWNER_RECOVERY_CODE.encode("utf-8")).hexdigest()
+    state = db.scalar(select(OwnerRecoveryState).where(OwnerRecoveryState.id == 1).with_for_update())
+    if state is None or not secrets.compare_digest(state.code_hash, configured_hash):
+        raise HTTPException(503, "Estado de recuperação indisponível. Reinicie o serviço e tente novamente.")
+    if state.consumed_at is not None:
+        raise HTTPException(409, "Código de recuperação já utilizado. Gere outro no Render para rearmar.")
+
+    # Hash the source address so raw IP addresses are not stored in the database.
+    source = request.client.host if request.client else "unknown"
+    ip_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    attempt = db.scalar(select(OwnerRecoveryAttempt).where(
+        OwnerRecoveryAttempt.ip_hash == ip_hash).with_for_update())
+    if attempt is None:
+        attempt = OwnerRecoveryAttempt(ip_hash=ip_hash, failed_attempts=0)
+        db.add(attempt)
+        db.flush()
+    if attempt.locked_until and attempt.locked_until > now:
+        raise HTTPException(429, "Muitas tentativas. Aguarde 30 minutos antes de tentar novamente.")
+
+    supplied_hash = hashlib.sha256(body.recovery_code.encode("utf-8")).hexdigest()
+    if not secrets.compare_digest(supplied_hash, state.code_hash):
+        attempt.failed_attempts += 1
+        if attempt.failed_attempts >= 5:
+            attempt.failed_attempts = 0
+            attempt.locked_until = now + timedelta(minutes=30)
+            db.commit()
+            raise HTTPException(429, "Limite de tentativas atingido. Aguarde 30 minutos.")
+        db.commit()
+        raise HTTPException(401, "Credencial de recuperação inválida.")
+
+    state.consumed_at = now
+    attempt.failed_attempts = 0
+    attempt.locked_until = None
     device = db.scalar(select(OwnerDevice).where(OwnerDevice.id == 1).with_for_update())
     if device is None:
         device = OwnerDevice(id=1, install_id=body.install_id,
@@ -1983,7 +2041,7 @@ def owner_recover_device(body: OwnerRecoveryBody, db: Session = Depends(db_sessi
     return {"access_token": token, "token_type": "bearer",
             "expires_in": OWNER_TOKEN_MINUTES * 60,
             "device": {"label": device.device_label, "paired_at": device.paired_at.isoformat()},
-            "message": "Controlador anterior invalidado; novo aparelho autorizado."}
+            "message": "Controlador anterior invalidado; novo aparelho autorizado. Código de recuperação consumido."}
 
 
 @app.post("/v1/owner/device/revoke")
