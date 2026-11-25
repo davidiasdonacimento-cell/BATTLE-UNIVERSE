@@ -45,6 +45,10 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 password_hash = PasswordHash.recommended()
 bearer = HTTPBearer(auto_error=False)
+
+def constant_time_text_equal(left: str, right: str) -> bool:
+    """Compare UTF-8 text without secrets.compare_digest Unicode failures."""
+    return secrets.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
 USERNAME_RE = re.compile(r"^[a-z0-9_]{3,18}$")
 PROFILE_FIELDS = {
     "selected_mode", "selected_map", "selected_character", "quality", "music", "effects",
@@ -1486,7 +1490,7 @@ def royale_history(player: Player = Depends(current_player)):
 def owner_pair(body: OwnerPairBody, db: Session = Depends(db_session)) -> dict[str, Any]:
     if not OWNER_PAIRING_CODE:
         raise HTTPException(503, "Ativação do proprietário ainda não foi configurada no servidor.")
-    if not secrets.compare_digest(body.pairing_code, OWNER_PAIRING_CODE):
+    if not constant_time_text_equal(body.pairing_code, OWNER_PAIRING_CODE):
         raise HTTPException(401, "Código de ativação inválido.")
     # Clientes antigos sem install_id recebem uma identidade aleatória vinculada ao JWT.
     # O token é cifrado no Android Keystore e continua sujeito ao bloqueio de aparelho único.
@@ -1505,7 +1509,7 @@ def owner_pair(body: OwnerPairBody, db: Session = Depends(db_session)) -> dict[s
             device = db.get(OwnerDevice, 1)
     if device is None:
         raise HTTPException(503, "Não foi possível registrar o aparelho controlador.")
-    if not secrets.compare_digest(device.install_id, install_id):
+    if not constant_time_text_equal(device.install_id, install_id):
         if not device.revoked:
             raise HTTPException(409, "Já existe outro aparelho autorizado. Revogue o controlador atual antes de parear outro.")
         device.install_id = install_id
