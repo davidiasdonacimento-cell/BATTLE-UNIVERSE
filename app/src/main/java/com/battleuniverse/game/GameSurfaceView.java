@@ -92,6 +92,7 @@ public final class GameSurfaceView extends GLSurfaceView {
         try { return nativeGetEliminations(); } catch(UnsatisfiedLinkError error) { return 0; }
     }
     public int getDiagnosticStage() { try { return nativeGetDiagnosticStage(); } catch(UnsatisfiedLinkError error) { return -1; } }
+    public int getLastEliminationStage() { try { return nativeGetLastEliminationStage(); } catch(UnsatisfiedLinkError error) { return -1; } }
     public int getCollectedResources() {
         try { return nativeGetCollected(); } catch(UnsatisfiedLinkError error) { return 0; }
     }
@@ -264,6 +265,7 @@ public final class GameSurfaceView extends GLSurfaceView {
     private static native int nativeGetEliminations();
     private static native int nativeGetCollected();
     private static native int nativeGetDiagnosticStage();
+    private static native int nativeGetLastEliminationStage();
     private static native int[] nativeGetMatchStats();
     private static native void nativeSetSpectator(boolean enabled);
 
