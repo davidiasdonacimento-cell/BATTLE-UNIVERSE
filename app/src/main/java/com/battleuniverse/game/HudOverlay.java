@@ -111,23 +111,33 @@ public final class HudOverlay extends View {
         this.game=game; this.prefs=prefs;
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setClickable(true); setFocusable(true);
-        mode=prefs.getInt("mode",0); map=prefs.getInt("map",0);
-        character=prefs.getInt("character",0); quality=prefs.getInt("quality",1);
+        // Valores vindos do perfil online nunca podem ser usados sem validação:
+        // estes campos alimentam índices de arrays e parâmetros do motor nativo.
+        mode=clampPreference(prefs,"mode",0,MODE_NAMES.length-1,0);
+        map=clampPreference(prefs,"map",0,MAP_NAMES.length-1,0);
+        character=clampPreference(prefs,"character",0,CHARACTER_NAMES.length-1,0);
+        quality=clampPreference(prefs,"quality",0,QUALITY_NAMES.length-1,1);
         onlineMode=prefs.getBoolean("online_mode",false);
-        map=Math.max(0,Math.min(MAP_NAMES.length-1,map));
         music=prefs.getBoolean("music",true); effects=prefs.getBoolean("effects",true);
-        lookSensitivity=prefs.getInt("look_sensitivity",1);
+        lookSensitivity=clampPreference(prefs,"look_sensitivity",0,2,1);
         invertCameraY=prefs.getBoolean("invert_camera_y",false);
         showMinimap=prefs.getBoolean("show_minimap",true);
         hapticsEnabled=prefs.getBoolean("haptics",true);
         ensureStarterWardrobe();
-        selectedShirt=prefs.getInt("selected_shirt",1);
-        selectedBoots=prefs.getInt("selected_boots",1);
-        selectedSet=prefs.getInt("selected_set",0);
+        selectedShirt=clampPreference(prefs,"selected_shirt",0,4,1);
+        selectedBoots=clampPreference(prefs,"selected_boots",0,4,1);
+        selectedSet=clampPreference(prefs,"selected_set",0,4,0);
         ensureDailyMissionWindow();
         game.setInvertCameraY(invertCameraY);
         game.setCharacter(character); game.setMap(map); game.setWardrobe(selectedShirt,selectedBoots,selectedSet);
         game.setMatchMode(mode); game.setQuality(quality); game.setLookSensitivity(lookSensitivity); game.setGameScreen(false);
+    }
+
+    private static int clampPreference(SharedPreferences prefs,String key,int min,int max,int fallback) {
+        int stored=prefs.getInt(key,fallback);
+        int safe=Math.max(min,Math.min(max,stored));
+        if(safe!=stored) prefs.edit().putInt(key,safe).apply();
+        return safe;
     }
 
     @Override protected void onDraw(Canvas c) {
