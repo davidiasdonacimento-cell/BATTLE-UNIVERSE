@@ -28,7 +28,9 @@ public final class ContentLoadingView extends View {
     private long downloaded=0,total=0,started=System.currentTimeMillis();
     private String status="PREPARANDO CONEXÃO SEGURA...";
     private String error="";
-    private Runnable retryAction,continueAction,localPackAction;
+    private Runnable retryAction,continueAction,localPackAction,loginAction,startupContinueAction;
+    private boolean startupMode,accountSignedIn;
+    private String accountStatus="CONTA NÃO CONECTADA";
 
     public ContentLoadingView(Context context) {
         super(context);
@@ -45,6 +47,17 @@ public final class ContentLoadingView extends View {
     }
 
     public void setLocalPackAction(Runnable action){localPackAction=action; postInvalidate();}
+
+    public void setStartupActions(Runnable login,Runnable continueGame){
+        startupMode=true;loginAction=login;startupContinueAction=continueGame;postInvalidate();
+    }
+    public void setAccountStatus(boolean signedIn,String username,String message){
+        accountSignedIn=signedIn;
+        accountStatus=signedIn?("CONECTADO: @"+(username==null?"jogador":username)):
+            (message==null||message.trim().isEmpty()?"ENTRE NA SUA CONTA OU CONTINUE OFFLINE":message);
+        if(accountStatus.length()>76)accountStatus=accountStatus.substring(0,73)+"...";
+        postInvalidate();
+    }
 
     public void setStatus(String message) {
         status=message==null?status:message;
@@ -107,8 +120,8 @@ public final class ContentLoadingView extends View {
         paint.setColor(0xFF66F0F0);canvas.drawCircle(640,228,7,paint);
         text(canvas,"BATTLE",555,105,39,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
         text(canvas,"UNIVERSE",690,105,39,0xFF54DCE9,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(canvas,"EXPANSÃO DE CONTEÚDO  •  TEMPORADA 02",640,365,17,0xFFD4EAF2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
-        text(canvas,"Modelos 3D  •  Materiais PBR 4K  •  8 mapas  •  Áudio",640,391,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
+        text(canvas,startupMode?"INICIALIZAÇÃO DO JOGO":"EXPANSÃO DE CONTEÚDO  •  TEMPORADA 02",640,365,17,0xFFD4EAF2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+        text(canvas,startupMode?"PREPARANDO PERFIL, CONTA E RECURSOS":"Modelos 3D  •  Materiais PBR 4K  •  8 mapas  •  Áudio",640,391,12,0xFF88AFC1,Typeface.DEFAULT,Paint.Align.CENTER);
 
         rect.set(260,414,1020,428);
         paint.setColor(0xFF1B3448);canvas.drawRoundRect(rect,8,8,paint);
@@ -126,6 +139,14 @@ public final class ContentLoadingView extends View {
             text(canvas,"TENTAR NOVAMENTE",450,606,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
             text(canvas,"ABRIR JOGO BASE",830,606,13,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
             text(canvas,shortText(error,105),640,665,10,0xFFFFB1A5,Typeface.DEFAULT,Paint.Align.CENTER);
+        } else if(startupMode) {
+            panel(canvas,245,570,380,62,0xFF123B4C,0xFF54DCE9);
+            panel(canvas,655,570,380,62,0xFF263545,0xFF6F8798);
+            text(canvas,accountSignedIn?"CONTA CONECTADA":"ENTRAR / CRIAR CONTA",435,608,15,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,"CONTINUAR PARA O JOGO",845,608,15,Color.WHITE,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,accountStatus,640,660,11,accountSignedIn?0xFF69F0D2:0xFFB8D6E2,Typeface.DEFAULT_BOLD,Paint.Align.CENTER);
+            text(canvas,"A conta é opcional para jogar offline.",640,692,9,0xFF648DA1,Typeface.DEFAULT,Paint.Align.CENTER);
+            postInvalidateDelayed(120);
         } else {
             text(canvas,"ARQUIVOS DO JOGO  •  PROGRESSO INDIVIDUAL",260,548,11,0xFF64DDE8,Typeface.DEFAULT_BOLD);
             for(int i=0;i<recentFiles.size();i++) {
@@ -176,7 +197,11 @@ public final class ContentLoadingView extends View {
                 if(x>=275&&x<=625&&retryAction!=null)retryAction.run();
                 else if(x>=655&&x<=1005&&continueAction!=null)continueAction.run();
                 performClick();
-            } else if(error.isEmpty()&&x>=390&&x<=890&&y>=565&&y<=635&&localPackAction!=null) {
+            } else if(error.isEmpty()&&startupMode&&y>=555&&y<=640) {
+                if(x>=245&&x<=625&&loginAction!=null)loginAction.run();
+                else if(x>=655&&x<=1035&&startupContinueAction!=null)startupContinueAction.run();
+                performClick();
+            } else if(error.isEmpty()&&!startupMode&&x>=390&&x<=890&&y>=565&&y<=635&&localPackAction!=null) {
                 localPackAction.run(); performClick();
             }
             return true;
