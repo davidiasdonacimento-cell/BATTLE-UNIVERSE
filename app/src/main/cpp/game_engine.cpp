@@ -944,6 +944,7 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
             drawCube(localPoint(p,0,1.30f+bob,-1.16f+recoil,yaw),{0.055f,0.055f,0.72f},accent,yaw);
             drawCube(localPoint(p,0,1.43f+bob,-0.77f+recoil,yaw),{0.09f,0.10f,0.22f},darkMetal,yaw);
             drawCylinder(localPoint(p,0,1.49f+bob,-0.83f+recoil,yaw),{0.10f,0.12f,0.22f},{0.16f,0.22f,0.27f},yaw);
+            gCrashTraceStage.store(82,std::memory_order_relaxed);
         } else { // Mini Uzi: formato curto e carregador frontal.
             drawCube(localPoint(p,0,1.31f+bob,-0.99f+recoil,yaw),{0.12f,0.09f,0.24f},accent,yaw);
             drawCube(localPoint(p,0,1.18f+bob,-0.91f+recoil,yaw),{0.075f,0.22f,0.10f},darkMetal,yaw);
@@ -953,6 +954,7 @@ void drawCharacter(Vec3 p,float yaw,Vec3 color,bool bot,float time,float movemen
             {0.16f,0.12f,0.16f},{1.0f,0.72f,0.28f},yaw);
     }
     gCharacterPoseScale=1.0f;
+    if(!bot&&gWeaponType==2)gCrashTraceStage.store(83,std::memory_order_relaxed);
 }
 void drawCrystal(Vec3 p,float time,int index) {
     float bob=std::sin(time*2.2f+index)*0.16f, spin=time*0.55f+index*0.7f;
@@ -1638,7 +1640,6 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
         gWaypointActive=false;
         setStatus("LOBBY • PRONTO PARA NOVA PARTIDA");
     }
-    gCrashTraceStage.store(90,std::memory_order_relaxed);
     publishMatchStats();
     publishFlightInfo();
 }
@@ -1707,8 +1708,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeResize(JNIEnv*,jclass,jint wi
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     jfloat deltaSeconds,jfloat moveX,jfloat moveY,jfloat lookDX,jfloat lookDY,jint buttons) {
-    if(!gProgram||!gCubeVbo){gCrashTraceStage.store(1,std::memory_order_relaxed);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);return;}
-    gCrashTraceStage.store(2,std::memory_order_relaxed);
+    if(!gProgram||!gCubeVbo){glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);return;}
     const float dt=std::clamp(static_cast<float>(deltaSeconds),0.001f,0.05f);
     gMatchTime+=dt;
     for(float& timer:gBotDamageTimer) timer=std::max(0.0f,timer-dt);
@@ -1741,8 +1741,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         Mat4 view=lookAt(eye,target,{0,1,0});
         gProjection=multiply(perspective(0.86f,static_cast<float>(gWidth)/gHeight,0.1f,260.0f),view);
         glClearColor(0.24f,0.47f,0.58f,1.0f);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glUseProgram(gProgram);
-        gCrashTraceStage.store(20,std::memory_order_relaxed);
-    drawWorld(gMatchTime);
+        drawWorld(gMatchTime);
         const std::array<Vec3,4> lobbyOutfits{{
             {0.035f,0.66f,0.88f},{0.10f,0.18f,0.23f},
             {0.52f,0.12f,0.88f},{0.82f,0.55f,0.08f}
@@ -2039,7 +2038,6 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     for(int i=0;i<gResourceCount;++i)
         if(!gCrystalTaken[static_cast<size_t>(i)])
             drawCrystal(gCrystals[static_cast<size_t>(i)],gMatchTime,i);
-    gCrashTraceStage.store(30,std::memory_order_relaxed);
     drawTargets(gMatchTime);drawBuildPieces();drawBuildPreview();drawGroundLoot(gMatchTime);
     if(gWaypointActive&&gDropState==3) {
         drawCylinder({gWaypoint.x,0.72f,gWaypoint.z},{0.32f,0.65f,0.32f},{0.10f,0.90f,0.82f});
@@ -2120,7 +2118,6 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         }
         glEnable(GL_DEPTH_TEST);
     }
-    gCrashTraceStage.store(70,std::memory_order_relaxed);
     Vec3 playerDraw=gPlayer;playerDraw.y+=gJumpHeight;
     if(!gSpectatorMode) drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
         false,gMatchTime,moving?std::min(1.0f,moveLength):0.0f,
