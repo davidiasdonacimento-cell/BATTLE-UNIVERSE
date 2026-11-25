@@ -199,8 +199,10 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         search.setHint("Nickname da conta (vazio = listar recentes)");
         LinearLayout box=new LinearLayout(activity);box.setPadding(36,8,36,0);box.addView(search);
         new AlertDialog.Builder(activity).setTitle("SELECIONAR CONTA")
-            .setMessage("Pesquise uma conta ou deixe vazio para carregar as contas recentes.")
-            .setView(box).setNegativeButton("CANCELAR",null).setPositiveButton("PESQUISAR",(d,w)->
+            .setMessage("Pesquise uma conta ou deixe vazio para carregar as contas recentes. Se este controlador foi bloqueado, use recuperar.")
+            .setView(box).setNegativeButton("CANCELAR",null)
+            .setNeutralButton("RECUPERAR CONTROLADOR",(d,w)->showOwnerRecoveryDialog())
+            .setPositiveButton("PESQUISAR",(d,w)->
                 loadOwnerAccounts(token,search.getText().toString().trim())).show();
     }
     private void loadOwnerAccounts(String token,String query) {
