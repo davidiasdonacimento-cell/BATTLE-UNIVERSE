@@ -31,11 +31,10 @@ class AccountIdentityTests(unittest.TestCase):
 
     def test_owner_recovery_throttle_is_global_and_bound_to_secret_fingerprint(self):
         fingerprint = "a" * 64
-        throttle_key = __import__("hashlib").sha256(
-            ("owner-recovery:" + fingerprint).encode("utf-8")
-        ).hexdigest()
+        throttle_key = main.owner_recovery_throttle_key(fingerprint)
         self.assertEqual(len(throttle_key), 64)
         self.assertNotEqual(throttle_key, fingerprint)
+        self.assertEqual(throttle_key, main.owner_recovery_throttle_key(fingerprint))
 
     def test_recovery_code_has_128_bits_and_human_grouping(self):
         code = main.new_recovery_code()
