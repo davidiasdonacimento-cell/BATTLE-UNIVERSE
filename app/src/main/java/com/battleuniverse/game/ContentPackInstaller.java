@@ -1,6 +1,12 @@
 package com.battleuniverse.game;
 
 import android.content.Context;
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.StatFs;
@@ -12,6 +18,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -28,6 +35,8 @@ public final class ContentPackInstaller {
     private static final long MAX_DOWNLOAD_BYTES = 2L * 1024L * 1024L * 1024L;
     private static final long MAX_EXTRACTED_BYTES = 3L * 1024L * 1024L * 1024L;
     private static final int PACK_VERSION = 2;
+    private static final String SAVED_ARCHIVE_NAME = "BATTLE-UNIVERSE-Season-02.zip";
+    private static final String SAVED_ARCHIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/BATTLE UNIVERSE/";
 
     public interface Listener {
         void onProgress(long downloaded,long total,String status);
@@ -105,10 +114,34 @@ public final class ContentPackInstaller {
                 if(storage.getAvailableBytes()<needed)
                     throw new Exception("Espaço insuficiente. Libere pelo menos "+
                         String.format(Locale.US,"%.0f MB",needed/1048576.0)+" e tente novamente.");
-                downloadArchive(url,archive,expectedSize);
-                postProgress(expectedSize,expectedSize,"VERIFICANDO INTEGRIDADE DO PACOTE...");
+                boolean reusedSavedArchive=false;
+                Uri savedArchive=findSavedArchive();
+                if(savedArchive!=null) {
+                    try {
+                        copySavedArchiveToFile(savedArchive,archive);
+                        if(archive.length()==expectedSize&&sha256(archive).equals(expectedHash)) {
+                            reusedSavedArchive=true;
+                            postProgress(expectedSize,expectedSize,"ZIP SALVO ENCONTRADO • REUTILIZANDO...");
+                        } else {
+                            archive.delete();
+                            appContext.getContentResolver().delete(savedArchive,null,null);
+                        }
+                    } catch(Exception invalidSavedCopy) {
+                        archive.delete();
+                        appContext.getContentResolver().delete(savedArchive,null,null);
+                    }
+                }
+                if(!reusedSavedArchive) {
+                    downloadArchive(url,archive,expectedSize);
+                    postProgress(expectedSize,expectedSize,"VERIFICANDO INTEGRIDADE DO PACOTE...");
+                    String downloadedHash=sha256(archive);
+                    if(!downloadedHash.equals(expectedHash))
+                        throw new Exception("Falha na verificação SHA-256. O pacote foi descartado.");
+                    saveArchiveToDownloads(archive);
+                }
                 String actualHash=sha256(archive);
-                if(!actualHash.equals(expectedHash)) throw new Exception("Falha na verificação SHA-256. O pacote foi descartado.");
+                if(!actualHash.equals(expectedHash))
+                    throw new Exception("Falha na verificação SHA-256 do ZIP salvo.");
                 postProgress(expectedSize,expectedSize,"PREPARANDO INSTALAÇÃO DOS ARQUIVOS...");
                 deleteTree(staging);
                 if(!staging.mkdirs()&&!staging.isDirectory()) throw new Exception("Não foi possível criar a pasta temporária.");
@@ -129,8 +162,8 @@ public final class ContentPackInstaller {
                     throw new Exception("Falha ao ativar os dados. A versão anterior foi preservada.");
                 }
                 deleteTree(backup);
-                archive.delete();
-                postProgress(expectedSize,expectedSize,"DADOS VERIFICADOS • REINICIANDO O JOGO...");
+                archive.delete(); // A cópia pública em Download/BATTLE UNIVERSE permanece após desinstalar o app.
+                postProgress(expectedSize,expectedSize,"DADOS VERIFICADOS • ZIP GUARDADO EM DOWNLOAD/BATTLE UNIVERSE...");
                 main.post(()->{running=false;listener.onSuccess();});
             } catch(Exception error) {
                 // Keep incomplete data for resume, but discard a complete archive that failed validation.
@@ -141,6 +174,82 @@ public final class ContentPackInstaller {
                 main.post(()->{running=false;listener.onFailure(message);});
             }
         });
+    }
+
+    private Uri findSavedArchive() throws Exception {
+        if(Build.VERSION.SDK_INT<29)
+            throw new Exception("O salvamento permanente automático do ZIP requer Android 10 ou superior.");
+        String[] columns={MediaStore.MediaColumns._ID};
+        String selection=MediaStore.MediaColumns.DISPLAY_NAME+"=? AND "+
+            MediaStore.MediaColumns.RELATIVE_PATH+"=?";
+        try(Cursor cursor=appContext.getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,columns,selection,
+                new String[]{SAVED_ARCHIVE_NAME,SAVED_ARCHIVE_PATH},null)) {
+            if(cursor!=null&&cursor.moveToFirst()) {
+                long id=cursor.getLong(0);
+                return Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    Long.toString(id));
+            }
+        }
+        return null;
+    }
+
+    private void copySavedArchiveToFile(Uri source,File destination) throws Exception {
+        try(InputStream input=appContext.getContentResolver().openInputStream(source);
+            FileOutputStream output=new FileOutputStream(destination,false)) {
+            if(input==null)throw new Exception("Não foi possível abrir o ZIP salvo.");
+            byte[] buffer=new byte[65536];int count;
+            while((count=input.read(buffer))!=-1)output.write(buffer,0,count);
+            output.getFD().sync();
+        }
+    }
+
+    private void saveArchiveToDownloads(File source) throws Exception {
+        if(Build.VERSION.SDK_INT<29)
+            throw new Exception("O salvamento permanente automático do ZIP requer Android 10 ou superior.");
+        ContentValues values=new ContentValues();
+        values.put(MediaStore.MediaColumns.DISPLAY_NAME,SAVED_ARCHIVE_NAME);
+        values.put(MediaStore.MediaColumns.MIME_TYPE,"application/zip");
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH,SAVED_ARCHIVE_PATH);
+        values.put(MediaStore.MediaColumns.IS_PENDING,1);
+        Uri target=appContext.getContentResolver().insert(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);
+        if(target==null)throw new Exception("Não foi possível criar Download/BATTLE UNIVERSE.");
+        try {
+            try(InputStream input=new FileInputStream(source);
+                OutputStream output=appContext.getContentResolver().openOutputStream(target,"w")) {
+                if(output==null)throw new Exception("Não foi possível gravar o ZIP na pasta permanente.");
+                byte[] buffer=new byte[65536];int count;
+                while((count=input.read(buffer))!=-1)output.write(buffer,0,count);
+                output.flush();
+            }
+            ContentValues ready=new ContentValues();
+            ready.put(MediaStore.MediaColumns.IS_PENDING,0);
+            if(appContext.getContentResolver().update(target,ready,null,null)<=0)
+                throw new Exception("O ZIP foi copiado, mas não foi possível finalizar o salvamento.");
+            Uri previous=findSavedArchiveExcluding(target);
+            if(previous!=null)appContext.getContentResolver().delete(previous,null,null);
+            postProgress(source.length(),source.length(),"ZIP GUARDADO EM DOWNLOAD/BATTLE UNIVERSE...");
+        } catch(Exception failure) {
+            appContext.getContentResolver().delete(target,null,null);
+            throw failure;
+        }
+    }
+
+    private Uri findSavedArchiveExcluding(Uri keep) throws Exception {
+        String[] columns={MediaStore.MediaColumns._ID};
+        String selection=MediaStore.MediaColumns.DISPLAY_NAME+"=? AND "+
+            MediaStore.MediaColumns.RELATIVE_PATH+"=?";
+        try(Cursor cursor=appContext.getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,columns,selection,
+                new String[]{SAVED_ARCHIVE_NAME,SAVED_ARCHIVE_PATH},null)) {
+            if(cursor!=null)while(cursor.moveToNext()) {
+                Uri candidate=Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    Long.toString(cursor.getLong(0)));
+                if(!candidate.equals(keep))return candidate;
+            }
+        }
+        return null;
     }
 
     private JSONObject downloadManifest() throws Exception {
