@@ -29,6 +29,7 @@ JWT_ISSUER = os.environ.get("JWT_ISSUER", "battle-universe-accounts")
 ACCESS_TOKEN_MINUTES = max(15, min(43200, int(os.environ.get("ACCESS_TOKEN_MINUTES", "43200"))))
 ADMIN_TOKEN_MINUTES = max(10, min(720, int(os.environ.get("ADMIN_TOKEN_MINUTES", "120"))))
 OWNER_PAIRING_CODE = os.environ.get("OWNER_PAIRING_CODE", "").strip()
+OWNER_RECOVERY_CODE = os.environ.get("OWNER_RECOVERY_CODE", "").strip()
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "openrouter/auto").strip() or "openrouter/auto"
 OWNER_TOKEN_MINUTES = 43200
@@ -347,6 +348,12 @@ class OwnerPairBody(BaseModel):
     install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
     device_label: str = Field(default="Android", min_length=1, max_length=40)
 
+class OwnerRecoveryBody(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    recovery_code: str = Field(min_length=32, max_length=256)
+    install_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9._:-]+$")
+    device_label: str = Field(default="Android", min_length=1, max_length=40)
+
 class OwnerTargetMailBody(BaseModel):
     title: str = Field(min_length=2, max_length=80)
     body: str = Field(min_length=2, max_length=1200)
@@ -428,6 +435,8 @@ def startup() -> None:
     # Owner pairing code stays in the hosting environment and is never embedded in the APK.
     if OWNER_PAIRING_CODE and len(OWNER_PAIRING_CODE) < 32:
         raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
+    if OWNER_RECOVERY_CODE and len(OWNER_RECOVERY_CODE) < 32:
+        raise RuntimeError("OWNER_RECOVERY_CODE must contain at least 32 characters")
 
 def player_payload(player: Player) -> dict[str, Any]:
     return {"id": player.id, "username": player.username, "profile": player.profile or {},
@@ -1946,6 +1955,36 @@ $("sendTargetMail").onclick=async()=>{
  }catch(e){show("❌ DEU RED! "+e.message)}
 };
 </script></body></html>""")
+
+@app.post("/v1/owner/device/recover")
+def owner_recover_device(body: OwnerRecoveryBody, db: Session = Depends(db_session)) -> dict[str, Any]:
+    """Recover the single owner controller using a separate server-side secret."""
+    if not OWNER_RECOVERY_CODE:
+        raise HTTPException(503, "Recuperação do controlador não foi configurada no servidor.")
+    if not secrets.compare_digest(body.recovery_code, OWNER_RECOVERY_CODE):
+        raise HTTPException(401, "Credencial de recuperação inválida.")
+    now = datetime.now(timezone.utc)
+    device = db.scalar(select(OwnerDevice).where(OwnerDevice.id == 1).with_for_update())
+    if device is None:
+        device = OwnerDevice(id=1, install_id=body.install_id,
+                             device_label=body.device_label.strip(), revoked=False,
+                             paired_at=now, last_seen_at=now)
+        db.add(device)
+    else:
+        # Replacing install_id invalidates every token issued to the previous controller.
+        device.install_id = body.install_id
+        device.device_label = body.device_label.strip()
+        device.revoked = False
+        device.paired_at = now
+        device.last_seen_at = now
+    db.commit()
+    token = issue_token("owner-device", "owner", "owner", OWNER_TOKEN_MINUTES,
+                        {"device_install_id": body.install_id})
+    return {"access_token": token, "token_type": "bearer",
+            "expires_in": OWNER_TOKEN_MINUTES * 60,
+            "device": {"label": device.device_label, "paired_at": device.paired_at.isoformat()},
+            "message": "Controlador anterior invalidado; novo aparelho autorizado."}
+
 
 @app.post("/v1/owner/device/revoke")
 def owner_revoke_device(db: Session = Depends(db_session), owner: str = Depends(current_owner)):
