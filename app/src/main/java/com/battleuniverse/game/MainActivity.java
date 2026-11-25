@@ -20,6 +20,7 @@ public final class MainActivity extends Activity {
     private ContentLoadingView loadingView;
     private AccountSyncManager accountSync;
     private SharedPreferences profilePrefs;
+    private boolean startupScreenActive;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private static final int REQUEST_PACK_FILE=4201;
     private final Handler traceHandler=new Handler(Looper.getMainLooper());
@@ -43,7 +44,7 @@ public final class MainActivity extends Activity {
         android.content.SharedPreferences tracePrefs=getSharedPreferences("bu_crash_trace",MODE_PRIVATE);
         int previousStage=tracePrefs.getInt("last_stage",-1);
         int previousElimination=tracePrefs.getInt("last_elimination_stage",-1);
-        launchGame(ContentPackInstaller.isInstalled(this));
+        showStartupScreen();
         if(previousStage>0||previousElimination>0) new android.app.AlertDialog.Builder(this)
             .setTitle("DIAGNÓSTICO DE ESTABILIDADE")
             .setMessage("Última etapa registrada: "+diagnosticStageName(previousStage)+"."
@@ -51,6 +52,85 @@ public final class MainActivity extends Activity {
                 +"\n\nRegistro técnico, não confirmação isolada da causa.")
             .setPositiveButton("OK",null).show();
         traceHandler.post(traceSampler);
+    }
+
+    private void ensureAccountSync() {
+        if(accountSync!=null)return;
+        accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
+            if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
+            if(loadingView!=null)loadingView.setAccountStatus(signedIn,username,message);
+            if(startupScreenActive&&signedIn) {
+                startupScreenActive=false;
+                mainHandler.postDelayed(()->{
+                    if(!isFinishing()&&!isDestroyed())launchGame(ContentPackInstaller.isInstalled(MainActivity.this));
+                },450);
+            }
+        });
+    }
+
+    private void showStartupScreen() {
+        startupScreenActive=true;
+        profilePrefs=getSharedPreferences("battle_universe_profile",MODE_PRIVATE);
+        loadingView=new ContentLoadingView(this);
+        setContentView(loadingView);
+        loadingView.setProgress(0,1,"CARREGANDO PERFIL E VERIFICANDO A INSTALAÇÃO...");
+        loadingView.setAccountStatus(false,"","Verificando sessão salva...");
+        loadingView.setStartupActions(this::showStartupLoginDialog,()->{
+            if(startupScreenActive) {
+                startupScreenActive=false;
+                launchGame(ContentPackInstaller.isInstalled(this));
+            }
+        });
+        ensureAccountSync();
+        loadingView.setAccountStatus(accountSync.isSignedIn(),accountSync.getUsername(),
+            "Entre na sua conta ou continue offline.");
+        accountSync.restoreExistingSession();
+    }
+
+    private void showStartupLoginDialog() {
+        android.widget.LinearLayout form=new android.widget.LinearLayout(this);
+        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad=(int)(18*getResources().getDisplayMetrics().density);
+        form.setPadding(pad,8,pad,0);
+        android.widget.EditText username=new android.widget.EditText(this);
+        username.setSingleLine(true);
+        username.setHint("Nickname (3 a 18 caracteres)");
+        android.widget.EditText password=new android.widget.EditText(this);
+        password.setSingleLine(true);
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            |android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setHint("Senha (8 a 72 caracteres)");
+        form.addView(username);
+        form.addView(password);
+        android.app.AlertDialog dialog=new android.app.AlertDialog.Builder(this)
+            .setTitle("BATTLE UNIVERSE • CONTA")
+            .setMessage("Entre para sincronizar seu progresso ou crie uma conta nova.")
+            .setView(form)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ENTRAR",null)
+            .setNeutralButton("CRIAR CONTA",null)
+            .create();
+        dialog.setOnShowListener(ignored->{
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String name=username.getText().toString();
+                String pass=password.getText().toString();
+                password.setText("");
+                ensureAccountSync();
+                accountSync.authenticateUsername(name,pass,false);
+                loadingView.setStatus("VALIDANDO LOGIN...");
+                dialog.dismiss();
+            });
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
+                String name=username.getText().toString();
+                String pass=password.getText().toString();
+                password.setText("");
+                ensureAccountSync();
+                accountSync.authenticateUsername(name,pass,true);
+                loadingView.setStatus("CRIANDO CONTA...");
+                dialog.dismiss();
+            });
+        });
+        dialog.show();
     }
 
     private void startContentSetup() {
@@ -81,6 +161,7 @@ public final class MainActivity extends Activity {
     }
 
     private void launchGame(boolean contentPackReady) {
+        startupScreenActive=false;
         FrameLayout root=new FrameLayout(this);
         gameSurface=new GameSurfaceView(this);
         if(contentPackReady) {
@@ -134,9 +215,7 @@ public final class MainActivity extends Activity {
         });
         hud.setPackAnalyzerAction(this::showContentPackOptions);
         hud.setOwnerControllerAction(()->{if(accountSync!=null)accountSync.openOwnerMailController();});
-        accountSync=new AccountSyncManager(this,profilePrefs,(configured,signedIn,username,message)->{
-            if(hud!=null)hud.setGoogleAccountStatus(configured,signedIn,username,message);
-        });
+        ensureAccountSync();
         hud.setGoogleAccountStatus(true,accountSync.isSignedIn(),accountSync.getUsername(),
             "Crie uma conta ou entre com nickname e senha.");
         // Primeiro anexe a HUD e a superfície OpenGL à Activity. Restaurar a conta
