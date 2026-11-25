@@ -50,6 +50,11 @@ bearer = HTTPBearer(auto_error=False)
 def constant_time_text_equal(left: str, right: str) -> bool:
     """Compare UTF-8 text without secrets.compare_digest Unicode failures."""
     return secrets.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
+
+
+def owner_recovery_throttle_key(code_hash: str) -> str:
+    """Build one global throttle key from the configured recovery-secret fingerprint."""
+    return hashlib.sha256(("owner-recovery:" + code_hash).encode("utf-8")).hexdigest()
 USERNAME_RE = re.compile(r"^[a-z0-9_]{3,18}$")
 PROFILE_FIELDS = {
     "selected_mode", "selected_map", "selected_character", "quality", "music", "effects",
@@ -2007,11 +2012,11 @@ def owner_recover_device(body: OwnerRecoveryBody, request: Request,
 
     # The recovery credential has a single global throttle, not an IP-only
     # throttle that could be bypassed by changing networks or proxy addresses.
-    throttle_key = hashlib.sha256(("owner-recovery:" + state.code_hash).encode("utf-8")).hexdigest()
+    throttle_key = owner_recovery_throttle_key(state.code_hash)
     attempt = db.scalar(select(OwnerRecoveryAttempt).where(
         OwnerRecoveryAttempt.ip_hash == throttle_key).with_for_update())
     if attempt is None:
-        attempt = OwnerRecoveryAttempt(ip_hash=ip_hash, failed_attempts=0)
+        attempt = OwnerRecoveryAttempt(ip_hash=throttle_key, failed_attempts=0)
         db.add(attempt)
         db.flush()
     if attempt.locked_until and attempt.locked_until > now:

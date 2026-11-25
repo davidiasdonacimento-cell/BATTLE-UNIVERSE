@@ -1425,20 +1425,25 @@ void firePulse() {
             setStatus("ALVO DE TREINO DESATIVADO  •  +100 PONTOS");
         }
     } else if(hitBot>=0) {
+        if(gWeaponType==2)gCrashTraceStage.store(100,std::memory_order_relaxed);
         gBotHealth[static_cast<size_t>(hitBot)]=std::max(0,gBotHealth[static_cast<size_t>(hitBot)]-damage);
         gDamageDealt+=damage;
         const int healthAfterHit=gBotHealth[static_cast<size_t>(hitBot)];
         gBotDamageAmount[static_cast<size_t>(hitBot)]=damage;
         gBotDamageTimer[static_cast<size_t>(hitBot)]=1.20f;
         gBotDamagePosition[static_cast<size_t>(hitBot)]=gBots[static_cast<size_t>(hitBot)].pos;
+        if(gWeaponType==2)gCrashTraceStage.store(101,std::memory_order_relaxed);
         { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/"<<BOT_MAX_HEALTH; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
+            if(gWeaponType==2)gCrashTraceStage.store(102,std::memory_order_relaxed);
             if((gSelectedMode==1||gSelectedMode==2)&&!gBotDowned[static_cast<size_t>(hitBot)]) {
                 gBotDowned[static_cast<size_t>(hitBot)]=true;gBotDownedTimer[static_cast<size_t>(hitBot)]=25.0f;
                 gBotReviveProgress[static_cast<size_t>(hitBot)]=0.0f;
                 setStatus("ALIADO DERRUBADO • APROXIME-SE E TOQUE USAR PARA REVIVER");
-            } else { gBotActive[static_cast<size_t>(hitBot)]=false;
+            } else {
+            if(gWeaponType==2)gCrashTraceStage.store(103,std::memory_order_relaxed);
+            gBotActive[static_cast<size_t>(hitBot)]=false;
             if(gSelectedMode==3) {
                 gBotRespawn[static_cast<size_t>(hitBot)]=12.0f;
                 gTrainingScore+=150;
@@ -1447,6 +1452,7 @@ void firePulse() {
                 ++gEliminations;
             }
             gWood=std::min(250,gWood+10);
+            if(gWeaponType==2)gCrashTraceStage.store(104,std::memory_order_relaxed);
             int remaining=0;
             for(int i=0;i<BOT_COUNT;++i)
                 if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])++remaining;
@@ -1454,7 +1460,8 @@ void firePulse() {
                 gMatchFinished=true;
                 setStatus("VITÓRIA • TODOS OS OPONENTES ELIMINADOS");
             } else if(gSelectedMode==3) setStatus("ALVO BOT DESATIVADO • +150 PONTOS");
-            else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining)); }
+            else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining));
+            if(gWeaponType==2)gCrashTraceStage.store(105,std::memory_order_relaxed); }
         }
     }
     if(hitTarget<0&&hitBot<0&&!hitIceWall) {
@@ -1642,6 +1649,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint
     }
     publishMatchStats();
     publishFlightInfo();
+    if(gWeaponType==2)gCrashTraceStage.store(120,std::memory_order_relaxed);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetCharacter(JNIEnv*,jclass,jint id) {
@@ -2098,8 +2106,10 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         if(gBotDamageTimer[static_cast<size_t>(i)]<=0.0f) continue;
         const float elapsed=1.20f-gBotDamageTimer[static_cast<size_t>(i)];
         const float rise=elapsed*1.35f;
+        if(gWeaponType==2)gCrashTraceStage.store(110,std::memory_order_relaxed);
         drawDamagePopup(gBotDamagePosition[static_cast<size_t>(i)],
             gBotDamageAmount[static_cast<size_t>(i)],gCameraYaw,rise);
+        if(gWeaponType==2)gCrashTraceStage.store(111,std::memory_order_relaxed);
     }
     glEnable(GL_DEPTH_TEST);
 
@@ -2119,9 +2129,11 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
         glEnable(GL_DEPTH_TEST);
     }
     Vec3 playerDraw=gPlayer;playerDraw.y+=gJumpHeight;
+    if(gWeaponType==2)gCrashTraceStage.store(112,std::memory_order_relaxed);
     if(!gSpectatorMode) drawCharacter(playerDraw,gPlayerYaw,outfits[static_cast<size_t>(gSelectedCharacter)],
         false,gMatchTime,moving?std::min(1.0f,moveLength):0.0f,
         aimHeld,gPulseFlash>0.0f,(buttons&BUTTON_RUN)!=0);
+    if(gWeaponType==2)gCrashTraceStage.store(113,std::memory_order_relaxed);
     drawParachute(gPlayer);
 
     static float statusTimer=0;statusTimer+=dt;
@@ -2129,6 +2141,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     publishMatchStats();
     publishFlightInfo();
     glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
+    if(gWeaponType==2)gCrashTraceStage.store(120,std::memory_order_relaxed);
 }
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetFlightInfo(JNIEnv* env,jclass) {
