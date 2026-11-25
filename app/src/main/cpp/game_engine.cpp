@@ -2149,7 +2149,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     publishMatchStats();
     publishFlightInfo();
     glDisableVertexAttribArray(0);glDisableVertexAttribArray(1);glBindBuffer(GL_ARRAY_BUFFER,0);
-    if(gWeaponType==2)gCrashTraceStage.store(120,std::memory_order_relaxed);
+    // Preserva o último estágio real para leitura após um encerramento inesperado.
 }
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetFlightInfo(JNIEnv* env,jclass) {
