@@ -166,11 +166,11 @@ public final class AccountSyncManager implements SharedPreferences.OnSharedPrefe
         box.addView(recovery);
         new AlertDialog.Builder(activity)
             .setTitle("RECUPERAR CONTROLADOR")
-            .setMessage("A credencial OWNER_RECOVERY_CODE deve estar configurada no servidor. A recuperação substitui o controlador anterior.")
+            .setMessage("Use somente o valor OWNER_RECOVERY_CODE configurado no Render. Não é a senha da conta nem o código de recuperação de jogador. A recuperação substitui o controlador anterior.")
             .setView(box)
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("RECUPERAR", (d,w)->{
-                String value=recovery.getText().toString().trim();
+                String value=recovery.getText().toString().replaceAll("\\s+","");
                 recovery.setText("");
                 if(value.length()<32){ownerMessage("Credencial de recuperação inválida.");return;}
                 worker.execute(()->{

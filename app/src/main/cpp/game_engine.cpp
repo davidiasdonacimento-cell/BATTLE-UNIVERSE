@@ -91,6 +91,7 @@ Mat4 lookAt(Vec3 eye,Vec3 center,Vec3 up) {
 }
 
 std::atomic<int> gCrashTraceStage{0};
+std::atomic<int> gLastEliminationStage{0};
 GLuint gProgram=0, gCubeVbo=0, gSphereVbo=0, gCylinderVbo=0, gConeVbo=0;
 GLsizei gSphereCount=0, gCylinderCount=0, gConeCount=0;
 GLint gMvpLocation=-1, gModelLocation=-1, gColorLocation=-1;
@@ -1425,25 +1426,27 @@ void firePulse() {
             setStatus("ALVO DE TREINO DESATIVADO  •  +100 PONTOS");
         }
     } else if(hitBot>=0) {
-        if(gWeaponType==2)gCrashTraceStage.store(100,std::memory_order_relaxed);
+        if(gWeaponType==2){gCrashTraceStage.store(100,std::memory_order_relaxed);gLastEliminationStage.store(100,std::memory_order_relaxed);}
         gBotHealth[static_cast<size_t>(hitBot)]=std::max(0,gBotHealth[static_cast<size_t>(hitBot)]-damage);
         gDamageDealt+=damage;
         const int healthAfterHit=gBotHealth[static_cast<size_t>(hitBot)];
         gBotDamageAmount[static_cast<size_t>(hitBot)]=damage;
         gBotDamageTimer[static_cast<size_t>(hitBot)]=1.20f;
         gBotDamagePosition[static_cast<size_t>(hitBot)]=gBots[static_cast<size_t>(hitBot)].pos;
-        if(gWeaponType==2)gCrashTraceStage.store(101,std::memory_order_relaxed);
+        if(gWeaponType==2){gCrashTraceStage.store(101,std::memory_order_relaxed);gLastEliminationStage.store(101,std::memory_order_relaxed);}
         { std::ostringstream hit; hit<<"ACERTOU IA  •  -"<<damage<<" DANO  •  VIDA "<<healthAfterHit<<"/"<<BOT_MAX_HEALTH; setStatus(hit.str()); }
         gPulseHitPosition=gBots[static_cast<size_t>(hitBot)].pos;
         if(gBotHealth[static_cast<size_t>(hitBot)]==0) {
-            if(gWeaponType==2)gCrashTraceStage.store(102,std::memory_order_relaxed);
+            if(gWeaponType==2){gCrashTraceStage.store(102,std::memory_order_relaxed);gLastEliminationStage.store(102,std::memory_order_relaxed);}
             if((gSelectedMode==1||gSelectedMode==2)&&!gBotDowned[static_cast<size_t>(hitBot)]) {
                 gBotDowned[static_cast<size_t>(hitBot)]=true;gBotDownedTimer[static_cast<size_t>(hitBot)]=25.0f;
                 gBotReviveProgress[static_cast<size_t>(hitBot)]=0.0f;
                 setStatus("ALIADO DERRUBADO • APROXIME-SE E TOQUE USAR PARA REVIVER");
             } else {
-            if(gWeaponType==2)gCrashTraceStage.store(103,std::memory_order_relaxed);
+            if(gWeaponType==2){gCrashTraceStage.store(103,std::memory_order_relaxed);gLastEliminationStage.store(103,std::memory_order_relaxed);}
             gBotActive[static_cast<size_t>(hitBot)]=false;
+            gBotDamageTimer[static_cast<size_t>(hitBot)]=0.0f;
+            gBotDamageAmount[static_cast<size_t>(hitBot)]=0;
             if(gSelectedMode==3) {
                 gBotRespawn[static_cast<size_t>(hitBot)]=12.0f;
                 gTrainingScore+=150;
@@ -1452,7 +1455,7 @@ void firePulse() {
                 ++gEliminations;
             }
             gWood=std::min(250,gWood+10);
-            if(gWeaponType==2)gCrashTraceStage.store(104,std::memory_order_relaxed);
+            if(gWeaponType==2){gCrashTraceStage.store(104,std::memory_order_relaxed);gLastEliminationStage.store(104,std::memory_order_relaxed);}
             int remaining=0;
             for(int i=0;i<BOT_COUNT;++i)
                 if(!isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])++remaining;
@@ -1461,7 +1464,7 @@ void firePulse() {
                 setStatus("VITÓRIA • TODOS OS OPONENTES ELIMINADOS");
             } else if(gSelectedMode==3) setStatus("ALVO BOT DESATIVADO • +150 PONTOS");
             else setStatus("OPONENTE ELIMINADO • RESTAM "+std::to_string(remaining));
-            if(gWeaponType==2)gCrashTraceStage.store(105,std::memory_order_relaxed); }
+            if(gWeaponType==2){gCrashTraceStage.store(105,std::memory_order_relaxed);gLastEliminationStage.store(105,std::memory_order_relaxed);} }
         }
     }
     if(hitTarget<0&&hitBot<0&&!hitIceWall) {
@@ -1612,6 +1615,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeSetScreen(JNIEnv*,jclass,jint mode) {
     gScreenMode=std::clamp(static_cast<int>(mode),0,1);
     if(gScreenMode==1) {
+        gLastEliminationStage.store(0,std::memory_order_relaxed);
         gPlayer={-110,0.55f,-32};
         gPlayerXSnapshot.store(gPlayer.x);gPlayerZSnapshot.store(gPlayer.z);
         gPlayerYaw=-PI*0.5f;gCameraYaw=-PI*0.5f;gCameraPitch=0.36f;
@@ -2103,7 +2107,7 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     // Dano flutuante: permanece visível por pouco tempo mesmo se a IA for eliminada.
     glDisable(GL_DEPTH_TEST);
     for(int i=0;i<BOT_COUNT;++i) {
-        if(gBotDamageTimer[static_cast<size_t>(i)]<=0.0f) continue;
+        if(!gBotActive[static_cast<size_t>(i)]||gBotDamageTimer[static_cast<size_t>(i)]<=0.0f) continue;
         const float elapsed=1.20f-gBotDamageTimer[static_cast<size_t>(i)];
         const float rise=elapsed*1.35f;
         if(gWeaponType==2)gCrashTraceStage.store(110,std::memory_order_relaxed);
@@ -2207,6 +2211,10 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeSetSpectator(JNIEnv*,jclass,j
 extern "C" JNIEXPORT jint JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetDiagnosticStage(JNIEnv*,jclass) {
     return static_cast<jint>(gCrashTraceStage.load(std::memory_order_relaxed));
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_com_battleuniverse_game_GameSurfaceView_nativeGetLastEliminationStage(JNIEnv*,jclass) {
+    return static_cast<jint>(gLastEliminationStage.load(std::memory_order_relaxed));
 }
 extern "C" JNIEXPORT jint JNICALL
 Java_com_battleuniverse_game_GameSurfaceView_nativeGetEliminations(JNIEnv*,jclass) {

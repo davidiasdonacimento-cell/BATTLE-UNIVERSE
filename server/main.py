@@ -52,6 +52,11 @@ def constant_time_text_equal(left: str, right: str) -> bool:
     return secrets.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
 
 
+def normalize_owner_recovery_code(code: str) -> str:
+    """Remove copy/paste whitespace without changing the recovery secret itself."""
+    return re.sub(r"\s+", "", code or "")
+
+
 def owner_recovery_throttle_key(code_hash: str) -> str:
     """Build one global throttle key from the configured recovery-secret fingerprint."""
     return hashlib.sha256(("owner-recovery:" + code_hash).encode("utf-8")).hexdigest()
@@ -456,12 +461,12 @@ def startup() -> None:
     # Owner pairing code stays in the hosting environment and is never embedded in the APK.
     if OWNER_PAIRING_CODE and len(OWNER_PAIRING_CODE) < 32:
         raise RuntimeError("OWNER_PAIRING_CODE must contain at least 32 characters")
-    if OWNER_RECOVERY_CODE and len(OWNER_RECOVERY_CODE) < 32:
+    if OWNER_RECOVERY_CODE and len(normalize_owner_recovery_code(OWNER_RECOVERY_CODE)) < 32:
         raise RuntimeError("OWNER_RECOVERY_CODE must contain at least 32 characters")
     # Keep only a SHA-256 fingerprint in the database. Changing the Render
     # environment secret rotates the recovery credential and re-arms its use.
     if OWNER_RECOVERY_CODE:
-        configured_hash = hashlib.sha256(OWNER_RECOVERY_CODE.encode("utf-8")).hexdigest()
+        configured_hash = hashlib.sha256(normalize_owner_recovery_code(OWNER_RECOVERY_CODE).encode("utf-8")).hexdigest()
         with SessionLocal() as db:
             state = db.get(OwnerRecoveryState, 1)
             if state is None:
@@ -1998,7 +2003,7 @@ def owner_recover_device(body: OwnerRecoveryBody, request: Request,
         raise HTTPException(503, "Recuperação do controlador não foi configurada no servidor.")
 
     now = datetime.now(timezone.utc)
-    configured_hash = hashlib.sha256(OWNER_RECOVERY_CODE.encode("utf-8")).hexdigest()
+    configured_hash = hashlib.sha256(normalize_owner_recovery_code(OWNER_RECOVERY_CODE).encode("utf-8")).hexdigest()
 
     # Serialize every recovery attempt at the database level. This also closes
     # the first-row race in the throttle table and prevents two simultaneous
@@ -2022,7 +2027,7 @@ def owner_recover_device(body: OwnerRecoveryBody, request: Request,
     if attempt.locked_until and attempt.locked_until > now:
         raise HTTPException(429, "Muitas tentativas. Aguarde 30 minutos antes de tentar novamente.")
 
-    supplied_hash = hashlib.sha256(body.recovery_code.encode("utf-8")).hexdigest()
+    supplied_hash = hashlib.sha256(normalize_owner_recovery_code(body.recovery_code).encode("utf-8")).hexdigest()
     if not secrets.compare_digest(supplied_hash, state.code_hash):
         attempt.failed_attempts += 1
         if attempt.failed_attempts >= 5:
