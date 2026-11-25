@@ -1994,17 +1994,22 @@ def owner_recover_device(body: OwnerRecoveryBody, request: Request,
 
     now = datetime.now(timezone.utc)
     configured_hash = hashlib.sha256(OWNER_RECOVERY_CODE.encode("utf-8")).hexdigest()
+
+    # Serialize every recovery attempt at the database level. This also closes
+    # the first-row race in the throttle table and prevents two simultaneous
+    # requests from consuming the same one-use credential.
+    db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": 731904261})
     state = db.scalar(select(OwnerRecoveryState).where(OwnerRecoveryState.id == 1).with_for_update())
     if state is None or not secrets.compare_digest(state.code_hash, configured_hash):
         raise HTTPException(503, "Estado de recuperação indisponível. Reinicie o serviço e tente novamente.")
     if state.consumed_at is not None:
         raise HTTPException(409, "Código de recuperação já utilizado. Gere outro no Render para rearmar.")
 
-    # Hash the source address so raw IP addresses are not stored in the database.
-    source = request.client.host if request.client else "unknown"
-    ip_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    # The recovery credential has a single global throttle, not an IP-only
+    # throttle that could be bypassed by changing networks or proxy addresses.
+    throttle_key = hashlib.sha256(("owner-recovery:" + state.code_hash).encode("utf-8")).hexdigest()
     attempt = db.scalar(select(OwnerRecoveryAttempt).where(
-        OwnerRecoveryAttempt.ip_hash == ip_hash).with_for_update())
+        OwnerRecoveryAttempt.ip_hash == throttle_key).with_for_update())
     if attempt is None:
         attempt = OwnerRecoveryAttempt(ip_hash=ip_hash, failed_attempts=0)
         db.add(attempt)
