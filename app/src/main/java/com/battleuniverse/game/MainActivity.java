@@ -66,8 +66,8 @@ public final class MainActivity extends Activity {
     private String buildCrashDiagnostics(int previousStage,int previousElimination) {
         StringBuilder report=new StringBuilder();
         report.append("BATTLE UNIVERSE • DIAGNÓSTICO DE CRASH\\n")
-            .append("Modelo: ").append(android.os.Build.MODEL).append('\\n')
-            .append("Android: ").append(android.os.Build.VERSION.RELEASE).append('\\n')
+            .append("Modelo: ").append(android.os.Build.MODEL).append('\n')
+            .append("Android: ").append(android.os.Build.VERSION.RELEASE).append('\n')
             .append("Etapa nativa: ").append(diagnosticStageName(previousStage))
             .append(" (").append(previousStage).append(")\\n")
             .append("Etapa da eliminação: ").append(diagnosticStageName(previousElimination))
@@ -80,7 +80,7 @@ public final class MainActivity extends Activity {
                 report.append("ÚLTIMO ERRO JAVA:\\n");
                 String line;
                 int lines=0;
-                while((line=reader.readLine())!=null&&lines++<500)report.append(line).append('\\n');
+                while((line=reader.readLine())!=null&&lines++<500)report.append(line).append('\n');
             } catch(java.io.IOException error) {
                 report.append("Não foi possível ler last_crash.txt: ").append(error.getClass().getSimpleName());
             }
