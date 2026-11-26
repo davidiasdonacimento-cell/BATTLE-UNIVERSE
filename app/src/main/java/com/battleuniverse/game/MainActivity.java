@@ -22,6 +22,8 @@ public final class MainActivity extends Activity {
     private SharedPreferences profilePrefs;
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private static final int REQUEST_PACK_FILE=4201;
+    private static final int REQUEST_SAVE_CRASH_REPORT=4202;
+    private String pendingCrashReport;
     private final Handler traceHandler=new Handler(Looper.getMainLooper());
     private final Runnable traceSampler=new Runnable(){@Override public void run(){
         if(gameSurface!=null){int stage=gameSurface.getDiagnosticStage();
@@ -51,6 +53,7 @@ public final class MainActivity extends Activity {
                 +"\n\nRegistro técnico, não confirmação isolada da causa.")
             .setPositiveButton("OK",null)
             .setNeutralButton("COMPARTILHAR RELATÓRIO",(dialog,which)->shareCrashDiagnostics(previousStage,previousElimination))
+            .setNegativeButton("BAIXAR RELATÓRIO",(dialog,which)->saveCrashDiagnostics(previousStage,previousElimination))
             .show();
         traceHandler.post(traceSampler);
     }
@@ -60,36 +63,50 @@ public final class MainActivity extends Activity {
      * Encerramentos nativos (SIGSEGV/abort) não passam pelo UncaughtExceptionHandler;
      * nesses casos os estágios ainda ajudam a localizar o último trecho executado.
      */
-    private void shareCrashDiagnostics(int previousStage,int previousElimination) {
+    private String buildCrashDiagnostics(int previousStage,int previousElimination) {
         StringBuilder report=new StringBuilder();
-        report.append("BATTLE UNIVERSE • DIAGNÓSTICO DE CRASH\n")
-            .append("Modelo: ").append(android.os.Build.MODEL).append('\n')
-            .append("Android: ").append(android.os.Build.VERSION.RELEASE).append('\n')
+        report.append("BATTLE UNIVERSE • DIAGNÓSTICO DE CRASH\\n")
+            .append("Modelo: ").append(android.os.Build.MODEL).append('\\n')
+            .append("Android: ").append(android.os.Build.VERSION.RELEASE).append('\\n')
             .append("Etapa nativa: ").append(diagnosticStageName(previousStage))
-            .append(" (").append(previousStage).append(")\n")
+            .append(" (").append(previousStage).append(")\\n")
             .append("Etapa da eliminação: ").append(diagnosticStageName(previousElimination))
-            .append(" (").append(previousElimination).append(")\n\n");
+            .append(" (").append(previousElimination).append(")\\n\\n");
         java.io.File crashFile=new java.io.File(getFilesDir(),"last_crash.txt");
         if(crashFile.isFile()) {
             try(java.io.BufferedReader reader=new java.io.BufferedReader(
                     new java.io.InputStreamReader(new java.io.FileInputStream(crashFile),
                         java.nio.charset.StandardCharsets.UTF_8))) {
-                report.append("ÚLTIMO ERRO JAVA:\n");
+                report.append("ÚLTIMO ERRO JAVA:\\n");
                 String line;
                 int lines=0;
-                while((line=reader.readLine())!=null&&lines++<500)report.append(line).append('\n');
+                while((line=reader.readLine())!=null&&lines++<500)report.append(line).append('\\n');
             } catch(java.io.IOException error) {
                 report.append("Não foi possível ler last_crash.txt: ").append(error.getClass().getSimpleName());
             }
         } else {
             report.append("Nenhum erro Java registrado. Se o app fechou sozinho, pode ter sido uma falha nativa; ")
-                .append("os estágios acima registram o último ponto do motor antes do encerramento.\n");
+                .append("os estágios acima registram o último ponto do motor antes do encerramento.\\n");
         }
+        return report.toString();
+    }
+
+    private void shareCrashDiagnostics(int previousStage,int previousElimination) {
+        String report=buildCrashDiagnostics(previousStage,previousElimination);
         android.content.Intent share=new android.content.Intent(android.content.Intent.ACTION_SEND);
         share.setType("text/plain");
         share.putExtra(android.content.Intent.EXTRA_SUBJECT,"BATTLE UNIVERSE — relatório de crash");
-        share.putExtra(android.content.Intent.EXTRA_TEXT,report.toString());
+        share.putExtra(android.content.Intent.EXTRA_TEXT,report);
         startActivity(android.content.Intent.createChooser(share,"Enviar diagnóstico"));
+    }
+
+    private void saveCrashDiagnostics(int previousStage,int previousElimination) {
+        pendingCrashReport=buildCrashDiagnostics(previousStage,previousElimination);
+        android.content.Intent save=new android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT);
+        save.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        save.setType("text/plain");
+        save.putExtra(android.content.Intent.EXTRA_TITLE,"battle_universe_relatorio_crash.txt");
+        startActivityForResult(save,REQUEST_SAVE_CRASH_REPORT);
     }
 
     private void startContentSetup() {
@@ -276,6 +293,18 @@ public final class MainActivity extends Activity {
             }
             // Cancelar o seletor mantém o jogador no lobby. Não iniciar download
             // automaticamente só porque o pacote opcional ainda não existe.
+        } else if(requestCode==REQUEST_SAVE_CRASH_REPORT) {
+            if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null&&pendingCrashReport!=null) {
+                try(java.io.OutputStream output=getContentResolver().openOutputStream(data.getData())) {
+                    if(output==null)throw new java.io.IOException("Destino de gravação indisponível");
+                    output.write(pendingCrashReport.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    output.flush();
+                    Toast.makeText(this,"Relatório salvo com sucesso.",Toast.LENGTH_LONG).show();
+                } catch(java.io.IOException error) {
+                    Toast.makeText(this,"Falha ao salvar relatório: "+error.getMessage(),Toast.LENGTH_LONG).show();
+                }
+            }
+            pendingCrashReport=null;
         }
     }
     @Override protected void onDestroy(){
