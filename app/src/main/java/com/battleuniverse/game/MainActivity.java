@@ -49,8 +49,47 @@ public final class MainActivity extends Activity {
             .setMessage("Última etapa registrada: "+diagnosticStageName(previousStage)+"."
                 +(previousElimination>0?"\nÚltima etapa da eliminação: "+diagnosticStageName(previousElimination)+".":"")
                 +"\n\nRegistro técnico, não confirmação isolada da causa.")
-            .setPositiveButton("OK",null).show();
+            .setPositiveButton("OK",null)
+            .setNeutralButton("COMPARTILHAR RELATÓRIO",(dialog,which)->shareCrashDiagnostics(previousStage,previousElimination))
+            .show();
         traceHandler.post(traceSampler);
+    }
+
+    /**
+     * Exporta os marcadores persistidos e o último erro Java, quando existir.
+     * Encerramentos nativos (SIGSEGV/abort) não passam pelo UncaughtExceptionHandler;
+     * nesses casos os estágios ainda ajudam a localizar o último trecho executado.
+     */
+    private void shareCrashDiagnostics(int previousStage,int previousElimination) {
+        StringBuilder report=new StringBuilder();
+        report.append("BATTLE UNIVERSE • DIAGNÓSTICO DE CRASH\\n")
+            .append("Modelo: ").append(android.os.Build.MODEL).append('\\n')
+            .append("Android: ").append(android.os.Build.VERSION.RELEASE).append('\\n')
+            .append("Etapa nativa: ").append(diagnosticStageName(previousStage))
+            .append(" (").append(previousStage).append(")\\n")
+            .append("Etapa da eliminação: ").append(diagnosticStageName(previousElimination))
+            .append(" (").append(previousElimination).append(")\\n\\n");
+        java.io.File crashFile=new java.io.File(getFilesDir(),"last_crash.txt");
+        if(crashFile.isFile()) {
+            try(java.io.BufferedReader reader=new java.io.BufferedReader(
+                    new java.io.InputStreamReader(new java.io.FileInputStream(crashFile),
+                        java.nio.charset.StandardCharsets.UTF_8))) {
+                report.append("ÚLTIMO ERRO JAVA:\\n");
+                String line;
+                int lines=0;
+                while((line=reader.readLine())!=null&&lines++<500)report.append(line).append('\\n');
+            } catch(java.io.IOException error) {
+                report.append("Não foi possível ler last_crash.txt: ").append(error.getClass().getSimpleName());
+            }
+        } else {
+            report.append("Nenhum erro Java registrado. Se o app fechou sozinho, pode ter sido uma falha nativa; ")
+                .append("os estágios acima registram o último ponto do motor antes do encerramento.\\n");
+        }
+        android.content.Intent share=new android.content.Intent(android.content.Intent.ACTION_SEND);
+        share.setType("text/plain");
+        share.putExtra(android.content.Intent.EXTRA_SUBJECT,"BATTLE UNIVERSE — relatório de crash");
+        share.putExtra(android.content.Intent.EXTRA_TEXT,report.toString());
+        startActivity(android.content.Intent.createChooser(share,"Enviar diagnóstico"));
     }
 
     private void startContentSetup() {
