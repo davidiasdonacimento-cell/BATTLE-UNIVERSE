@@ -789,37 +789,6 @@ public final class HudOverlay extends View {
             toast("Não foi possível preparar o resultado da partida.");
         }
     }
-    private void drawMatchResult(Canvas c,boolean victory) {
-        int[] stats=game.getMatchStats();
-        p.setColor(0xD9000811);c.drawRect(0,0,1280,720,p);
-        panel(c,225,76,830,570,0xF20B1C2A,0xFF4BCDD5,25);
-        eyebrow(c,275,116,"BATTLE UNIVERSE  •  RELATÓRIO DA PARTIDA");
-        title(c,victory?"VITÓRIA ROYALE":"VOCÊ FOI ELIMINADO",275,164);
-        String rewardStatus=prefs.getBoolean("match_reward_recorded",false)
-            ?"Recompensas confirmadas pela conta online."
-            :"Partida offline: aguardando conexão para confirmar as recompensas.";
-        subtitle(c,(victory?"1º LUGAR • VITÓRIA. ":"POSIÇÃO "+prefs.getInt("last_match_placement",30)+"º. ")+rewardStatus,275,190);
-        panel(c,275,220,330,104,0xCC123B39,0xFF45D6AE,16);
-        text(c,"RECOMPENSAS RECEBIDAS",296,247,10,0xFFB7EBDD,Typeface.DEFAULT_BOLD);
-        text(c,"+"+prefs.getLong("last_match_reward_diamonds",0L)+" DIAMANTES",296,278,19,0xFFFFD36D,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,"+"+prefs.getLong("last_match_reward_xp",0L)+" XP  •  PATENTE "+rankForXp(prefs.getLong("xp",0L)),296,302,10,0xFF8BE6D1,Typeface.DEFAULT_BOLD);
-        panel(c,625,220,380,104,0xCC132B43,0xFF4B9BD0,16);
-        text(c,"RESULTADO DA EQUIPE",648,247,10,0xFFAED8F0,Typeface.DEFAULT_BOLD);
-        text(c,""+stats[3]+" OPONENTES RESTANTES",648,278,17,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,""+game.getCollectedResources()+" RECURSOS COLETADOS",648,302,10,0xFFB6D7E8,Typeface.DEFAULT_BOLD);
-        statCard(c,275,350,220,82,""+game.getEliminations(),"ELIMINAÇÕES");
-        statCard(c,515,350,220,82,""+stats[0],"DANO CAUSADO");
-        statCard(c,755,350,250,82,""+stats[1],"DANO RECEBIDO");
-        statCard(c,275,448,340,70,""+stats[2],"ELIMINAÇÕES FEITAS PELA IA");
-        statCard(c,635,448,370,70,""+stats[3],"BOTS AINDA NA PARTIDA");
-        gradientButton(c,300,548,300,68,"PAINEL PRINCIPAL","Salvar resultado e voltar ao lobby",0xFF126C72,0xFF164C70);
-        gradientButton(c,680,548,300,68,"ASSISTIR PARTIDA","Acompanhar os bots restantes",0xFF694B20,0xFF9A6426);
-    }
-    private void statCard(Canvas c,float x,float y,float w,float h,String value,String label) {
-        panel(c,x,y,w,h,0xCC102B3A,0x4469C5D2,13);
-        text(c,value,x+18,y+31,22,0xFF73E4E9,Typeface.create("sans-serif-black",Typeface.BOLD));
-        text(c,label,x+18,y+h-13,9,0xFFB3C9D4,Typeface.DEFAULT_BOLD);
-    }
     private void drawSpectatorBanner(Canvas c) {
         panel(c,410,18,460,64,0xD9081928,0xFF54D6CF,16);
         text(c,"MODO ESPECTADOR",435,44,15,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
@@ -1281,7 +1250,9 @@ public final class HudOverlay extends View {
         else if(isMatchOver()) {
             boolean victory=game.getGameStatus().contains("VITÓRIA");
             applyMatchRewards(victory);
-            drawMatchResult(c,victory);
+            panel(c,420,18,440,54,0xD9081928,0xFF54D6CF,14);
+            text(c,victory?"PARTIDA CONCLUÍDA":"PARTIDA ENCERRADA",445,41,14,Color.WHITE,Typeface.create("sans-serif-black",Typeface.BOLD));
+            text(c,"TOQUE EM SAIR DA PARTIDA PARA VOLTAR AO LOBBY",445,59,9,0xFFB8D9E3,Typeface.DEFAULT_BOLD);
         }
         if(tacticalMapVisible)drawTacticalMap(c);
         postInvalidateDelayed(120);
@@ -1402,19 +1373,6 @@ public final class HudOverlay extends View {
                     return true;
                 }
                 if(hit(q[0],q[1],1080,150,158,25)) { tacticalMapVisible=true;invalidate();return true; }
-                if(!resultSpectating&&isMatchOver()) {
-                    boolean victory=game.getGameStatus().contains("VITÓRIA");
-                    if(hit(q[0],q[1],300,548,300,68)) {
-                        applyMatchRewards(victory);
-                        recordMissionProgressFromMatch();
-                        returnToLobbyAfterMatch();
-                        return true;
-                    }
-                    if(hit(q[0],q[1],680,548,300,68)) {
-                        resultSpectating=true;game.setSpectatorMode(true);invalidate();return true;
-                    }
-                    return true;
-                }
                 if(hit(q[0],q[1],24,625,resultSpectating?190:160,49)){
                     if(isMatchOver())applyMatchRewards(game.getGameStatus().contains("VITÓRIA"));
                     recordMissionProgressFromMatch();
