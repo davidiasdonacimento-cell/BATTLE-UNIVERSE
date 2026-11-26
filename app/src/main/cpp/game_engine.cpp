@@ -1252,6 +1252,9 @@ void updateBots(float dt) {
                 if(!damageIceWallOnPath(shotFrom,shotTo,8)) {
                 if(targetPlayer) {
                     applyPlayerDamage(1,"ELIMINADO • FIM DA PARTIDA");
+                    // A morte definitiva encerra a simulação da IA imediatamente,
+                    // sem deixar outros bots processarem ações neste mesmo frame.
+                    if(gMatchFinished)return;
                 } else if(targetBot>=0 && gBotActive[static_cast<size_t>(targetBot)]) {
                     const size_t victim=static_cast<size_t>(targetBot);
                     gBotHealth[victim]=std::max(0,gBotHealth[victim]-1);
@@ -1307,10 +1310,41 @@ void updateDownedState(float dt) {
     else {gReviveProgress=0;if(gDownedTimer<=0){gDownedTimer=15.0f;setStatus("DERRUBADO • ESQUADRÃO AINDA PODE SOCORRER");}else setStatus("DERRUBADO • AGUARDANDO ALIADO • "+std::to_string(static_cast<int>(gDownedTimer))+"s");}
 }
 void applyPlayerDamage(int amount,const char* reason) {
-    if(gPlayerDowned||gMatchFinished)return;gPlayerHealth=std::max(0,gPlayerHealth-amount);gDamageTaken+=amount;
-    if(gPlayerHealth<=0){bool ally=false;if(gSelectedMode==1||gSelectedMode==2)for(int i=0;i<BOT_COUNT;++i)if(isAllyBot(i)&&gBotActive[static_cast<size_t>(i)])ally=true;
-        if(ally){gPlayerDowned=true;gDownedTimer=90;gReviveProgress=0;setStatus("DERRUBADO • RASTEJE ATÉ SEU ESQUADRÃO • AGUARDANDO REVIVER");}else{gMatchFinished=true;setStatus(reason);}}
-    else setStatus("DANO RECEBIDO • VIDA "+std::to_string(gPlayerHealth)+"%");
+    // Dano inválido ou chamadas repetidas após a transição não alteram o estado.
+    if(amount<=0||gPlayerDowned||gMatchFinished)return;
+    gPlayerHealth=std::max(0,gPlayerHealth-amount);
+    gDamageTaken+=amount;
+    if(gPlayerHealth<=0) {
+        bool allyAvailable=false;
+        if(gSelectedMode==1||gSelectedMode==2) {
+            for(int i=0;i<BOT_COUNT;++i) {
+                const size_t index=static_cast<size_t>(i);
+                if(isAllyBot(i)&&gBotActive[index]&&!gBotDowned[index]) {
+                    allyAvailable=true;
+                    break;
+                }
+            }
+        }
+        if(allyAvailable) {
+            gPlayerDowned=true;
+            gDownedTimer=90.0f;
+            gReviveProgress=0.0f;
+            gPlayerReviveTarget=-1;
+            gPlayerReviveProgress=0.0f;
+            setStatus("DERRUBADO • RASTEJE ATÉ SEU ESQUADRÃO • AGUARDANDO REVIVER");
+        } else {
+            gPlayerHealth=0;
+            gPlayerDowned=false;
+            gCrouched=false;
+            gBuildPreview=false;
+            gPlayerReviveTarget=-1;
+            gPlayerReviveProgress=0.0f;
+            gMatchFinished=true;
+            setStatus(reason?reason:"ELIMINADO • FIM DA PARTIDA");
+        }
+    } else {
+        setStatus("DANO RECEBIDO • VIDA "+std::to_string(gPlayerHealth)+"%");
+    }
 }
 void placeBuildPiece() {
     if(gBuildCount>=gBuildLimit||gBuildCount>=BUILD_CAPACITY) {
@@ -1735,7 +1769,16 @@ Java_com_battleuniverse_game_GameSurfaceView_nativeRender(JNIEnv*,jclass,
     gCameraYaw+=static_cast<float>(lookDX)*4.8f*gLookSensitivity;
     gCameraPitch=std::clamp(gCameraPitch+static_cast<float>(lookDY)*2.2f*gLookSensitivity,0.12f,0.85f);
 
-    if(gSpectatorMode){moveX=0.0f;moveY=0.0f;buttons=0;}
+    if(gSpectatorMode||gMatchFinished) {
+        // Após a eliminação definitiva, congela comandos e câmera do jogador.
+        // A renderização continua ativa para exibir o encerramento normalmente.
+        moveX=0.0f;moveY=0.0f;buttons=0;
+        lookDX=0.0;lookDY=0.0;
+        gCrouched=false;
+        gBuildPreview=false;
+        gPlayerReviveTarget=-1;
+        gPlayerReviveProgress=0.0f;
+    }
     const bool jumpPressed=(buttons&BUTTON_JUMP)&&!(gPreviousButtons&BUTTON_JUMP);
     const bool buildPressed=(buttons&BUTTON_BUILD)&&!(gPreviousButtons&BUTTON_BUILD);
     gCrouched=(buttons&BUTTON_CROUCH)!=0&&!gPlayerDowned;
