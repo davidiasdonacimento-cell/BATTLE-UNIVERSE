@@ -62,28 +62,28 @@ public final class MainActivity extends Activity {
      */
     private void shareCrashDiagnostics(int previousStage,int previousElimination) {
         StringBuilder report=new StringBuilder();
-        report.append("BATTLE UNIVERSE • DIAGNÓSTICO DE CRASH\\n")
-            .append("Modelo: ").append(android.os.Build.MODEL).append('\\n')
-            .append("Android: ").append(android.os.Build.VERSION.RELEASE).append('\\n')
+        report.append("BATTLE UNIVERSE • DIAGNÓSTICO DE CRASH\n")
+            .append("Modelo: ").append(android.os.Build.MODEL).append('\n')
+            .append("Android: ").append(android.os.Build.VERSION.RELEASE).append('\n')
             .append("Etapa nativa: ").append(diagnosticStageName(previousStage))
-            .append(" (").append(previousStage).append(")\\n")
+            .append(" (").append(previousStage).append(")\n")
             .append("Etapa da eliminação: ").append(diagnosticStageName(previousElimination))
-            .append(" (").append(previousElimination).append(")\\n\\n");
+            .append(" (").append(previousElimination).append(")\n\n");
         java.io.File crashFile=new java.io.File(getFilesDir(),"last_crash.txt");
         if(crashFile.isFile()) {
             try(java.io.BufferedReader reader=new java.io.BufferedReader(
                     new java.io.InputStreamReader(new java.io.FileInputStream(crashFile),
                         java.nio.charset.StandardCharsets.UTF_8))) {
-                report.append("ÚLTIMO ERRO JAVA:\\n");
+                report.append("ÚLTIMO ERRO JAVA:\n");
                 String line;
                 int lines=0;
-                while((line=reader.readLine())!=null&&lines++<500)report.append(line).append('\\n');
+                while((line=reader.readLine())!=null&&lines++<500)report.append(line).append('\n');
             } catch(java.io.IOException error) {
                 report.append("Não foi possível ler last_crash.txt: ").append(error.getClass().getSimpleName());
             }
         } else {
             report.append("Nenhum erro Java registrado. Se o app fechou sozinho, pode ter sido uma falha nativa; ")
-                .append("os estágios acima registram o último ponto do motor antes do encerramento.\\n");
+                .append("os estágios acima registram o último ponto do motor antes do encerramento.\n");
         }
         android.content.Intent share=new android.content.Intent(android.content.Intent.ACTION_SEND);
         share.setType("text/plain");
